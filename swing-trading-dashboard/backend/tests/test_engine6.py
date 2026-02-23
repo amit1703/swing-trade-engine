@@ -1,0 +1,181 @@
+"""Tests for Engine 6: Resistance Breakout Scanner."""
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from engines.engine6 import scan_resistance_breakout
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def make_stage2_df(n=300, base_price=100.0):
+    """
+    Minimal Stage 2 DataFrame:
+    - Price trending up, above 200 SMA, above 50 SMA
+    - 30%+ above 52-week low
+    - 200 SMA rising
+    """
+    dates = pd.date_range("2024-01-01", periods=n, freq="B")
+    close = np.linspace(70.0, base_price, n)   # steady uptrend
+    high  = close * 1.01
+    low   = close * 0.99
+    volume = np.full(n, 1_000_000.0)
+    return pd.DataFrame(
+        {"Close": close, "High": high, "Low": low, "Open": close, "Volume": volume},
+        index=dates,
+    )
+
+
+def make_resistance_zone(level: float, atr: float = 1.0):
+    """Create a minimal Engine 1 resistance zone dict."""
+    return {
+        "level": level,
+        "upper": level + 0.2 * atr,
+        "lower": level - 0.2 * atr,
+        "type": "RESISTANCE",
+        "atr": atr,
+        "is_primary": True,
+    }
+
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+
+def test_returns_none_when_no_zones():
+    df = make_stage2_df()
+    assert scan_resistance_breakout("TEST", df, []) is None
+
+
+def test_returns_none_when_only_support_zones():
+    df = make_stage2_df()
+    support_zone = {
+        "level": 80.0, "upper": 80.2, "lower": 79.8,
+        "type": "SUPPORT", "atr": 1.0, "is_primary": True,
+    }
+    assert scan_resistance_breakout("TEST", df, [support_zone]) is None
+
+
+def test_detects_fresh_breakout_today():
+    """Stock that crossed resistance today with volume surge should be detected."""
+    n = 300
+    df = make_stage2_df(n=n, base_price=105.0)
+
+    resistance_level = 100.0
+    zone = make_resistance_zone(resistance_level, atr=1.0)
+    zone_upper = zone["upper"]  # 100.2
+
+    # Day before breakout: close just below zone_upper
+    df.iloc[-2, df.columns.get_loc("Close")] = zone_upper * 0.995
+    df.iloc[-2, df.columns.get_loc("High")]  = zone_upper * 0.998
+
+    # Breakout day (today): close above zone_upper with volume surge
+    df.iloc[-1, df.columns.get_loc("Close")]  = zone_upper * 1.012
+    df.iloc[-1, df.columns.get_loc("High")]   = zone_upper * 1.015
+    df.iloc[-1, df.columns.get_loc("Volume")] = 1_600_000.0  # 160% of 1M avg
+
+    result = scan_resistance_breakout("TEST", df, [zone])
+    assert result is not None, "Should detect today's breakout"
+    assert result["setup_type"] == "RES_BREAKOUT"
+    assert result["signal"] == "BRK"
+    assert result["days_since_breakout"] == 0
+    assert result["volume_ratio"] >= 1.5
+
+
+def test_detects_breakout_3_days_ago():
+    """Breakout 3 days ago is within the 3-day window and should be detected."""
+    n = 300
+    df = make_stage2_df(n=n, base_price=110.0)
+
+    zone = make_resistance_zone(100.0, atr=1.0)
+    zone_upper = zone["upper"]
+
+    # Day before breakout (4 days ago): close below zone_upper
+    df.iloc[-5, df.columns.get_loc("Close")] = zone_upper * 0.99
+    # Breakout 3 days ago
+    df.iloc[-4, df.columns.get_loc("Close")]  = zone_upper * 1.01
+    df.iloc[-4, df.columns.get_loc("High")]   = zone_upper * 1.013
+    df.iloc[-4, df.columns.get_loc("Volume")] = 1_600_000.0
+
+    result = scan_resistance_breakout("TEST", df, [zone])
+    assert result is not None, "3-day-old breakout should be detected"
+    assert result["days_since_breakout"] == 3
+
+
+def test_ignores_breakout_4_days_ago():
+    """Breakout older than 3 days must be ignored."""
+    n = 300
+    df = make_stage2_df(n=n, base_price=110.0)
+
+    zone = make_resistance_zone(100.0, atr=1.0)
+    zone_upper = zone["upper"]
+
+    df.iloc[-6, df.columns.get_loc("Close")] = zone_upper * 0.99
+    df.iloc[-5, df.columns.get_loc("Close")]  = zone_upper * 1.01
+    df.iloc[-5, df.columns.get_loc("High")]   = zone_upper * 1.013
+    df.iloc[-5, df.columns.get_loc("Volume")] = 1_600_000.0
+
+    result = scan_resistance_breakout("TEST", df, [zone])
+    assert result is None, "4-day-old breakout must be ignored"
+
+
+def test_ignores_low_volume_breakout():
+    """Breakout without volume surge (< 150%) must be ignored."""
+    n = 300
+    df = make_stage2_df(n=n, base_price=105.0)
+
+    zone = make_resistance_zone(100.0, atr=1.0)
+    zone_upper = zone["upper"]
+
+    df.iloc[-2, df.columns.get_loc("Close")] = zone_upper * 0.99
+    df.iloc[-1, df.columns.get_loc("Close")]  = zone_upper * 1.01
+    df.iloc[-1, df.columns.get_loc("High")]   = zone_upper * 1.013
+    df.iloc[-1, df.columns.get_loc("Volume")] = 1_200_000.0  # only 120% — not enough
+
+    result = scan_resistance_breakout("TEST", df, [zone])
+    assert result is None, "Volume < 150% should not qualify"
+
+
+def test_ignores_overextended_price():
+    """Price > 5% above zone.upper is already extended — ignore."""
+    n = 300
+    df = make_stage2_df(n=n, base_price=115.0)
+
+    zone = make_resistance_zone(100.0, atr=1.0)
+    zone_upper = zone["upper"]
+
+    df.iloc[-4, df.columns.get_loc("Close")] = zone_upper * 0.99
+    df.iloc[-3, df.columns.get_loc("Close")]  = zone_upper * 1.01
+    df.iloc[-3, df.columns.get_loc("Volume")] = 1_600_000.0
+    # Now price extended 8% above zone
+    df.iloc[-1, df.columns.get_loc("Close")] = zone_upper * 1.08
+
+    result = scan_resistance_breakout("TEST", df, [zone])
+    assert result is None, "Overextended price (>5% above zone) should be ignored"
+
+
+def test_risk_math():
+    """Entry, stop, target must follow the documented formula."""
+    n = 300
+    df = make_stage2_df(n=n, base_price=105.0)
+
+    zone = make_resistance_zone(100.0, atr=1.0)
+    zone_upper = zone["upper"]
+
+    df.iloc[-2, df.columns.get_loc("Close")] = zone_upper * 0.995
+    brk_high = zone_upper * 1.015
+    df.iloc[-1, df.columns.get_loc("Close")]  = zone_upper * 1.012
+    df.iloc[-1, df.columns.get_loc("High")]   = brk_high
+    df.iloc[-1, df.columns.get_loc("Volume")] = 1_600_000.0
+
+    result = scan_resistance_breakout("TEST", df, [zone])
+    assert result is not None
+
+    expected_entry = round(brk_high * 1.001, 2)
+    assert result["entry"] == pytest.approx(expected_entry, rel=1e-3)
+    assert result["stop_loss"] < result["entry"]
+    assert result["take_profit"] > result["entry"]
+    # R:R = 2
+    risk = result["entry"] - result["stop_loss"]
+    assert result["take_profit"] == pytest.approx(result["entry"] + 2 * risk, rel=1e-3)
