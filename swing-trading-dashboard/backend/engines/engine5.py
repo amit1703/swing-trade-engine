@@ -137,20 +137,10 @@ def scan_cup_handle(
         if not _is_u_shaped(close_lb, cup):
             return None
 
-        handle = _find_handle(close_lb, volume_lb, cup, vol_sma50)
+        high_lb = high_s.values.astype(float)[-lookback:]
+        handle = _find_handle(close_lb, high_lb, volume_lb, cup, vol_sma50)
         if handle is None:
             return None
-
-        # FIX: use actual intraday High of the right rim bar as the pivot/breakout level.
-        # _find_cup works on close prices, so right_rim = highest CLOSE after the bottom.
-        # The true breakout pivot is the intraday HIGH of that same bar, which is always
-        # >= the close and gives a more accurate entry zone on the chart.
-        _rim_abs = (len(close) - lookback) + cup["right_rim_idx"]
-        if _rim_abs < len(high_s):
-            _rim_high_val = high_s.iloc[_rim_abs]
-            _rim_high = float(_rim_high_val.item() if hasattr(_rim_high_val, 'item') else _rim_high_val)
-            if _rim_high > handle["handle_high"]:
-                handle["handle_high"] = _rim_high
 
         # Determine signal
         lc_val = close_s.iloc[-1]
@@ -313,9 +303,8 @@ def scan_flat_base(
         if depth > 0.12:
             return None
 
-        # For breakout pivot, use the highest close (not intraday high)
-        base_close = close_s.iloc[-lookback:]
-        base_high = float(base_close.max())
+        # For breakout pivot, use the intraday High (consistent with geometry)
+        base_high = base_high_price  # already = float(high_s.iloc[-lookback:].max())
 
         # Current close in upper 25% of range (near top of base)
         range_span = base_high_price - base_low_price
@@ -494,6 +483,7 @@ def _is_u_shaped(close: np.ndarray, cup: Dict) -> bool:
 
 def _find_handle(
     close: np.ndarray,
+    high: np.ndarray,
     volume: np.ndarray,
     cup: Dict,
     vol_sma50: float,
@@ -535,8 +525,12 @@ def _find_handle(
         if handle_avg_vol >= vol_sma50:
             return None
 
+    # handle_high: max intraday High in handle window (skip rim bar at index 0)
+    handle_high_window = high[rim_idx: rim_idx + 26] if rim_idx + 26 <= len(high) else high[rim_idx:]
+    handle_high = float(np.max(handle_high_window[1:])) if len(handle_high_window) > 1 else right_rim
+
     return {
-        "handle_high": right_rim,
+        "handle_high": handle_high,        # was: right_rim
         "handle_low": handle_low,
         "pullback_pct": pullback,
         "handle_length": handle_length,

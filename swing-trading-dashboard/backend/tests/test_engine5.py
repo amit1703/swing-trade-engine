@@ -160,11 +160,12 @@ class TestFindHandle:
     def test_finds_valid_handle(self):
         df = make_cup_handle_df(handle_pct=0.08)
         close = df["Close"].values[-120:]
+        high = df["High"].values[-120:]
         volume = df["Volume"].values[-120:]
         cup = _find_cup(close, lookback=120)
         assert cup is not None
         vol_sma50 = float(np.mean(volume))
-        handle = _find_handle(close, volume, cup, vol_sma50)
+        handle = _find_handle(close, high, volume, cup, vol_sma50)
         assert handle is not None
         assert "handle_high" in handle
         assert "handle_low" in handle
@@ -174,11 +175,12 @@ class TestFindHandle:
         """Handle pullback > 15% should return None."""
         df = make_cup_handle_df(handle_pct=0.25)
         close = df["Close"].values[-120:]
+        high = df["High"].values[-120:]
         volume = df["Volume"].values[-120:]
         cup = _find_cup(close, lookback=120)
         if cup is not None:
             vol_sma50 = float(np.mean(volume))
-            handle = _find_handle(close, volume, cup, vol_sma50)
+            handle = _find_handle(close, high, volume, cup, vol_sma50)
             if handle is not None:
                 assert handle["pullback_pct"] <= 0.15
 
@@ -265,3 +267,42 @@ class TestScanFlatBase:
     def test_returns_none_for_empty_df(self):
         result = scan_flat_base("TEST", pd.DataFrame())
         assert result is None
+
+
+def test_find_handle_uses_intraday_high_for_handle_high():
+    """handle_high must be the max intraday High in the handle window, not just rim close."""
+    n = 50
+    # Cup: left_peak_idx=0, cup_bottom_idx=20, right_rim_idx=40
+    cup = {
+        "left_peak_idx": 0, "left_peak": 100.0,
+        "cup_bottom_idx": 20, "cup_bottom": 80.0,
+        "right_rim_idx": 40, "right_rim": 98.0,
+        "depth": 0.20, "cup_length": 40,
+    }
+    close = np.ones(n) * 100.0
+    # Handle window bars (41–49): pull back ~7% from rim (98 * 0.93 = 91.14),
+    # which is above cup_midpoint=(100+80)/2=90 and within 3-15% pullback band.
+    close[41:] = 98.0 * 0.93  # ~91.14 — valid handle pullback
+    # Make a bar in handle window (bar 43) with intraday high of 101
+    high = close * 1.005        # default: just slightly above close
+    high[43] = 101.0            # spike in handle window
+    volume = np.full(n, 500_000.0)  # below 50d avg = 1_000_000
+    vol_sma50 = 1_000_000.0
+
+    result = _find_handle(close, high, volume, cup, vol_sma50)
+    assert result is not None, "_find_handle returned None unexpectedly"
+    assert result["handle_high"] == pytest.approx(101.0), \
+        f"handle_high should be 101.0 (max intraday High), got {result['handle_high']}"
+
+
+def test_flat_base_pivot_uses_intraday_high():
+    """Flat base breakout pivot must use highest intraday High, not highest close."""
+    df = make_flat_base_df()
+    # Inject a day where intraday High is higher than all closes
+    df.iloc[-10, df.columns.get_loc("High")] = df["Close"].max() * 1.02
+
+    result = scan_flat_base("TEST", df)
+    if result is not None:
+        # Entry is pivot * 1.001; pivot should reflect the intraday High spike
+        assert result["entry"] > df["Close"].max() * 1.001, \
+            "Entry should be above highest-close pivot when intraday High is higher"
