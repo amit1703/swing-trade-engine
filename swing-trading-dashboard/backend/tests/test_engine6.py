@@ -62,9 +62,9 @@ def test_detects_fresh_breakout_today():
     n = 300
     df = make_stage2_df(n=n, base_price=105.0)
 
-    resistance_level = 100.0
+    resistance_level = 102.0
     zone = make_resistance_zone(resistance_level, atr=1.0)
-    zone_upper = zone["upper"]  # 100.2
+    zone_upper = zone["upper"]  # 102.2
 
     # Day before breakout: close just below zone_upper
     df.iloc[-2, df.columns.get_loc("Close")] = zone_upper * 0.995
@@ -88,7 +88,7 @@ def test_detects_breakout_3_days_ago():
     n = 300
     df = make_stage2_df(n=n, base_price=110.0)
 
-    zone = make_resistance_zone(100.0, atr=1.0)
+    zone = make_resistance_zone(107.0, atr=1.0)
     zone_upper = zone["upper"]
 
     # Day before breakout (4 days ago): close below zone_upper
@@ -138,21 +138,25 @@ def test_ignores_low_volume_breakout():
 
 
 def test_ignores_overextended_price():
-    """Price > 5% above zone.upper is already extended — ignore."""
+    """Current close > 5% above zone.upper must be ignored even with valid breakout."""
     n = 300
     df = make_stage2_df(n=n, base_price=115.0)
 
     zone = make_resistance_zone(100.0, atr=1.0)
-    zone_upper = zone["upper"]
+    zone_upper = zone["upper"]  # 100.2
 
-    df.iloc[-4, df.columns.get_loc("Close")] = zone_upper * 0.99
-    df.iloc[-3, df.columns.get_loc("Close")]  = zone_upper * 1.01
-    df.iloc[-3, df.columns.get_loc("Volume")] = 1_600_000.0
-    # Now price extended 8% above zone
-    df.iloc[-1, df.columns.get_loc("Close")] = zone_upper * 1.08
+    # Valid breakout 3 days ago: pre-bar below zone, breakout bar just above
+    df.iloc[-5, df.columns.get_loc("Close")] = zone_upper * 0.99
+    df.iloc[-4, df.columns.get_loc("Close")]  = zone_upper * 1.012
+    df.iloc[-4, df.columns.get_loc("High")]   = zone_upper * 1.015   # within 5%
+    df.iloc[-4, df.columns.get_loc("Volume")] = 1_600_000.0
+
+    # But current close is 8% above zone — overextended
+    df.iloc[-1, df.columns.get_loc("Close")]  = zone_upper * 1.08
+    df.iloc[-1, df.columns.get_loc("High")]   = zone_upper * 1.09
 
     result = scan_resistance_breakout("TEST", df, [zone])
-    assert result is None, "Overextended price (>5% above zone) should be ignored"
+    assert result is None, "Overextended current price (>5% above zone) should be ignored"
 
 
 def test_risk_math():
@@ -160,7 +164,7 @@ def test_risk_math():
     n = 300
     df = make_stage2_df(n=n, base_price=105.0)
 
-    zone = make_resistance_zone(100.0, atr=1.0)
+    zone = make_resistance_zone(102.0, atr=1.0)
     zone_upper = zone["upper"]
 
     df.iloc[-2, df.columns.get_loc("Close")] = zone_upper * 0.995

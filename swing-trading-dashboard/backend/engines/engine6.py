@@ -67,6 +67,9 @@ def scan_resistance_breakout(
         if l200 > 0 and lc < l200:
             return None
 
+        if l50 > 0 and lc < l50:
+            return None
+
         yr_low = float(low_s.iloc[-252:].min()) if len(low_s) >= 252 else float(low_s.min())
         if yr_low > 0 and lc < yr_low * 1.30:
             return None
@@ -107,6 +110,10 @@ def scan_resistance_breakout(
             zone_lower = float(zone.get("lower", 0))
             zone_level = float(zone.get("level", 0))
             if zone_upper <= 0:
+                continue
+
+            # Current price must not be overextended (> 5% above zone)
+            if lc > zone_upper * (1 + _MAX_EXTEND_PCT):
                 continue
 
             for days_back in range(_MAX_DAYS_LOOKBACK + 1):
