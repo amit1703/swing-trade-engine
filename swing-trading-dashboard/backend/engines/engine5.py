@@ -527,7 +527,7 @@ def _find_handle(
 
     # handle_high: max intraday High in handle window (skip rim bar at index 0)
     handle_high_window = high[rim_idx: rim_idx + 26] if rim_idx + 26 <= len(high) else high[rim_idx:]
-    handle_high = float(np.max(handle_high_window[1:])) if len(handle_high_window) > 1 else right_rim
+    handle_high = float(np.max(handle_high_window[1:])) if len(handle_high_window) > 1 else float(high[rim_idx])
 
     return {
         "handle_high": handle_high,        # was: right_rim

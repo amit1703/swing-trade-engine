@@ -297,12 +297,38 @@ def test_find_handle_uses_intraday_high_for_handle_high():
 
 def test_flat_base_pivot_uses_intraday_high():
     """Flat base breakout pivot must use highest intraday High, not highest close."""
-    df = make_flat_base_df()
-    # Inject a day where intraday High is higher than all closes
-    df.iloc[-10, df.columns.get_loc("High")] = df["Close"].max() * 1.02
+    # Build a dedicated fixture that satisfies every scan_flat_base gate:
+    #   - 100 bars: 40 trend (50→100) + 60 flat (all closes = 100)
+    #   - One deep intrabar Low at bar 45 (Low = 91) so pct_in_range >= 0.75
+    #     and depth ≈ 9.5% (still within the ≤ 12% limit)
+    #   - Volume dry-up: bars -10 to -1 at 300k vs 50-day avg ≈ 540k (ratio ≈ 0.56)
+    #   - Last close = 100.0, all Highs = close * 1.005 = 100.5 before injection
+    n = 100
+    trend = 40
+    base = 60
+    dates = pd.date_range("2024-01-01", periods=n, freq="B")
+    close = np.ones(n) * 100.0
+    for i in range(trend):
+        close[i] = 50 + i * (50.0 / (trend - 1))
+    close[trend:] = 100.0          # perfectly flat base
+    high = close * 1.005
+    low = close * 0.995
+    low[trend + 5] = 91.0          # one deep intrabar wick — deepens base_low to 91
+    volume = np.ones(n) * 1_000_000.0
+    volume[trend:-10] = 600_000.0
+    volume[-10:] = 300_000.0       # dry-up at the end
+    df = pd.DataFrame({
+        "Close": close, "High": high, "Low": low,
+        "Open": close * 0.998, "Volume": volume,
+    }, index=dates)
+
+    # Inject an intraday High spike at the last bar: 0.9% above all closes.
+    # This becomes the new base_high (pivot). dist_to_pivot = (100.9-100)/100.9 ≈ 0.89% ≤ 1%
+    # so DRY fires. All other Highs are 100.5, so this spike is clearly the new max.
+    df.iloc[-1, df.columns.get_loc("High")] = df["Close"].max() * 1.009
 
     result = scan_flat_base("TEST", df)
-    if result is not None:
-        # Entry is pivot * 1.001; pivot should reflect the intraday High spike
-        assert result["entry"] > df["Close"].max() * 1.001, \
-            "Entry should be above highest-close pivot when intraday High is higher"
+    assert result is not None, "scan_flat_base should detect the pattern"
+    # Entry is pivot * 1.001; pivot should reflect the intraday High spike
+    assert result["entry"] > df["Close"].max() * 1.001, \
+        "Entry should be above highest-close pivot when intraday High is higher"
