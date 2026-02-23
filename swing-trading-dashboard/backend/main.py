@@ -548,11 +548,12 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
 
         process_time = time.time() - process_start_time
         log.info(
-            "Per-ticker processing completed  [%.1fs]  vcp=%d  pb=%d  base=%d  total_setups=%d",
+            "Per-ticker processing completed  [%.1fs]  vcp=%d  pb=%d  base=%d  res=%d  total_setups=%d",
             process_time,
             vcp_count,
             pb_count,
             base_count,
+            res_count,
             len(collected_setups),
         )
 
