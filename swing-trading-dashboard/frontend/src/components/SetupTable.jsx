@@ -18,6 +18,8 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
 
   const color = accentColor === 'blue'
     ? { badge: 'bg-t-blueDim text-t-blue border border-t-blue/30', dot: '#00C8FF', sectionDot: 'bg-t-blue' }
+    : accentColor === 'green'
+    ? { badge: 'bg-t-goDim text-t-go border border-t-go/30', dot: '#00c87a', sectionDot: 'bg-t-go' }
     : { badge: 'bg-t-accentDim text-t-accent border border-t-accent/30', dot: '#F5A623', sectionDot: 'bg-t-accent' }
 
   return (

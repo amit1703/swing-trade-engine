@@ -262,7 +262,7 @@ export default function App() {
 
               <SetupTable
                 title="Resistance Breakouts"
-                accentColor="accent"
+                accentColor="green"
                 setups={resBreakoutSetups}
                 selectedTicker={selectedTicker}
                 onSelectTicker={handleTickerClick}
@@ -325,7 +325,7 @@ function ScanFooter({ vcpCount, pbCount, baseCount = 0, resCount = 0, scanTimest
         <span><span className="text-t-blue font-600">{vcpCount}</span> VCP</span>
         <span><span className="text-t-accent font-600">{pbCount}</span> Pullback</span>
         <span><span className="text-t-green font-600">{baseCount}</span> Base</span>
-        <span><span className="text-t-accent font-600">{resCount}</span> ResBreak</span>
+        <span><span className="text-[var(--go)] font-600">{resCount}</span> ResBreak</span>
         <span className="ml-auto text-t-border">v1.0</span>
       </div>
     </div>
