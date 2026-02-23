@@ -211,6 +211,33 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                             </span>
                           )}
                         </div>
+                      ) : s.setup_type === 'RES_BREAKOUT' ? (
+                        /* Resistance Breakout: level, break%, vol ratio, days since */
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span
+                            className="badge"
+                            style={{ background: 'rgba(0,200,122,0.18)', color: 'var(--go)',
+                                     border: '1px solid rgba(0,200,122,0.4)', fontWeight: 700 }}
+                          >
+                            BRK
+                          </span>
+                          {s.resistance_level != null && (
+                            <span className="font-mono text-[8px] tabular-nums text-t-muted">
+                              L{s.resistance_level.toFixed(2)}
+                            </span>
+                          )}
+                          {s.volume_ratio != null && (
+                            <span className="font-mono text-[8px] tabular-nums"
+                              style={{ color: 'var(--go)' }}>
+                              ×{s.volume_ratio.toFixed(1)}
+                            </span>
+                          )}
+                          {s.days_since_breakout != null && (
+                            <span className="font-mono text-[8px] tabular-nums text-t-muted">
+                              {s.days_since_breakout === 0 ? 'today' : `${s.days_since_breakout}d ago`}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         /* BASE: C&H / FLAT pattern badge + BRK/DRY signal + quality score + RS+ */
                         <div className="flex items-center gap-1 flex-wrap">
