@@ -345,8 +345,39 @@ def scan_near_breakout(
                         best_level = tl_today
                         best_type = "TDL"
 
+        # ── Check confirmed KDE breakout (price 0.1-3% ABOVE resistance upper) ──
+        # These are stocks that just broke through a KDE resistance level.
+        # scan_vcp is always called first; we only reach here if vcp returned None,
+        # meaning the stock didn't pass the strict VCP trend filter. Catching these
+        # confirmed breaks ensures they still surface in the WATCHLIST.
+        BRK_PCT = 0.03   # up to 3% above level = "recently broke out"
+        for z in resistance_zones:
+            upper = z["upper"]
+            if upper > 0 and lc > upper:
+                pct_above = (lc - upper) / upper
+                if 0.001 <= pct_above <= BRK_PCT:
+                    if best_dist is None or pct_above < best_dist:
+                        best_dist = pct_above
+                        best_level = z["level"]
+                        best_type = "KDE-BRK"
+
+        # ── Check confirmed TDL breakout (price 0.1-3% ABOVE descending trendline) ──
+        if trendline and trendline.get("descending") and trendline["descending"].get("series"):
+            tl_series = trendline["descending"]["series"]
+            if tl_series:
+                tl_today = tl_series[-1]["value"]
+                if tl_today > 0 and lc > tl_today:
+                    pct_above = (lc - tl_today) / tl_today
+                    if 0.001 <= pct_above <= BRK_PCT:
+                        if best_dist is None or pct_above < best_dist:
+                            best_dist = pct_above
+                            best_level = tl_today
+                            best_type = "TDL-BRK"
+
         if best_dist is None:
             return None
+
+        is_confirmed_break = best_type in ("KDE-BRK", "TDL-BRK")
 
         return {
             "ticker":      ticker,
@@ -359,6 +390,7 @@ def scan_near_breakout(
             "distance_pct": round(best_dist * 100, 2),
             "pattern_type": best_type,
             "level":        round(best_level, 2),
+            "is_confirmed_break": is_confirmed_break,
         }
 
     except Exception as exc:
@@ -457,7 +489,7 @@ def _count_contractions(
         if contraction_count >= 3:
             # Each contraction should be tighter (smaller TR) than previous
             tr_values = [v for _, v in contractions]
-            is_progressive = all(tr_values[i] >= tr_values[i+1] for i in range(len(tr_values)-1))
+            is_progressive = all(tr_values[i] > tr_values[i+1] for i in range(len(tr_values)-1))
 
         # Map count to pattern name (3T, 4T, 5T, etc.)
         if contraction_count < 3:
@@ -532,10 +564,15 @@ def scan_vcp(
         if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, l200, latr]):
             return None
 
-        # ── Shared: Professional Trend filter (both paths) ────────────────
-        # FEATURE 1: Strict trend template - price above both 200 SMA and 50 SMA
-        if not (l8 > l20 and lc > l50 and lc > l200):
+        # ── Shared: Baseline trend filter ────────────────────────────────
+        # Requires 8 EMA > 20 EMA (short-term momentum) and price above 50 SMA.
+        # NOTE: 200 SMA is NOT required here so that stocks breaking out of
+        # downtrends via TDL/KDE (Paths C & D) are not gated out — they are
+        # often still below the 200 SMA at the time of the initial breakout.
+        # Path A (DRY coiled spring) re-applies the 200 SMA gate below.
+        if not (l8 > l20 and lc > l50):
             return None
+        is_above_200sma = lc > l200
 
         # ── Shared: Volume SMA ────────────────────────────────────────────
         vol_sma50 = volume.rolling(50).mean()
@@ -621,7 +658,7 @@ def scan_vcp(
                     "rs_52w_high":        rs_52w_high,
                     "rs_blue_dot":        rs_blue_dot,
                     "trendline":          None,
-                    "is_above_200sma":    True,
+                    "is_above_200sma":    is_above_200sma,
                     "base_depth_pct":     base_depth_pct,
                     "contraction_count":  contraction_count,
                     "contraction_pattern": contraction_pattern,
@@ -674,7 +711,7 @@ def scan_vcp(
                     "rs_52w_high":        rs_52w_high,
                     "rs_blue_dot":        rs_blue_dot,
                     "trendline":          trendline_data,
-                    "is_above_200sma":    True,
+                    "is_above_200sma":    is_above_200sma,
                     "base_depth_pct":     base_depth_pct,
                     "contraction_count":  contraction_count,
                     "contraction_pattern": contraction_pattern,
@@ -735,7 +772,7 @@ def scan_vcp(
                         "rs_52w_high":        rs_52w_high,
                         "rs_blue_dot":        rs_blue_dot,
                         "trendline":          None,
-                        "is_above_200sma":    True,
+                        "is_above_200sma":    is_above_200sma,
                         "base_depth_pct":     base_depth_pct,
                         "contraction_count":  contraction_count,
                         "contraction_pattern": contraction_pattern,
@@ -788,7 +825,7 @@ def scan_vcp(
                         "rs_52w_high":        rs_52w_high,
                         "rs_blue_dot":        rs_blue_dot,
                         "trendline":          None,
-                        "is_above_200sma":    True,
+                        "is_above_200sma":    is_above_200sma,
                         "base_depth_pct":     base_depth_pct,
                         "contraction_count":  contraction_count,
                         "contraction_pattern": contraction_pattern,
@@ -796,6 +833,11 @@ def scan_vcp(
                     }
 
         # ── PATH A — DRY (Coiled Spring) ──────────────────────────────────
+        # Path A (coiled spring below resistance) requires the FULL trend template:
+        # price must be above the 200 SMA (confirmed Stage 2 uptrend).
+        if not (lc > l200):
+            return None
+
 
         # ── A2. True Range contraction ────────────────────────────────────
         # (tr already computed above for contraction counting)
