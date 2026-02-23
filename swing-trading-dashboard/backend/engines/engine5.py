@@ -141,6 +141,17 @@ def scan_cup_handle(
         if handle is None:
             return None
 
+        # FIX: use actual intraday High of the right rim bar as the pivot/breakout level.
+        # _find_cup works on close prices, so right_rim = highest CLOSE after the bottom.
+        # The true breakout pivot is the intraday HIGH of that same bar, which is always
+        # >= the close and gives a more accurate entry zone on the chart.
+        _rim_abs = (len(close) - lookback) + cup["right_rim_idx"]
+        if _rim_abs < len(high_s):
+            _rim_high_val = high_s.iloc[_rim_abs]
+            _rim_high = float(_rim_high_val.item() if hasattr(_rim_high_val, 'item') else _rim_high_val)
+            if _rim_high > handle["handle_high"]:
+                handle["handle_high"] = _rim_high
+
         # Determine signal
         lc_val = close_s.iloc[-1]
         lc = float(lc_val.item() if hasattr(lc_val, 'item') else lc_val)
@@ -174,7 +185,7 @@ def scan_cup_handle(
             return None
 
         # RS vs SPY
-        rs_vs_spy = (rs_ratio - spy_3m_return) if spy_3m_return != 0 else 0.0
+        rs_vs_spy = (rs_ratio - 1.0) - spy_3m_return
 
         qs = _quality_score(
             depth_pct=cup["depth"],
@@ -358,7 +369,7 @@ def scan_flat_base(
             return None
         take_profit = round(entry + 2.0 * risk, 2)
 
-        rs_vs_spy = (rs_ratio - spy_3m_return) if spy_3m_return != 0 else 0.0
+        rs_vs_spy = (rs_ratio - 1.0) - spy_3m_return
 
         qs = _quality_score(
             depth_pct=depth,
