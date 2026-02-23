@@ -79,6 +79,7 @@ from engines.engine2 import scan_vcp, detect_trendline, scan_near_breakout
 from engines.engine3 import scan_pullback, scan_relaxed_pullback
 from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats
 from engines.engine5 import scan_base_pattern
+from engines.engine6 import scan_resistance_breakout
 from tickers import SCAN_UNIVERSE
 from universe_builder import load_universe, UNIVERSE_FILE
 
@@ -318,10 +319,11 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
         vcp_count = 0
         pb_count = 0
         base_count = 0
+        res_count  = 0
         process_start_time = time.time()
 
         async def _process(ticker: str, idx: int) -> None:
-            nonlocal vcp_count, pb_count, base_count, dropped_tickers
+            nonlocal vcp_count, pb_count, base_count, res_count, dropped_tickers
 
             try:
                 # ── Data Integrity Check ────────────────────────────────────
@@ -510,6 +512,30 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                 except Exception as base_exc:
                     log.warning("Base pattern check failed for %s: %s", ticker, base_exc)
 
+                # Engine 6: Resistance breakout
+                if zones:
+                    try:
+                        res_brk = await loop.run_in_executor(
+                            None, scan_resistance_breakout, ticker, df, zones
+                        )
+                        if res_brk:
+                            try:
+                                res_brk["entry"]      = float(res_brk.get("entry", 0.0))
+                                res_brk["stop_loss"]  = float(res_brk.get("stop_loss", 0.0))
+                                res_brk["take_profit"]= float(res_brk.get("take_profit", 0.0))
+                                res_brk["rr"]         = float(res_brk.get("rr", 2.0))
+                            except (ValueError, TypeError) as conv_err:
+                                log.warning("ResBreakout conversion failed for %s: %s", ticker, conv_err)
+                            else:
+                                res_brk["sector"] = SECTORS.get(ticker, "Unknown")
+                                collected_setups.append(res_brk)
+                                res_count += 1
+                                log.info("  RES_BRK  %-6s  level=%.2f  vol=×%.1f",
+                                         ticker, res_brk.get("resistance_level", 0),
+                                         res_brk.get("volume_ratio", 0))
+                    except Exception as res_exc:
+                        log.warning("ResBreakout check failed for %s: %s", ticker, res_exc)
+
             except Exception as exc:
                 log.error("Error processing %s: %s", ticker, exc)
                 import traceback
@@ -585,9 +611,11 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
 
         total_scan_time = time.time() - scan_start_time
         log.info(
-            "✔ Scan complete  VCP=%d  Pullbacks=%d  Processed=%d/%d  Total=%.1fs  (Regime=%.1fs, SPY=%.1fs, Process=%.1fs)",
+            "✔ Scan complete  VCP=%d  Pullbacks=%d  Base=%d  ResBreakout=%d  Processed=%d/%d  Total=%.1fs  (Regime=%.1fs, SPY=%.1fs, Process=%.1fs)",
             vcp_count,
             pb_count,
+            base_count,
+            res_count,
             processed_tickers,
             len(tickers),
             total_scan_time,
@@ -692,6 +720,14 @@ async def get_base_setups():
     """Cup & Handle and Flat Base setups from the latest scan."""
     setups = await get_latest_setups(DB_PATH, setup_type="BASE")
     setups.sort(key=lambda x: x.get("quality_score", 0), reverse=True)
+    return {"setups": setups, "count": len(setups)}
+
+
+@app.get("/api/setups/res-breakout")
+async def get_res_breakout_setups():
+    """Resistance breakout setups (fresh break above KDE zone, last 3 days)."""
+    setups = await get_latest_setups(DB_PATH, setup_type="RES_BREAKOUT")
+    setups.sort(key=lambda x: x.get("days_since_breakout", 99))
     return {"setups": setups, "count": len(setups)}
 
 
