@@ -361,23 +361,10 @@ def scan_near_breakout(
                         best_level = z["level"]
                         best_type = "KDE-BRK"
 
-        # ── Check confirmed TDL breakout (price 0.1-3% ABOVE descending trendline) ──
-        if trendline and trendline.get("descending") and trendline["descending"].get("series"):
-            tl_series = trendline["descending"]["series"]
-            if tl_series:
-                tl_today = tl_series[-1]["value"]
-                if tl_today > 0 and lc > tl_today:
-                    pct_above = (lc - tl_today) / tl_today
-                    if 0.001 <= pct_above <= BRK_PCT:
-                        if best_dist is None or pct_above < best_dist:
-                            best_dist = pct_above
-                            best_level = tl_today
-                            best_type = "TDL-BRK"
-
         if best_dist is None:
             return None
 
-        is_confirmed_break = best_type in ("KDE-BRK", "TDL-BRK")
+        is_confirmed_break = best_type in ("KDE-BRK",)
 
         return {
             "ticker":      ticker,
@@ -613,7 +600,7 @@ def scan_vcp(
         confirmed_breakout = False
         bk_zone: Optional[Dict] = None
 
-        if resistance_zones and is_vol_surge and rs_vs_spy > 0:
+        if resistance_zones and is_vol_surge and rs_vs_spy > -0.05:
             # Find resistance zones whose UPPER bound price has cleared
             broken = [z for z in resistance_zones if lc > z["upper"]]
             if broken:
@@ -678,7 +665,7 @@ def scan_vcp(
             # Cap: price must be within 0-2% above the line (reject stale/extended breakouts)
             if tl_today > 0:
                 pct_above_tl = (lc - tl_today) / tl_today
-                if 0 < pct_above_tl <= 0.02 and lvol >= 1.2 * avg_vol:
+                if 0 < pct_above_tl <= 0.03 and lvol >= 1.0 * avg_vol:
                     is_trendline_breakout = True
                     trendline_data = trendline_result
 
