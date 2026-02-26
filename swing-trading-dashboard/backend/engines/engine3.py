@@ -212,11 +212,12 @@ def scan_relaxed_pullback(
 
     Criteria:
     1. Trend: 8 EMA > 20 EMA AND Close > 50 SMA
-    2. Buffer Zone: Close within 0.8% of EMA-8 OR EMA-20 (either, not both)
-    3. CCI Early Signal: CCI[today] > CCI[yesterday] AND CCI[yesterday] < 0
+    2. Buffer Zone: Close within 2% of EMA-8 OR EMA-20
+    3. CCI Early Signal: CCI[today] > CCI[yesterday] AND CCI[yesterday] < -30
     4. Low Volume: 3-day avg volume <= 100% of 50-day SMA
+    5. Support Zone: Low or Close must be inside a KDE SUPPORT zone (mandatory)
 
-    Also checks for ascending trendline support if no horizontal zone found.
+    Flags ascending trendline touches as is_ascending_tdl for display purposes.
     """
     try:
         data = _prep(df)
@@ -307,7 +308,7 @@ def scan_relaxed_pullback(
 
         support_level = nearest_sup["level"]
 
-        # Always check ascending trendline independently — flag even if horizontal zones exist
+        # Check ascending trendline — flag for display if touched (zone already confirmed above)
         is_ascending_tdl = False
         if trendline is not None:
             ascending_tl = trendline.get("ascending")
@@ -315,9 +316,6 @@ def scan_relaxed_pullback(
                 touched, tl_level = _check_ascending_trendline_touch(ll, ascending_tl)
                 if touched:
                     is_ascending_tdl = True
-                    # Use trendline level as support if no horizontal zones found
-                    if not support_zones:
-                        support_level = tl_level
 
         # Validate support level is actually below current price
         if support_level >= lc:
