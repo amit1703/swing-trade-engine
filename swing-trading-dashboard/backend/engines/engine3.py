@@ -270,8 +270,8 @@ def scan_relaxed_pullback(
         if not (near_8 or near_20):
             return None
 
-        # ── 3. CCI Early Signal: turning from negative ────────────────────
-        cci_turning = cci_today > cci_prev and cci_prev < 0
+        # ── 3. CCI Early Signal: turning from deeply negative ────────────────────
+        cci_turning = cci_today > cci_prev and cci_prev < -30.0
         if not cci_turning:
             return None
 
@@ -289,12 +289,23 @@ def scan_relaxed_pullback(
         if last3_vol > avg_vol:
             return None
 
+        # ── Mandatory support zone touch ─────────────────────────────────
+        # Relaxed pullback requires a nearby KDE support zone (same as strict).
+        support_zones = [z for z in sr_zones if z["type"] == "SUPPORT"]
+        nearest_sup = None
+        for z in support_zones:
+            low_in_zone = z["lower"] * 0.995 <= ll <= z["upper"] * 1.005
+            close_in_zone = z["lower"] <= lc <= z["upper"]
+            if low_in_zone or close_in_zone:
+                nearest_sup = z
+                break
+        if nearest_sup is None:
+            return None
+
         # ── Risk Math ─────────────────────────────────────────────────────
         entry = round(lh * 1.001, 2)
 
-        support_zones = [z for z in sr_zones if z["type"] == "SUPPORT"]
-        # Use lowest (most defensive) support level for relaxed pullbacks
-        support_level = min([z["level"] for z in support_zones]) if support_zones else l50
+        support_level = nearest_sup["level"]
 
         # Always check ascending trendline independently — flag even if horizontal zones exist
         is_ascending_tdl = False
