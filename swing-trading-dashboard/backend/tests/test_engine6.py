@@ -11,13 +11,8 @@ from engines.engine6 import scan_resistance_breakout
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def make_stage2_df(n=300, base_price=100.0):
-    """
-    Minimal Stage 2 DataFrame:
-    - Price trending up, above 200 SMA, above 50 SMA
-    - 30%+ above 52-week low
-    - 200 SMA rising
-    """
+def make_uptrend_df(n=300, base_price=100.0):
+    """Minimal uptrend DataFrame: close > 50 SMA. Price trends steadily from 70 to base_price."""
     dates = pd.date_range("2024-01-01", periods=n, freq="B")
     close = np.linspace(70.0, base_price, n)   # steady uptrend
     high  = close * 1.01
@@ -44,12 +39,12 @@ def make_resistance_zone(level: float, atr: float = 1.0):
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 def test_returns_none_when_no_zones():
-    df = make_stage2_df()
+    df = make_uptrend_df()
     assert scan_resistance_breakout("TEST", df, []) is None
 
 
 def test_returns_none_when_only_support_zones():
-    df = make_stage2_df()
+    df = make_uptrend_df()
     support_zone = {
         "level": 80.0, "upper": 80.2, "lower": 79.8,
         "type": "SUPPORT", "atr": 1.0, "is_primary": True,
@@ -60,7 +55,7 @@ def test_returns_none_when_only_support_zones():
 def test_detects_fresh_breakout_today():
     """Stock that crossed resistance today with volume surge should be detected."""
     n = 300
-    df = make_stage2_df(n=n, base_price=105.0)
+    df = make_uptrend_df(n=n, base_price=105.0)
 
     resistance_level = 102.0
     zone = make_resistance_zone(resistance_level, atr=1.0)
@@ -86,7 +81,7 @@ def test_detects_fresh_breakout_today():
 def test_detects_breakout_3_days_ago():
     """Breakout 3 days ago is within the 3-day window and should be detected."""
     n = 300
-    df = make_stage2_df(n=n, base_price=110.0)
+    df = make_uptrend_df(n=n, base_price=110.0)
 
     zone = make_resistance_zone(107.0, atr=1.0)
     zone_upper = zone["upper"]
@@ -106,7 +101,7 @@ def test_detects_breakout_3_days_ago():
 def test_ignores_breakout_4_days_ago():
     """Breakout older than 3 days must be ignored."""
     n = 300
-    df = make_stage2_df(n=n, base_price=110.0)
+    df = make_uptrend_df(n=n, base_price=110.0)
 
     zone = make_resistance_zone(100.0, atr=1.0)
     zone_upper = zone["upper"]
@@ -123,7 +118,7 @@ def test_ignores_breakout_4_days_ago():
 def test_ignores_low_volume_breakout():
     """Breakout without volume (< 100% of avg) must be ignored."""
     n = 300
-    df = make_stage2_df(n=n, base_price=105.0)
+    df = make_uptrend_df(n=n, base_price=105.0)
 
     zone = make_resistance_zone(100.0, atr=1.0)
     zone_upper = zone["upper"]
@@ -140,7 +135,7 @@ def test_ignores_low_volume_breakout():
 def test_detects_breakout_with_moderate_volume():
     """Breakout with 110% volume (above new 100% threshold) should be detected."""
     n = 300
-    df = make_stage2_df(n=n, base_price=103.0)  # base_price ensures lc > 50 SMA at breakout
+    df = make_uptrend_df(n=n, base_price=103.0)  # base_price ensures lc > 50 SMA at breakout
 
     zone = make_resistance_zone(100.0, atr=1.0)
     zone_upper = zone["upper"]
@@ -158,7 +153,7 @@ def test_detects_breakout_with_moderate_volume():
 def test_ignores_overextended_price():
     """Current close > 5% above zone.upper must be ignored even with valid breakout."""
     n = 300
-    df = make_stage2_df(n=n, base_price=115.0)
+    df = make_uptrend_df(n=n, base_price=115.0)
 
     zone = make_resistance_zone(100.0, atr=1.0)
     zone_upper = zone["upper"]  # 100.2
@@ -180,7 +175,7 @@ def test_ignores_overextended_price():
 def test_risk_math():
     """Entry, stop, target must follow the documented formula."""
     n = 300
-    df = make_stage2_df(n=n, base_price=105.0)
+    df = make_uptrend_df(n=n, base_price=105.0)
 
     zone = make_resistance_zone(102.0, atr=1.0)
     zone_upper = zone["upper"]
