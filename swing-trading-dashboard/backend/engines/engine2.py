@@ -17,7 +17,7 @@ PATH B — BRK (Confirmed Breakout):
   2. Location   : Close is STRICTLY ABOVE an Engine 1 resistance zone's
                   upper boundary, within 0.5%–3% of that upper bound
   3. Volume     : Daily Volume >= 150% of 50-day Vol SMA
-  4. RS Filter  : Stock's 3-month return > SPY's 3-month return
+  4. RS Filter  : Stock's 3-month return > SPY's 3-month return − 5% (rs_vs_spy > −0.05)
 
 Risk Math (both paths):
   Entry      = High of setup candle × 1.001
@@ -661,8 +661,8 @@ def scan_vcp(
         desc_tl = trendline_result.get("descending") if trendline_result else None
         if desc_tl is not None and desc_tl.get("series"):
             tl_today = desc_tl["series"][-1]["value"]
-            # Breakout: close above descending trendline + vol surge ≥120% + trend filter (already checked)
-            # Cap: price must be within 0-2% above the line (reject stale/extended breakouts)
+            # Breakout: close above descending trendline + vol surge ≥100% + trend filter (already checked)
+            # Cap: price must be within 0-3% above the line (reject stale/extended breakouts)
             if tl_today > 0:
                 pct_above_tl = (lc - tl_today) / tl_today
                 if 0 < pct_above_tl <= 0.03 and lvol >= 1.0 * avg_vol:
