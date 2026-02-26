@@ -121,7 +121,7 @@ def test_ignores_breakout_4_days_ago():
 
 
 def test_ignores_low_volume_breakout():
-    """Breakout without volume surge (< 150%) must be ignored."""
+    """Breakout without volume (< 100% of avg) must be ignored."""
     n = 300
     df = make_stage2_df(n=n, base_price=105.0)
 
@@ -131,10 +131,28 @@ def test_ignores_low_volume_breakout():
     df.iloc[-2, df.columns.get_loc("Close")] = zone_upper * 0.99
     df.iloc[-1, df.columns.get_loc("Close")]  = zone_upper * 1.01
     df.iloc[-1, df.columns.get_loc("High")]   = zone_upper * 1.013
-    df.iloc[-1, df.columns.get_loc("Volume")] = 1_200_000.0  # only 120% — not enough
+    df.iloc[-1, df.columns.get_loc("Volume")] = 800_000.0  # only 80% of avg — not enough
 
     result = scan_resistance_breakout("TEST", df, [zone])
-    assert result is None, "Volume < 150% should not qualify"
+    assert result is None, "Volume < 100% of avg should not qualify"
+
+
+def test_detects_breakout_with_moderate_volume():
+    """Breakout with 110% volume (above new 100% threshold) should be detected."""
+    n = 300
+    df = make_stage2_df(n=n, base_price=103.0)  # base_price ensures lc > 50 SMA at breakout
+
+    zone = make_resistance_zone(100.0, atr=1.0)
+    zone_upper = zone["upper"]
+
+    df.iloc[-2, df.columns.get_loc("Close")] = zone_upper * 0.99
+    df.iloc[-1, df.columns.get_loc("Close")]  = zone_upper * 1.01
+    df.iloc[-1, df.columns.get_loc("High")]   = zone_upper * 1.013
+    df.iloc[-1, df.columns.get_loc("Volume")] = 1_100_000.0  # 110% of 1M avg
+
+    result = scan_resistance_breakout("TEST", df, [zone])
+    assert result is not None, "110% volume should qualify with new 100% threshold"
+    assert result["volume_ratio"] == pytest.approx(1.1, rel=0.05)
 
 
 def test_ignores_overextended_price():
@@ -183,3 +201,34 @@ def test_risk_math():
     # R:R = 2
     risk = result["entry"] - result["stop_loss"]
     assert result["take_profit"] == pytest.approx(result["entry"] + 2 * risk, rel=1e-3)
+
+
+def test_detects_breakout_below_200sma():
+    """Stage 2 filter removed — stock below 200 SMA but above 50 SMA should qualify."""
+    n = 300
+    dates = pd.date_range("2024-01-01", periods=n, freq="B")
+    # Declining price: below 200 SMA but above 50 SMA at the end
+    close = np.linspace(120.0, 85.0, n)   # downtrend — 200 SMA > current price
+    close[-50:] = np.linspace(85.0, 95.0, 50)  # recent recovery above 50 SMA
+    high   = close * 1.01
+    low    = close * 0.99
+    volume = np.full(n, 1_000_000.0)
+    df = pd.DataFrame(
+        {"Close": close, "High": high, "Low": low, "Open": close, "Volume": volume},
+        index=dates,
+    )
+
+    zone = make_resistance_zone(90.0, atr=1.0)
+    zone_upper = zone["upper"]
+
+    df.iloc[-2, df.columns.get_loc("Close")] = zone_upper * 0.99
+    df.iloc[-1, df.columns.get_loc("Close")]  = zone_upper * 1.01
+    df.iloc[-1, df.columns.get_loc("High")]   = zone_upper * 1.013
+    df.iloc[-1, df.columns.get_loc("Volume")] = 1_100_000.0
+
+    # Confirm this df has close < 200 SMA (so old Stage 2 would have rejected it)
+    sma200 = pd.Series(close).rolling(200).mean().iloc[-1]
+    assert close[-1] < sma200, "Precondition: close must be below 200 SMA"
+
+    result = scan_resistance_breakout("TEST", df, [zone])
+    assert result is not None, "Should detect breakout even when below 200 SMA"

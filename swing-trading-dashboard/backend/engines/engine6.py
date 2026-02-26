@@ -5,10 +5,10 @@ Detects stocks that have broken above a KDE resistance zone (from Engine 1)
 within the last 3 trading days with institutional volume confirmation.
 
 Criteria:
-  1. Stage 2: Close > 200 SMA, Close > 50 SMA, Close >= 52w-low x 1.30, rising 200 SMA
+  1. Uptrend filter: Close > 50 SMA
   2. For each RESISTANCE zone: close crossed above zone.upper within last 3 days,
      was below zone.upper on the bar before the cross
-  3. Breakout-day volume >= 150% of 50-day SMA
+  3. Breakout-day volume >= 100% of 50-day SMA
   4. Current close <= zone.upper x 1.05 (not already extended)
 
 Risk Math:
@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import atr as _atr
 
 
-_VOL_SURGE_THRESHOLD = 1.50
+_VOL_SURGE_THRESHOLD = 1.00
 _MAX_DAYS_LOOKBACK   = 3
 _MAX_EXTEND_PCT      = 0.05
 
@@ -53,32 +53,16 @@ def scan_resistance_breakout(
         if close_s.dropna().shape[0] < 55:
             return None
 
-        # Stage 2 filter
-        sma200 = close_s.rolling(200).mean()
+        # Uptrend filter: price must be above 50 SMA
         sma50  = close_s.rolling(50).mean()
 
-        lc_val   = close_s.iloc[-1]
-        lc       = float(lc_val.item() if hasattr(lc_val, 'item') else lc_val)
-        l200_val = sma200.iloc[-1]
-        l50_val  = sma50.iloc[-1]
-        l200 = float(l200_val.item() if hasattr(l200_val, 'item') else l200_val) if pd.notna(l200_val) else 0.0
-        l50  = float(l50_val.item()  if hasattr(l50_val,  'item') else l50_val)  if pd.notna(l50_val)  else 0.0
-
-        if l200 > 0 and lc < l200:
-            return None
+        lc_val  = close_s.iloc[-1]
+        lc      = float(lc_val.item() if hasattr(lc_val, 'item') else lc_val)
+        l50_val = sma50.iloc[-1]
+        l50     = float(l50_val.item() if hasattr(l50_val, 'item') else l50_val) if pd.notna(l50_val) else 0.0
 
         if l50 > 0 and lc < l50:
             return None
-
-        yr_low = float(low_s.iloc[-252:].min()) if len(low_s) >= 252 else float(low_s.min())
-        if yr_low > 0 and lc < yr_low * 1.30:
-            return None
-
-        if l200 > 0 and len(sma200) >= 21:
-            l200_prev_val = sma200.iloc[-21]
-            l200_prev = float(l200_prev_val.item() if hasattr(l200_prev_val, 'item') else l200_prev_val) if pd.notna(l200_prev_val) else 0.0
-            if l200_prev > 0 and l200 <= l200_prev:
-                return None
 
         # Volume SMA and ATR
         vol_sma50_s = volume_s.rolling(50).mean()
