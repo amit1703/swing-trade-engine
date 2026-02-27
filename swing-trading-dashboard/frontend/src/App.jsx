@@ -30,6 +30,7 @@ import SetupTable    from './components/SetupTable.jsx'
 import TradingChart  from './components/TradingChart.jsx'
 import PortfolioTab  from './components/PortfolioTab.jsx'
 import WatchlistPanel from './components/WatchlistPanel.jsx'
+import SystemGuideModal from './components/SystemGuideModal.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ export default function App() {
   const [loadingSetups,  setLoadingSetups ] = useState(false)
   const [loadingChart,   setLoadingChart  ] = useState(false)
   const [scanStatus,     setScanStatus    ] = useState(DEFAULT_SCAN_STATUS)
+  const [showGuide,      setShowGuide     ] = useState(false)
 
   const pollTimerRef = useRef(null)
 
@@ -145,6 +147,17 @@ export default function App() {
       .catch(() => {})
   }, [loadAllData])
 
+  // ── '?' key opens the guide (when no input element is focused) ───────────
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === '?' && document.activeElement.tagName !== 'INPUT') {
+        setShowGuide((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div
@@ -157,6 +170,7 @@ export default function App() {
         scanStatus={scanStatus}
         onRunScan={handleRunScan}
         onSearchTicker={handleTickerClick}
+        onOpenGuide={() => setShowGuide(true)}
       />
 
       {/* ── Tab bar ────────────────────────────────────────────────────── */}
@@ -297,6 +311,9 @@ export default function App() {
         )}
 
       </div>
+
+      {/* System Guide modal */}
+      <SystemGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </div>
   )
 }
