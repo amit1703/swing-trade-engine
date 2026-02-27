@@ -1,20 +1,22 @@
 """
-Engine 6: Resistance Breakout Scanner
-══════════════════════════════════════
-Detects stocks that have broken above a KDE resistance zone (from Engine 1)
-within the last 3 trading days with institutional volume confirmation.
+Engine 6: Resistance Breakout Scanner (Minervini/O'Neil)
+═════════════════════════════════════════════════════════
+Detects institutional-quality breakouts above KDE resistance zones.
 
-Criteria:
-  1. Uptrend filter: Close > 50 SMA
-  2. For each RESISTANCE zone: close crossed above zone.upper within last 3 days,
-     was below zone.upper on the bar before the cross
-  3. Breakout-day volume >= 100% of 50-day SMA
-  4. Current close <= zone.upper x 1.05 (not already extended)
+Three mandatory rules for a valid breakout:
+  1. LAUNCHPAD   — 3 trading days before breakout: highs within 3% of resistance
+                   AND daily range < 1.5 × ATR14.
+  2. DECISIVE CLOSE — breakout day close > zone_upper × 1.005 (0.5% above zone)
+                      AND close in top 30% of daily range.
+  3. INSTITUTIONAL VOLUME — breakout day volume ≥ 150% of 50-day average.
+
+Uptrend filter: Close > 50 SMA.
+Overextension gate: current close ≤ zone_upper × 1.05.
 
 Risk Math:
-  Entry      = breakout_bar_high x 1.001
-  Stop Loss  = zone.lower - 0.2 x ATR14
-  Take Profit= Entry + 2 x Risk   (1:2 R:R)
+  Entry      = breakout_bar_high × 1.001
+  Stop Loss  = zone.lower − 0.2 × ATR14
+  Take Profit= Entry + 2 × Risk   (1:2 R:R)
 """
 
 import os
@@ -28,9 +30,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import atr as _atr
 
 
-_VOL_SURGE_THRESHOLD = 1.00
-_MAX_DAYS_LOOKBACK   = 3
-_MAX_EXTEND_PCT      = 0.05
+_VOL_SURGE_THRESHOLD     = 1.50   # Rule 3: ≥ 150% of 50-day average
+_MAX_DAYS_LOOKBACK       = 3      # Search window for breakout bar
+_MAX_EXTEND_PCT          = 0.05   # Overextension gate (current close vs zone)
+_DECISIVE_CLOSE_MIN_PCT  = 0.005  # Rule 2a: close must be > 0.5% above zone
+_CLOSE_POSITION_MIN      = 0.70   # Rule 2b: close ≥ low + 70% of range (top 30%)
+_LAUNCHPAD_BARS          = 3      # Rule 1: number of pre-breakout bars to check
+_LAUNCHPAD_MAX_HIGH_PCT  = 1.03   # Rule 1: pre-bar high ≤ zone_upper × 1.03
+_LAUNCHPAD_MAX_RANGE_ATR = 1.5    # Rule 1: pre-bar range < 1.5 × ATR14
 
 
 def scan_resistance_breakout(
@@ -79,6 +86,7 @@ def scan_resistance_breakout(
 
         close_arr  = close_s.values.astype(float)
         high_arr   = high_s.values.astype(float)
+        low_arr    = low_s.values.astype(float)
         volume_arr = volume_s.values.astype(float)
         n          = len(close_arr)
 
@@ -109,19 +117,47 @@ def scan_resistance_breakout(
                 brk_close = close_arr[brk_idx]
                 pre_close = close_arr[pre_idx]
 
+                # Basic cross: price was below zone, then closed above
                 if not (pre_close <= zone_upper and brk_close > zone_upper):
                     continue
 
-                brk_high_chk = high_arr[brk_idx]
-                if brk_high_chk > zone_upper * (1 + _MAX_EXTEND_PCT):
+                brk_high  = high_arr[brk_idx]
+                brk_low   = low_arr[brk_idx]
+                brk_range = brk_high - brk_low
+
+                # Rule 2a — Decisive close: ≥ 0.5% above zone
+                if brk_close <= zone_upper * (1 + _DECISIVE_CLOSE_MIN_PCT):
                     continue
 
+                # Rule 2b — Close in top 30% of day's range
+                if brk_range > 0 and brk_close < brk_low + _CLOSE_POSITION_MIN * brk_range:
+                    continue
+
+                # Rule 1 — Launchpad: 3 pre-breakout bars tight under resistance
+                launchpad_ok = True
+                for offset in range(1, _LAUNCHPAD_BARS + 1):
+                    lp_idx = brk_idx - offset
+                    if lp_idx < 0:
+                        launchpad_ok = False
+                        break
+                    lp_high  = high_arr[lp_idx]
+                    lp_low   = low_arr[lp_idx]
+                    lp_range = lp_high - lp_low
+                    if lp_high > zone_upper * _LAUNCHPAD_MAX_HIGH_PCT:
+                        launchpad_ok = False
+                        break
+                    if latr > 0 and lp_range >= _LAUNCHPAD_MAX_RANGE_ATR * latr:
+                        launchpad_ok = False
+                        break
+                if not launchpad_ok:
+                    continue
+
+                # Rule 3 — Institutional volume: ≥ 150% of 50-day average
                 brk_vol   = volume_arr[brk_idx]
                 vol_ratio = brk_vol / vol_sma50
                 if vol_ratio < _VOL_SURGE_THRESHOLD:
                     continue
 
-                brk_high    = high_arr[brk_idx]
                 entry       = round(brk_high * 1.001, 2)
                 stop_loss   = round(zone_lower - 0.2 * latr, 2)
                 risk        = entry - stop_loss
