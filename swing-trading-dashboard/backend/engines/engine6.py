@@ -193,7 +193,7 @@ def scan_resistance_breakout(
                 if vol_ratio < _VOL_SURGE_THRESHOLD:
                     if debug:
                         print(f"Engine 6 Breakout: REJECTED - Breakout volume {vol_ratio:.1f}x "
-                              f"(required: 1.5x 50d SMA)")
+                              f"(required: {_VOL_SURGE_THRESHOLD:.1f}x 50d SMA)")
                     continue
 
                 entry       = round(brk_high * 1.001, 2)
