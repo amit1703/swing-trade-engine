@@ -851,8 +851,16 @@ async def get_chart_data(ticker: str):
                 }
             )
 
-    # S/R zones from latest scan (pre-computed)
+    # S/R zones: try DB first (fast); fall back to fresh Engine 1 computation
+    # so that manually-searched tickers always see their KDE bands.
     zones = await get_sr_zones_for_ticker_from_db(DB_PATH, sym)
+    if not zones:
+        try:
+            loop = asyncio.get_event_loop()
+            zones = await loop.run_in_executor(None, calculate_sr_zones, sym, df)
+        except Exception as exc:
+            log.warning("Fresh zone calculation failed for %s: %s", sym, exc)
+            zones = []
 
     # Detect trendline (fresh computation for chart display)
     trendline = None
