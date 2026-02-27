@@ -93,7 +93,18 @@ def scan_resistance_breakout(
         volume_arr = volume_s.values.astype(float)
         n          = len(close_arr)
 
-        resistance_zones = [z for z in zones if z.get("type") == "RESISTANCE"]
+        # Include RESISTANCE zones (price still below) AND SUPPORT zones where
+        # price is within the overextension window — these are zones the price
+        # recently crossed above and Engine 1 reclassified from RESISTANCE to SUPPORT.
+        resistance_zones = [
+            z for z in zones
+            if z.get("type") == "RESISTANCE"
+            or (
+                z.get("type") == "SUPPORT"
+                and float(z.get("upper", 0)) > 0
+                and lc <= float(z.get("upper", 0)) * (1 + _MAX_EXTEND_PCT)
+            )
+        ]
         if not resistance_zones:
             if debug:
                 print("Engine 6 Breakout: REJECTED - No KDE resistance zones found")
