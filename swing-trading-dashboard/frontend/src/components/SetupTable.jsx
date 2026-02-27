@@ -97,6 +97,9 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                       >
                         {s.ticker}
                       </span>
+                      {s.hot_sector && (
+                        <span title={`Hot sector: ${s.sector ?? ''} (3+ setups)`} style={{ marginLeft: 3, fontSize: 10 }}>🔥</span>
+                      )}
                     </td>
 
                     {/* Entry */}

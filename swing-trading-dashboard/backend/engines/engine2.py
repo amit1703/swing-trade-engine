@@ -962,9 +962,13 @@ def scan_vcp(
             return None
 
         # ── A4. Volume dry-up ─────────────────────────────────────────────
+        # Two-part gate:
+        #   (a) 3-day average below the 50-day average (quiet overall)
+        #   (b) At least one day in the last 10 bars had genuine evaporation
+        #       (< 50 % of the 50-day average) — eliminates mild drift-down
         last3_vol_val = volume.iloc[-3:].mean()
         last3_vol = float(last3_vol_val.item() if hasattr(last3_vol_val, 'item') else last3_vol_val)
-        is_dry = last3_vol < avg_vol
+        is_dry = last3_vol < avg_vol and _has_vol_dryup(volume, avg_vol)
 
         # ── A5. Engine 1 resistance proximity ────────────────────────────
         nearest_res = None
@@ -1033,6 +1037,26 @@ def scan_vcp(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _has_vol_dryup(
+    volume: pd.Series,
+    avg_vol: float,
+    window: int = 10,
+    threshold: float = 0.5,
+) -> bool:
+    """
+    Return True if at least one bar in the last `window` bars has
+    volume strictly less than `threshold` × avg_vol.
+
+    Implements the Minervini/O'Neil "institutional dry-up" gate:
+    genuine volume evaporation must include at least one day of real
+    indifference (< 50 % of the 50-day average), not just a mild
+    drift below the average.
+    """
+    if avg_vol <= 0 or len(volume) < window:
+        return False
+    return bool((volume.iloc[-window:] < threshold * avg_vol).any())
+
 
 def _parabola(x: np.ndarray, a: float, b: float, c: float) -> np.ndarray:
     return a * x**2 + b * x + c

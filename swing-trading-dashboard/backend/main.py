@@ -567,6 +567,12 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
             len(collected_setups),
         )
 
+        # ── Sector Clustering — inject hot_sector flag before saving ─────────
+        try:
+            _inject_hot_sector(collected_setups)
+        except Exception as exc:
+            log.warning("Sector clustering failed: %s", exc)
+
         # ── Batch Save All Setups (5-10x faster than individual saves) ──────
         if collected_setups:
             db_save_start = time.time()
@@ -575,13 +581,10 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
             log.info("Batch saved %d setups to database  [%.1fs]", len(collected_setups), db_save_time)
 
         # ── Sector Summary with Bold Highlighting ───────────────────────────
-        # Sectors with 3+ setups are highlighted in bold for institutional rotation
         try:
-            all_setups = await get_latest_setups(DB_PATH, scan_ts)
-            sector_counts = {}
-
-            for setup in all_setups:
-                sector = setup.get("sector", "Unknown")
+            sector_counts: Dict[str, int] = {}
+            for s in collected_setups:
+                sector = s.get("sector", "Unknown")
                 sector_counts[sector] = sector_counts.get(sector, 0) + 1
 
             # Sort by count descending
@@ -640,6 +643,29 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
         _scan_state["last_error"] = str(exc)
     finally:
         _scan_state["in_progress"] = False
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Scan helpers
+# ────────────────────────────────────────────────────────────────────────────
+
+def _inject_hot_sector(setups: List[Dict], threshold: int = 3) -> None:
+    """
+    Mutate each setup in-place: set hot_sector=True if its sector has
+    ≥ threshold setups in the current scan batch, False otherwise.
+
+    hot_sector is persisted in the metadata JSON column and surfaced
+    to the frontend as a 🔥 flag for institutional rotation signals.
+    """
+    sector_counts: Dict[str, int] = {}
+    for s in setups:
+        sector = s.get("sector", "Unknown")
+        sector_counts[sector] = sector_counts.get(sector, 0) + 1
+
+    hot = {sector for sector, count in sector_counts.items() if count >= threshold}
+
+    for s in setups:
+        s["hot_sector"] = s.get("sector", "Unknown") in hot
 
 
 # ────────────────────────────────────────────────────────────────────────────
