@@ -5,7 +5,7 @@ Detects two classic O'Neil/Minervini base patterns on the daily timeframe.
 
 PATTERN A — Cup & Handle (C&H):
   1. Cup     : U-shaped consolidation, 12–35% depth, 30–120 bars
-  2. Right rim: recovers to within 10% of left peak
+  2. Right rim: recovers to within 15% of left peak
   3. Handle  : 5–25 day pullback 5–15%, volume contracting
   4. Signal  : DRY (within 1.0% of handle high) or BRK (above, vol ≥ 120%)
 
@@ -13,7 +13,7 @@ PATTERN B — Flat Base (FLAT):
   1. Duration: ≥ 25 trading days
   2. Depth   : ≤ 12% from high to low of range
   3. Location: Close in upper 75% of range
-  4. Volume  : 10-day avg ≤ 75% of 50-day avg
+  4. Volume  : 10-day avg ≤ 90% of 50-day avg
   5. Signal  : DRY (within 1.0% of base high) or BRK (above, vol ≥ 120%)
 
 Quality Score (0–100):
@@ -93,22 +93,6 @@ def scan_cup_handle(
             return None
         if l50 > 0 and lc_raw < l50:
             return None
-
-        # ── Stage 2 confirmation: prior advance + rising 200 SMA ───────
-        # Stock must be >= 30% above its 52-week low (proves prior advance)
-        if len(low_s) >= 252:
-            yr_low = float(low_s.iloc[-252:].min())
-        else:
-            yr_low = float(low_s.min())
-        if yr_low > 0 and lc_raw < yr_low * 1.30:
-            return None
-
-        # 200 SMA must be rising (today > 20 bars ago)
-        if l200 > 0 and len(sma200) >= 21:
-            l200_prev_val = sma200.iloc[-21]
-            l200_prev = float(l200_prev_val.item() if hasattr(l200_prev_val, 'item') else l200_prev_val) if pd.notna(l200_prev_val) else 0.0
-            if l200_prev > 0 and l200 <= l200_prev:
-                return None
 
         close = close_s.values.astype(float)
         volume = volume_s.values.astype(float)
@@ -263,20 +247,6 @@ def scan_flat_base(
         if l50 > 0 and lc < l50:
             return None
 
-        # ── Stage 2 confirmation: prior advance + rising 200 SMA ───────
-        if len(low_s) >= 252:
-            yr_low = float(low_s.iloc[-252:].min())
-        else:
-            yr_low = float(low_s.min())
-        if yr_low > 0 and lc < yr_low * 1.30:
-            return None
-
-        if l200 > 0 and len(sma200) >= 21:
-            l200_prev_val = sma200.iloc[-21]
-            l200_prev = float(l200_prev_val.item() if hasattr(l200_prev_val, 'item') else l200_prev_val) if pd.notna(l200_prev_val) else 0.0
-            if l200_prev > 0 and l200 <= l200_prev:
-                return None
-
         # ── Dynamic lookback: find where the flat base starts ────────────
         # Scan backward from 60 days to find the longest window where
         # high-to-low depth stays <= 12%. Minimum 25 days.
@@ -325,7 +295,7 @@ def scan_flat_base(
             return None
 
         vol_ratio_10_50 = vsm10 / vsm50
-        if vol_ratio_10_50 > 0.75:
+        if vol_ratio_10_50 > 0.90:
             return None
 
         # ATR
@@ -439,8 +409,8 @@ def _find_cup(close: np.ndarray, lookback: int = 120) -> Optional[Dict]:
     right_rim_idx = cup_bottom_idx + right_rim_rel
     right_rim = float(data[right_rim_idx])
 
-    # Right rim must recover to within 10% of left peak
-    if (left_peak - right_rim) / left_peak > 0.10:
+    # Right rim must recover to within 15% of left peak
+    if (left_peak - right_rim) / left_peak > 0.15:
         return None
 
     # Cup must span at least 20 bars

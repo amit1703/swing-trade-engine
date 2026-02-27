@@ -332,3 +332,39 @@ def test_flat_base_pivot_uses_intraday_high():
     # Entry is pivot * 1.001; pivot should reflect the intraday High spike
     assert result["entry"] > df["Close"].max() * 1.001, \
         "Entry should be above highest-close pivot when intraday High is higher"
+
+
+def test_flat_base_detects_when_200sma_not_rising():
+    """Flat base must be found even when 200 SMA is flat, as long as close > 200 SMA."""
+    from engines.engine5 import scan_flat_base
+    import numpy as np, pandas as pd
+
+    # 400 bars: 50-bar prior advance to 102.0, then 350 bars flat at 102.0.
+    # SMA200 at end ≈ 102.0 = lc, so close > 200 SMA check passes (not strictly less-than).
+    # One deep intrabar low at bar 340 (within the 60-bar lookback window) adds depth
+    # so pct_in_range ≥ 0.75 and depth stays ≤ 12%.
+    # Volume: 1M baseline, 200k dry-up over the last 10 bars gives ratio ≈ 0.24.
+    n = 400
+    dates = pd.date_range("2024-01-01", periods=n, freq="B")
+    close = np.full(n, 102.0, dtype=float)
+    close[:50] = np.linspace(70.0, 102.0, 50)   # prior advance
+
+    high = close * 1.002
+    low  = close * 0.998
+    low[340] = 98.0   # deep wick inside last-60-bar window — adds range without breaking flatness
+
+    volume = np.full(n, 1_000_000.0)
+    volume[-10:] = 200_000.0   # dry-up: vol_sma10 ≈ 200k vs vol_sma50 ≈ 840k → ratio ≈ 0.24
+
+    df = pd.DataFrame(
+        {"Close": close, "Adj Close": close, "High": high,
+         "Low": low, "Open": close, "Volume": volume},
+        index=dates,
+    )
+
+    # Verify precondition: 200 SMA is NOT rising (today ≈ 20 bars ago)
+    sma200 = pd.Series(close).rolling(200).mean()
+    assert sma200.iloc[-1] <= sma200.iloc[-21] + 0.1, "Precondition: 200 SMA must not be rising"
+
+    result = scan_flat_base("TEST", df)
+    assert result is not None, "Should find flat base even when 200 SMA is flat/not-rising"
