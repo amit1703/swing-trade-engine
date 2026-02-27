@@ -125,3 +125,25 @@ def test_pullback_debug_false_no_output(capsys):
     df = _trend_fail_df()
     scan_pullback("TEST", df, [], None, debug=False)
     assert capsys.readouterr().out == ""
+
+
+# ── Task 4: scan_relaxed_pullback ────────────────────────────────────────
+
+from engines.engine3 import scan_relaxed_pullback
+
+
+def test_rlx_pullback_debug_trend_filter(capsys):
+    """debug=True prints trend filter rejection for a downtrending stock."""
+    df = _trend_fail_df()
+    result = scan_relaxed_pullback("TEST", df, [], None, debug=True)
+    assert result is None
+    out = capsys.readouterr().out
+    assert "Engine 3 RLX Pullback: REJECTED" in out
+    assert "Trend filter" in out
+
+
+def test_rlx_pullback_debug_false_no_output(capsys):
+    """debug=False produces no stdout."""
+    df = _trend_fail_df()
+    scan_relaxed_pullback("TEST", df, [], None, debug=False)
+    assert capsys.readouterr().out == ""

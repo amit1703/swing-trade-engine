@@ -233,6 +233,7 @@ def scan_relaxed_pullback(
     df: pd.DataFrame,
     sr_zones: List[Dict],
     trendline: Optional[Dict] = None,
+    debug: bool = False,
 ) -> Optional[Dict]:
     """
     Relaxed tactical pullback: triggers when no strict pullback found.
@@ -286,6 +287,11 @@ def scan_relaxed_pullback(
 
         # ── 1. Trend filter ───────────────────────────────────────────────
         if not (l8 > l20 and lc > l50):
+            if debug:
+                print(
+                    f"Engine 3 RLX Pullback: REJECTED - Trend filter failed "
+                    f"(EMA8 {l8:.2f} vs EMA20 {l20:.2f}, Close {lc:.2f} vs SMA50 {l50:.2f})"
+                )
             return None
 
         # ── 2. Buffer Zone: within 2% of EMA-8 OR EMA-20 ────────────────
@@ -296,11 +302,23 @@ def scan_relaxed_pullback(
         near_20 = dist_to_20 <= 0.02
 
         if not (near_8 or near_20):
+            if debug:
+                print(
+                    f"Engine 3 RLX Pullback: REJECTED - Not within buffer of EMA8 or EMA20 "
+                    f"(Close {lc:.2f}, EMA8 {l8:.2f} [{dist_to_8*100:.1f}%], "
+                    f"EMA20 {l20:.2f} [{dist_to_20*100:.1f}%], required: ≤2%)"
+                )
             return None
 
         # ── 3. CCI Early Signal: turning from deeply negative ────────────────────
         cci_turning = cci_today > cci_prev and cci_prev < -30.0
         if not cci_turning:
+            if debug:
+                print(
+                    f"Engine 3 RLX Pullback: REJECTED - CCI relaxation failed "
+                    f"(yesterday: {cci_prev:.1f}, today: {cci_today:.1f}, "
+                    f"required: < -30 and today rising)"
+                )
             return None
 
         # ── 4. Low Volume: 3-day avg <= 100% of 50-day SMA ────────────────
@@ -315,6 +333,11 @@ def scan_relaxed_pullback(
         last3_vol = float(v3m_val.item() if hasattr(v3m_val, 'item') else v3m_val)
 
         if last3_vol > avg_vol:
+            if debug:
+                print(
+                    f"Engine 3 RLX Pullback: REJECTED - Volume not dry "
+                    f"(3d avg vol {last3_vol:.0f} > 50d SMA vol {avg_vol:.0f})"
+                )
             return None
 
         # ── Mandatory support zone touch ─────────────────────────────────
@@ -328,6 +351,11 @@ def scan_relaxed_pullback(
                 nearest_sup = z
                 break
         if nearest_sup is None:
+            if debug:
+                print(
+                    f"Engine 3 RLX Pullback: REJECTED - No KDE support zone touch "
+                    f"(low: {ll:.2f})"
+                )
             return None
 
         # ── Risk Math ─────────────────────────────────────────────────────
