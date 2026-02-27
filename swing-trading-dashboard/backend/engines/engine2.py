@@ -726,11 +726,10 @@ def scan_vcp(
             if risk <= 0 or risk > entry * 0.15:
                 if debug:
                     print(
-                        f"Engine 2 VCP: REJECTED - Breakout volume {volume_ratio:.1f}x "
-                        f"(required: ≥1.5x 50d SMA) — risk math failed "
-                        f"(risk={risk:.2f}, entry={entry:.2f})"
+                        f"Engine 2 VCP: REJECTED - Path B risk math invalid "
+                        f"(risk={risk:.2f}, entry={entry:.2f}, "
+                        f"max_allowed={entry * 0.15:.2f})"
                     )
-                pass  # fall through to Path C/A check
             else:
                 take_profit = round(entry + 2.0 * risk, 2)
                 return {
