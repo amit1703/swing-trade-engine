@@ -53,5 +53,6 @@ def test_vitality_debug_prints_rejection(capsys):
 def test_vitality_debug_false_no_output(capsys):
     """debug=False (default) produces no stdout even when stock is rejected."""
     df = _flatline_df()
-    is_price_vital(df, debug=False)
+    result = is_price_vital(df, debug=False)
+    assert result is False
     assert capsys.readouterr().out == ""

@@ -80,3 +80,10 @@ SCAN_TIMEOUT_SECONDS = 600  # Maximum scan duration (10 minutes)
 
 DB_PATH = "trading.db"
 DB_TIMEOUT = 10.0  # SQLite timeout in seconds
+
+# ──────────────────────────────────────────────────────────────────────────
+# Price Vitality / Zombie-Stock Filter
+# ──────────────────────────────────────────────────────────────────────────
+
+VITALITY_LOOKBACK_DAYS = 10   # Trading days used for H-L range check
+VITALITY_MIN_RANGE_PCT = 0.02  # Minimum H-L range (2%) to pass vitality

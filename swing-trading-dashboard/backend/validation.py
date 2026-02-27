@@ -11,6 +11,8 @@ import pandas as pd
 from constants import (
     MIN_CANDLES_FOR_ANALYSIS,
     MIN_CANDLES_FOR_RS,
+    VITALITY_LOOKBACK_DAYS,
+    VITALITY_MIN_RANGE_PCT,
 )
 
 log = logging.getLogger(__name__)
@@ -169,8 +171,8 @@ def validate_setup_result(setup: Dict[str, Any], ticker: str) -> bool:
 
 def is_price_vital(
     df: pd.DataFrame,
-    lookback: int = 10,
-    min_range_pct: float = 0.02,
+    lookback: int = VITALITY_LOOKBACK_DAYS,
+    min_range_pct: float = VITALITY_MIN_RANGE_PCT,
     debug: bool = False,
 ) -> bool:
     """
@@ -201,7 +203,7 @@ def is_price_vital(
         if debug:
             print(
                 f"Vitality: REJECTED - Zombie/Buyout stock "
-                f"(10-day range {range_pct:.1%} < {min_range_pct:.0%})"
+                f"({lookback}-day range {range_pct:.1%} < {min_range_pct:.0%})"
             )
         return False
     return True
