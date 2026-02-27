@@ -148,7 +148,9 @@ export default function PortfolioTab({ onTickerClick }) {
                   <th>P/L %</th>
                   <th>Stop $</th>
                   <th>Trail $</th>
-                  <th>Target $</th>
+                  <th>T1 $</th>
+                  <th>T2 $</th>
+                  <th>T3 $</th>
                   <th style={{ textAlign: 'center' }}>Health</th>
                   <th style={{ textAlign: 'center' }}>Act</th>
                 </tr>
@@ -214,8 +216,16 @@ export default function PortfolioTab({ onTickerClick }) {
                         )}
                       </td>
 
-                      {/* Target */}
-                      <td style={{ color: 'var(--go)' }}>{fmt2(t.target)}</td>
+                      {/* T1 */}
+                      <td style={{ color: 'var(--go)' }}>{fmt2(t.targets?.[0] ?? t.target)}</td>
+                      {/* T2 */}
+                      <td style={{ color: 'var(--go)' }}>
+                          {t.targets?.[1] != null ? fmt2(t.targets[1]) : <Dash />}
+                      </td>
+                      {/* T3 */}
+                      <td style={{ color: 'var(--go)' }}>
+                          {t.targets?.[2] != null ? fmt2(t.targets[2]) : <Dash />}
+                      </td>
 
                       {/* Health badge */}
                       <td style={{ textAlign: 'center' }}>
