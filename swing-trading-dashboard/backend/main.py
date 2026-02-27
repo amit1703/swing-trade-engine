@@ -77,7 +77,7 @@ from engines.engine0 import check_market_regime
 from engines.engine1 import calculate_sr_zones
 from engines.engine2 import scan_vcp, detect_trendline, scan_near_breakout
 from engines.engine3 import scan_pullback, scan_relaxed_pullback
-from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats
+from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats, calculate_rs_score
 from engines.engine5 import scan_base_pattern
 from engines.engine6 import scan_resistance_breakout
 from tickers import SCAN_UNIVERSE
@@ -366,6 +366,7 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                 rs_ratio = 0.0
                 rs_52w_high = 0.0
                 rs_blue_dot = False
+                rs_score = 0.0
                 zones: List[Dict] = []
 
                 # Run RS and S/R zone calculations in parallel
@@ -407,13 +408,19 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                 if zones:
                     await save_sr_zones(DB_PATH, scan_ts, ticker, zones)
 
+                # Composite RS score (O'Neil formula)
+                if spy_df_full is not None:
+                    rs_score = await loop.run_in_executor(
+                        None, calculate_rs_score, df, spy_df_full
+                    )
+
                 # Detect trendline early (used by VCP follow-up, near-breakout, and pullback)
                 tl = await loop.run_in_executor(None, detect_trendline, ticker, df)
 
                 # Engine 2: VCP breakout (with RS parameters for Path E)
                 vcp = await loop.run_in_executor(
                     None, scan_vcp, ticker, df, zones, spy_3m_return,
-                    rs_ratio, rs_52w_high, rs_blue_dot
+                    rs_ratio, rs_52w_high, rs_blue_dot, rs_score
                 )
                 if vcp:
                     # Sanitize VCP output: ensure all numeric fields are proper floats
@@ -503,7 +510,7 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                 try:
                     base = await loop.run_in_executor(
                         None, scan_base_pattern, ticker, df,
-                        spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot
+                        spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score
                     )
                     if base:
                         try:

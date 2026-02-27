@@ -597,6 +597,7 @@ def scan_vcp(
     rs_ratio: float = 0.0,
     rs_52w_high: float = 0.0,
     rs_blue_dot: bool = False,
+    rs_score: float = 0.0,
 ) -> Optional[Dict]:
     """
     Returns a setup dict if a valid VCP (Path A), Confirmed Breakout (Path B),
@@ -699,7 +700,7 @@ def scan_vcp(
         confirmed_breakout = False
         bk_zone: Optional[Dict] = None
 
-        if resistance_zones and is_vol_surge and rs_vs_spy > -0.05:
+        if resistance_zones and is_vol_surge and rs_score > 0:
             # Find resistance zones whose UPPER bound price has cleared
             broken = [z for z in resistance_zones if lc > z["upper"]]
             if broken:
@@ -736,6 +737,7 @@ def scan_vcp(
                         (lc - bk_zone["upper"]) / bk_zone["upper"] * 100, 2
                     ),
                     "rs_vs_spy":          rs_vs_spy,
+                    "rs_score":           round(rs_score, 4),
                     "tr_contraction_pct": round((1 - (tr.iloc[-5:].mean() / tr.iloc[-25:-5].mean())) * 100, 1) if len(tr) >= 25 else None,
                     "is_trendline_breakout": False,
                     "is_kde_breakout":    False,
@@ -789,6 +791,7 @@ def scan_vcp(
                     "resistance_level":   None,
                     "breakout_pct":       None,
                     "rs_vs_spy":          rs_vs_spy,
+                    "rs_score":           round(rs_score, 4),
                     "tr_contraction_pct": round((1 - (tr.iloc[-5:].mean() / tr.iloc[-25:-5].mean())) * 100, 1) if len(tr) >= 25 else None,
                     "is_trendline_breakout": True,
                     "is_kde_breakout":    False,
@@ -850,6 +853,7 @@ def scan_vcp(
                         "resistance_level":   nearest_res_above["level"],
                         "breakout_pct":       round(pct_above_upper * 100, 2),
                         "rs_vs_spy":          rs_vs_spy,
+                        "rs_score":           round(rs_score, 4),
                         "tr_contraction_pct": round((1 - (tr.iloc[-5:].mean() / tr.iloc[-25:-5].mean())) * 100, 1) if len(tr) >= 25 else None,
                         "is_trendline_breakout": False,
                         "is_kde_breakout":    True,
@@ -903,6 +907,7 @@ def scan_vcp(
                         "resistance_level":   nearest_res_above["level"],
                         "breakout_pct":       round(pct_below_upper * 100, 2),
                         "rs_vs_spy":          rs_vs_spy,
+                        "rs_score":           round(rs_score, 4),
                         "tr_contraction_pct": round((1 - (tr.iloc[-5:].mean() / tr.iloc[-25:-5].mean())) * 100, 1) if len(tr) >= 25 else None,
                         "is_trendline_breakout": False,
                         "is_kde_breakout":    False,
@@ -1014,6 +1019,7 @@ def scan_vcp(
             "resistance_level":   nearest_res["level"],
             "breakout_pct":       None,
             "rs_vs_spy":          rs_vs_spy,
+            "rs_score":           round(rs_score, 4),
             "tr_contraction_pct": round((1 - last5_tr / prev20_tr) * 100, 1),
             "is_trendline_breakout": False,
             "is_kde_breakout":    False,

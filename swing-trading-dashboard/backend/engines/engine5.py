@@ -47,10 +47,11 @@ def scan_base_pattern(
     rs_ratio: float = 0.0,
     rs_52w_high: float = 0.0,
     rs_blue_dot: bool = False,
+    rs_score: float = 0.0,
 ) -> Optional[Dict]:
     """Main entry point. Returns the highest-quality base setup found, or None."""
-    ch = scan_cup_handle(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot)
-    fb = scan_flat_base(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot)
+    ch = scan_cup_handle(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score)
+    fb = scan_flat_base(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score)
     candidates = [s for s in [ch, fb] if s is not None and s.get("quality_score", 0) >= 25]
     if not candidates:
         return None
@@ -64,6 +65,7 @@ def scan_cup_handle(
     rs_ratio: float = 0.0,
     rs_52w_high: float = 0.0,
     rs_blue_dot: bool = False,
+    rs_score: float = 0.0,
 ) -> Optional[Dict]:
     """Scan for a Cup & Handle pattern. Returns setup dict or None."""
     try:
@@ -191,6 +193,7 @@ def scan_cup_handle(
             "base_length_days": max(0, base_length),
             "volume_dry_pct": round(vol_dry_pct * 100, 1),
             "rs_vs_spy": round(rs_vs_spy * 100, 2),
+            "rs_score":  round(rs_score, 4),
             "setup_date": str(data.index[-1].date()),
             # Geometry for chart overlay
             "geometry": {
@@ -217,6 +220,7 @@ def scan_flat_base(
     rs_ratio: float = 0.0,
     rs_52w_high: float = 0.0,
     rs_blue_dot: bool = False,
+    rs_score: float = 0.0,
 ) -> Optional[Dict]:
     """Scan for a Flat Base pattern. Returns setup dict or None."""
     try:
@@ -355,6 +359,7 @@ def scan_flat_base(
             "base_length_days": lookback,
             "volume_dry_pct": round(vol_ratio_10_50 * 100, 1),
             "rs_vs_spy": round(rs_vs_spy * 100, 2),
+            "rs_score":  round(rs_score, 4),
             "setup_date": str(data.index[-1].date()),
             # Geometry for chart overlay (uses actual high/low for bounding box)
             "geometry": {
