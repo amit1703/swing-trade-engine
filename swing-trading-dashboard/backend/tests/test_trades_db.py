@@ -105,3 +105,36 @@ def test_legacy_target_col_written_as_t1(tmp_db):
 
     raw_target = run(_raw_target(tmp_db))
     assert raw_target == 190.0
+
+
+def test_trade_in_model_rejects_empty_targets():
+    """TradeIn must reject an empty targets list."""
+    import sys, os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from main import TradeIn
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        TradeIn(
+            ticker="AAPL", entry_price=140, quantity=10,
+            stop_loss=135, targets=[], entry_date="2026-01-01"
+        )
+
+
+def test_trade_in_model_rejects_four_targets():
+    """TradeIn must reject more than 3 targets."""
+    from main import TradeIn
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        TradeIn(
+            ticker="AAPL", entry_price=140, quantity=10,
+            stop_loss=135, targets=[150, 160, 170, 180], entry_date="2026-01-01"
+        )
+
+
+def test_trade_in_model_accepts_one_to_three():
+    """TradeIn accepts 1, 2, or 3 targets."""
+    from main import TradeIn
+    m1 = TradeIn(ticker="A", entry_price=100, quantity=1, stop_loss=95, targets=[110], entry_date="2026-01-01")
+    assert m1.targets == [110]
+    m3 = TradeIn(ticker="B", entry_price=100, quantity=1, stop_loss=95, targets=[110, 120, 130], entry_date="2026-01-01")
+    assert len(m3.targets) == 3

@@ -43,7 +43,7 @@ import yfinance as yf
 from indicators import ema as _ema, sma as _sma, cci as _cci, atr as _atr
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from constants import (
     CONCURRENCY_LIMIT,
@@ -933,7 +933,7 @@ class TradeIn(BaseModel):
     entry_price: float
     quantity:    float
     stop_loss:   float
-    target:      float
+    targets:     List[float] = Field(..., min_length=1, max_length=3)
     entry_date:  str
     notes:       str = ""
 
