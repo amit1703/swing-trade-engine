@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Database
+backend/trading.db
+backend/trading.db-journal
+*.db-journal
+
+# Node / Frontend
+frontend/node_modules/
+frontend/.vite/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
