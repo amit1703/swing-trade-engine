@@ -23,7 +23,7 @@ import pandas as pd
 from constants import DATA_FETCH_PERIOD, DAYS_3_MONTHS, VITALITY_LOOKBACK_DAYS, VITALITY_MIN_RANGE_PCT
 from validation import is_price_vital
 from engines.engine1 import calculate_sr_zones
-from engines.engine2 import scan_vcp, detect_trendline
+from engines.engine2 import scan_vcp, detect_trendline, scan_near_breakout
 from engines.engine3 import scan_pullback, scan_relaxed_pullback
 from engines.engine4 import calculate_rs_score, detect_rs_blue_dot, calculate_rs_line
 from engines.engine5 import scan_base_pattern
@@ -119,7 +119,7 @@ def main() -> None:
             rs_line = calculate_rs_line(df, spy_df)
             if rs_line and len(rs_line) >= 252:
                 rs_ratio    = float(rs_line[-1])
-                rs_52w_high = float(max(rs_line))
+                rs_52w_high = float(max(rs_line[-252:]))
                 rs_blue_dot = detect_rs_blue_dot(rs_line)
             rs_score = calculate_rs_score(df, spy_df)
         except Exception as exc:
@@ -158,6 +158,12 @@ def main() -> None:
                   f"stop={res['stop_loss']:.2f}  target={res['take_profit']:.2f}  "
                   f"R:R={res['rr']:.1f}")
             passes += 1
+        else:
+            # Check watchlist proximity (not a full setup, but useful context)
+            wl = scan_near_breakout(ticker, df, zones)
+            if wl:
+                print(f"  ↳ WATCHLIST — within {wl.get('proximity_pct', 0):.1%} of resistance "
+                      f"(not a setup, no entry signal yet)")
     except Exception as exc:
         print(f"  ✗ Engine 2 error: {exc}")
 
@@ -190,6 +196,8 @@ def main() -> None:
         print(f"  ✗ Engine 3 (relaxed) error: {exc}")
 
     # ── ENGINE 5: Base Patterns ───────────────────────────────────
+    # Note: Engine 5 has no gate-level debug messages (complex geometry).
+    # A pass/fail result is shown; for deeper diagnosis read engine5.py directly.
     print(f"\n{_DIV}")
     print("  ENGINE 5 — BASE PATTERNS (Cup & Handle / Flat Base)")
     print(_DIV)
@@ -203,7 +211,7 @@ def main() -> None:
                   f"Q={res.get('quality_score', 0)}  entry={res['entry']:.2f}")
             passes += 1
         else:
-            print("✗ No qualifying base pattern")
+            print("✗ No qualifying base pattern (no gate-level trace for Engine 5)")
     except Exception as exc:
         print(f"  ✗ Engine 5 error: {exc}")
 
