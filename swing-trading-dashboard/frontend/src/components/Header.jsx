@@ -7,7 +7,7 @@
  */
 import { useRef, useState } from 'react'
 
-export default function Header({ regime, scanStatus, onRunScan, onSearchTicker }) {
+export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, onOpenGuide }) {
   const isBullish = regime?.is_bullish
   const isNoData  = !regime || regime.regime === 'NO_DATA'
   const isHalt    = regime && !isBullish && regime.regime !== 'NO_DATA'
@@ -116,6 +116,35 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker }
               </>
             )}
           </div>
+
+          {/* Guide button */}
+          <button
+            onClick={onOpenGuide}
+            style={{
+              fontFamily: 'IBM Plex Mono, monospace',
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              padding: '5px 12px',
+              background: 'transparent',
+              border: '1px solid var(--border-light)',
+              color: 'var(--muted)',
+              cursor: 'pointer',
+              textTransform: 'uppercase',
+              transition: 'border-color 0.15s, color 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent)'
+              e.currentTarget.style.color = 'var(--accent)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-light)'
+              e.currentTarget.style.color = 'var(--muted)'
+            }}
+            title="System Guide & Legend (?)"
+          >
+            ? GUIDE
+          </button>
 
           {/* Run scan button */}
           <button
