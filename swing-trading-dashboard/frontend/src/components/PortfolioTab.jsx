@@ -117,7 +117,7 @@ export default function PortfolioTab({ onTickerClick }) {
       <div className="flex-1 overflow-auto">
         {loading && trades.length === 0 ? (
           <div className="terminal-placeholder">
-            <span className="text-t-muted text-[10px] tracking-widest uppercase terminal-cursor">
+            <span className="text-t-muted text-[10px] tracking-widest uppercase">
               Loading positions
             </span>
           </div>
@@ -188,14 +188,16 @@ export default function PortfolioTab({ onTickerClick }) {
                       </td>
 
                       {/* P/L $ */}
-                      <td style={{ color: plPos ? 'var(--go)' : 'var(--halt)', fontWeight: 600 }}>
+                      <td className={plPos ? 'pl-positive' : 'pl-negative'}
+                          style={{ color: plPos ? 'var(--go)' : 'var(--halt)', fontWeight: 600 }}>
                         {t.pl_dollar != null
                           ? `${plPos ? '+' : ''}${fmt$(t.pl_dollar)}`
                           : <Dash />}
                       </td>
 
                       {/* P/L % */}
-                      <td style={{ color: plPos ? 'var(--go)' : 'var(--halt)' }}>
+                      <td className={plPos ? 'pl-positive' : 'pl-negative'}
+                          style={{ color: plPos ? 'var(--go)' : 'var(--halt)' }}>
                         {t.pl_pct != null
                           ? `${plPos ? '+' : ''}${t.pl_pct.toFixed(2)}%`
                           : <Dash />}
@@ -286,10 +288,11 @@ function AddTradeModal({ onAdd, onClose }) {
     entry_price: '',
     stop_loss:   '',
     quantity:    '',
-    target:      '',
+    targets:     ['', '', ''],
     entry_date:  new Date().toISOString().slice(0, 10),
     notes:       '',
   })
+  const [targetCount, setTargetCount] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]           = useState('')
   const tickerRef                   = useRef(null)
@@ -306,8 +309,12 @@ function AddTradeModal({ onAdd, onClose }) {
   const calcPositionSize = () => {
     if (risk <= 0) { setError('Entry must be greater than Stop Loss'); return }
     const qty = Math.floor(RISK_AMOUNT / risk)
-    const tgt = +(entry + 2 * risk).toFixed(2)
-    setForm((f) => ({ ...f, quantity: String(qty), target: String(tgt) }))
+    const t1  = +(entry + 2 * risk).toFixed(2)
+    setForm((f) => {
+        const targets = [...f.targets]
+        targets[0] = String(t1)
+        return { ...f, quantity: String(qty), targets }
+    })
     setError('')
   }
 
@@ -318,23 +325,28 @@ function AddTradeModal({ onAdd, onClose }) {
     const ep  = parseFloat(form.entry_price)
     const sl  = parseFloat(form.stop_loss)
     const qty = parseFloat(form.quantity)
-    const tgt = parseFloat(form.target)
+    const t1 = parseFloat(form.targets[0])
+    const t2 = form.targets[1] !== '' ? parseFloat(form.targets[1]) : null
+    const t3 = form.targets[2] !== '' ? parseFloat(form.targets[2]) : null
 
     if (!form.ticker.trim())      { setError('Ticker is required'); return }
     if (!ep || ep <= 0)            { setError('Enter a valid entry price'); return }
     if (!sl || sl <= 0)            { setError('Enter a valid stop loss'); return }
     if (sl >= ep)                  { setError('Stop loss must be below entry price'); return }
     if (!qty || qty <= 0)          { setError('Enter a valid quantity'); return }
-    if (!tgt || tgt <= ep)         { setError('Target must be above entry price'); return }
+    if (!t1 || t1 <= ep)                            { setError('T1 must be above entry price'); return }
+    if (t2 !== null && t2 <= t1)                    { setError('T2 must be above T1'); return }
+    if (t3 !== null && (t2 === null || t3 <= t2))   { setError('T3 must be above T2'); return }
 
     setSubmitting(true)
     try {
+      const targets = [t1, t2, t3].filter((v) => v !== null)
       const result = await addTrade({
         ticker:      form.ticker.trim().toUpperCase(),
         entry_price: ep,
         quantity:    qty,
         stop_loss:   sl,
-        target:      tgt,
+        targets,
         entry_date:  form.entry_date,
         notes:       form.notes,
       })
@@ -358,6 +370,8 @@ function AddTradeModal({ onAdd, onClose }) {
       style={{
         position: 'fixed', inset: 0,
         background: 'rgba(0,0,0,0.82)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         zIndex: 1000,
       }}
@@ -368,7 +382,7 @@ function AddTradeModal({ onAdd, onClose }) {
           background: 'var(--surface)',
           border: '1px solid var(--border-light)',
           width: 420,
-          boxShadow: '0 0 40px rgba(0,0,0,0.8)',
+          boxShadow: '0 0 0 1px rgba(245,166,35,0.1), 0 0 60px rgba(0,0,0,0.9)',
         }}
       >
         {/* Modal header */}
@@ -440,7 +454,7 @@ function AddTradeModal({ onAdd, onClose }) {
               <span className="text-[10px] text-t-muted">
                 Risk ${RISK_AMOUNT} →{' '}
                 {risk > 0
-                  ? <span className="text-t-accent font-600">{Math.floor(RISK_AMOUNT / risk)} shares  ·  2:1 target: ${+(entry + 2*risk).toFixed(2)}</span>
+                  ? <span className="text-t-accent font-600">{Math.floor(RISK_AMOUNT / risk)} shares  ·  T1: ${+(entry + 2*risk).toFixed(2)}</span>
                   : <span className="text-t-border">enter entry & stop first</span>
                 }
               </span>
@@ -467,8 +481,8 @@ function AddTradeModal({ onAdd, onClose }) {
             </button>
           </div>
 
-          {/* Row: Quantity + Target */}
-          <div className="grid grid-cols-2 gap-px" style={{ background: 'var(--border)' }}>
+          {/* Row: Quantity */}
+          <div className="grid grid-cols-1">
             <ModalField label="Quantity (shares)">
               <ModalInput
                 type="number" step="1" min="1"
@@ -477,14 +491,103 @@ function AddTradeModal({ onAdd, onClose }) {
                 placeholder="0"
               />
             </ModalField>
-            <ModalField label="Target $" hint="2:1 R:R auto-filled">
-              <ModalInput
-                type="number" step="0.01" min="0"
-                value={form.target}
-                onChange={set('target')}
-                placeholder="0.00"
-              />
-            </ModalField>
+          </div>
+
+          {/* Targets section */}
+          <div style={{ borderBottom: '1px solid var(--border)' }}>
+            {/* T1 — always visible */}
+            <div style={{ borderBottom: '1px solid var(--border)' }}>
+              <ModalField label="T1 $ (required)" hint="2:1 auto-filled">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ModalInput
+                    type="number" step="0.01" min="0"
+                    value={form.targets[0]}
+                    onChange={(e) => setForm(f => { const t = [...f.targets]; t[0] = e.target.value; return { ...f, targets: t } })}
+                    placeholder="0.00"
+                    style={{ flex: 1 }}
+                  />
+                  {risk > 0 && (
+                    <button type="button"
+                      onClick={() => setForm(f => { const t = [...f.targets]; t[0] = String(+(entry + 2*risk).toFixed(2)); return { ...f, targets: t } })}
+                      style={{ fontSize: 9, padding: '2px 6px', background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.3)', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.06em' }}>
+                      +2R
+                    </button>
+                  )}
+                </div>
+              </ModalField>
+            </div>
+
+            {/* T2 */}
+            {targetCount >= 2 ? (
+              <div style={{ borderBottom: '1px solid var(--border)' }}>
+                <ModalField label="T2 $">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ModalInput
+                      type="number" step="0.01" min="0"
+                      value={form.targets[1]}
+                      onChange={(e) => setForm(f => { const t = [...f.targets]; t[1] = e.target.value; return { ...f, targets: t } })}
+                      placeholder="0.00"
+                      style={{ flex: 1 }}
+                    />
+                    {risk > 0 && (
+                      <button type="button"
+                        onClick={() => setForm(f => { const t = [...f.targets]; t[1] = String(+(entry + 3*risk).toFixed(2)); return { ...f, targets: t } })}
+                        style={{ fontSize: 9, padding: '2px 6px', background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.3)', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.06em' }}>
+                        +3R
+                      </button>
+                    )}
+                    <button type="button"
+                      onClick={() => { setTargetCount(1); setForm(f => { const t = [...f.targets]; t[1] = ''; t[2] = ''; return { ...f, targets: t } }) }}
+                      style={{ fontSize: 9, padding: '2px 6px', background: 'transparent', border: '1px solid var(--border-light)', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.06em' }}>
+                      ×
+                    </button>
+                  </div>
+                </ModalField>
+              </div>
+            ) : (
+              <div className="px-4 py-2" style={{ borderBottom: '1px solid var(--border)', background: 'var(--panel)' }}>
+                <button type="button" onClick={() => setTargetCount(2)}
+                  style={{ fontSize: 9, padding: '2px 8px', background: 'transparent', border: '1px solid var(--border-light)', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  + T2
+                </button>
+              </div>
+            )}
+
+            {/* T3 — only available after T2 is added */}
+            {targetCount >= 2 && (
+              targetCount >= 3 ? (
+                <ModalField label="T3 $">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ModalInput
+                      type="number" step="0.01" min="0"
+                      value={form.targets[2]}
+                      onChange={(e) => setForm(f => { const t = [...f.targets]; t[2] = e.target.value; return { ...f, targets: t } })}
+                      placeholder="0.00"
+                      style={{ flex: 1 }}
+                    />
+                    {risk > 0 && (
+                      <button type="button"
+                        onClick={() => setForm(f => { const t = [...f.targets]; t[2] = String(+(entry + 4*risk).toFixed(2)); return { ...f, targets: t } })}
+                        style={{ fontSize: 9, padding: '2px 6px', background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.3)', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.06em' }}>
+                        +4R
+                      </button>
+                    )}
+                    <button type="button"
+                      onClick={() => { setTargetCount(2); setForm(f => { const t = [...f.targets]; t[2] = ''; return { ...f, targets: t } }) }}
+                      style={{ fontSize: 9, padding: '2px 6px', background: 'transparent', border: '1px solid var(--border-light)', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.06em' }}>
+                      ×
+                    </button>
+                  </div>
+                </ModalField>
+              ) : (
+                <div className="px-4 py-2" style={{ background: 'var(--panel)' }}>
+                  <button type="button" onClick={() => setTargetCount(3)}
+                    style={{ fontSize: 9, padding: '2px 8px', background: 'transparent', border: '1px solid var(--border-light)', color: 'var(--muted)', cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    + T3
+                  </button>
+                </div>
+              )
+            )}
           </div>
 
           {/* Notes */}
