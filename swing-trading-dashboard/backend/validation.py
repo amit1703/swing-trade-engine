@@ -171,6 +171,7 @@ def is_price_vital(
     df: pd.DataFrame,
     lookback: int = 10,
     min_range_pct: float = 0.02,
+    debug: bool = False,
 ) -> bool:
     """
     Price Action Vitality check — filter zombie / buyout-flatline stocks.
@@ -196,7 +197,14 @@ def is_price_vital(
         return True
 
     range_pct = (recent_high - recent_low) / recent_high
-    return range_pct >= min_range_pct
+    if range_pct < min_range_pct:
+        if debug:
+            print(
+                f"Vitality: REJECTED - Zombie/Buyout stock "
+                f"(10-day range {range_pct:.1%} < {min_range_pct:.0%})"
+            )
+        return False
+    return True
 
 
 def validate_regime_dict(regime: Dict[str, Any]) -> bool:
