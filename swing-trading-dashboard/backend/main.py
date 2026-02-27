@@ -41,7 +41,7 @@ import pandas as pd
 import yfinance as yf
 
 from indicators import ema as _ema, sma as _sma, cci as _cci, atr as _atr
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -132,6 +132,18 @@ _scan_state: Dict = {
     "started_at": None,
     "last_completed": None,
     "last_error": None,
+    "engine_stats": {
+        "e0": {},
+        "e1": {"zones_saved": 0},
+        "e2": {"vcp": 0, "watchlist": 0},
+        "e3": {"pullback": 0, "relaxed": 0},
+        "e5": {"base": 0, "cup_handle": 0, "flat_base": 0},
+        "e6": {"res_breakout": 0},
+        "total_tickers": 0,
+        "total_duration_s": 0.0,
+        "forced": False,
+        "dry_run": False,
+    },
 }
 _semaphore: Optional[asyncio.Semaphore] = None
 
@@ -249,7 +261,7 @@ async def _fetch(ticker: str, retry_count: int = 0) -> Optional[pd.DataFrame]:
 # Background scan worker
 # ────────────────────────────────────────────────────────────────────────────
 
-async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
+async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_run: bool = False) -> None:
     """
     Full scan pipeline:
       Engine 0 → (if bullish) Engine 1 → Engine 2 + Engine 3
@@ -265,6 +277,18 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
         total=len(tickers),
         started_at=scan_ts,
         last_error=None,
+        engine_stats={
+            "e0": {},
+            "e1": {"zones_saved": 0},
+            "e2": {"vcp": 0, "watchlist": 0},
+            "e3": {"pullback": 0, "relaxed": 0},
+            "e5": {"base": 0, "cup_handle": 0, "flat_base": 0},
+            "e6": {"res_breakout": 0},
+            "total_tickers": 0,
+            "total_duration_s": 0.0,
+            "forced": force,
+            "dry_run": dry_run,
+        },
     )
 
     try:
@@ -275,7 +299,8 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
         regime_start = time.time()
         regime = await loop.run_in_executor(None, check_market_regime)
         regime_time = time.time() - regime_start
-        await save_regime(DB_PATH, scan_ts, regime)
+        if not dry_run:
+            await save_regime(DB_PATH, scan_ts, regime)
         log.info(
             "Engine 0: %s  (SPY=%.2f  EMA20=%.2f)  [%.1fs]",
             regime["regime"],
@@ -283,8 +308,14 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
             regime["spy_20ema"],
             regime_time,
         )
+        _scan_state["engine_stats"]["e0"] = {
+            "spy_close": round(regime["spy_close"], 2),
+            "spy_ema20": round(regime["spy_20ema"], 2),
+            "is_bullish": regime["is_bullish"],
+            "duration_s": round(regime_time, 1),
+        }
 
-        if not regime["is_bullish"]:
+        if not regime["is_bullish"] and not force:
             log.info("Market is BEARISH — RS calculations + Engines 2 & 3 disabled (0s saved)")
             await complete_scan_run(DB_PATH, scan_ts, 0)
             _scan_state["last_completed"] = scan_ts
@@ -406,7 +437,9 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                         rs_52w_high = 0.0
                         rs_blue_dot = False
                 if zones:
-                    await save_sr_zones(DB_PATH, scan_ts, ticker, zones)
+                    if not dry_run:
+                        await save_sr_zones(DB_PATH, scan_ts, ticker, zones)
+                    _scan_state["engine_stats"]["e1"]["zones_saved"] += 1
 
                 # Composite RS score (O'Neil formula)
                 if spy_df_full is not None:
@@ -437,6 +470,7 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                     vcp["sector"] = SECTORS.get(ticker, "Unknown")
                     collected_setups.append(vcp)
                     vcp_count += 1
+                    _scan_state["engine_stats"]["e2"]["vcp"] += 1
 
                     setup_type = "RS LEAD" if vcp.get("is_rs_lead") else "VCP"
                     log.info("  %s      %-6s  entry=%.2f", setup_type, ticker, vcp["entry"])
@@ -460,6 +494,7 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                             near["sector"] = SECTORS.get(ticker, "Unknown")
                             near["rs_blue_dot"] = rs_blue_dot
                             collected_setups.append(near)
+                            _scan_state["engine_stats"]["e2"]["watchlist"] += 1
                             log.info("  NEAR     %-6s  dist=%.1f%%", ticker, near["distance_pct"])
                     except Exception as near_exc:
                         log.warning("Near-breakout check failed for %s: %s", ticker, near_exc)
@@ -481,6 +516,7 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                     pb["sector"] = SECTORS.get(ticker, "Unknown")
                     collected_setups.append(pb)
                     pb_count += 1
+                    _scan_state["engine_stats"]["e3"]["pullback"] += 1
                     log.info("  PULLBACK %-6s  entry=%.2f", ticker, pb["entry"])
                 else:
                     # Only check relaxed if no strict pullback found
@@ -502,6 +538,7 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                             pb_relaxed["sector"] = SECTORS.get(ticker, "Unknown")
                             collected_setups.append(pb_relaxed)
                             pb_count += 1
+                            _scan_state["engine_stats"]["e3"]["relaxed"] += 1
                             log.info("  PULLBACK %-6s  entry=%.2f (relaxed)", ticker, pb_relaxed["entry"])
                     except Exception as pb_rel_exc:
                         log.warning("Relaxed pullback check failed for %s: %s", ticker, pb_rel_exc)
@@ -524,6 +561,11 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                             base["sector"] = SECTORS.get(ticker, "Unknown")
                             collected_setups.append(base)
                             base_count += 1
+                            _scan_state["engine_stats"]["e5"]["base"] += 1
+                            if base.get("base_type") == "CUP_HANDLE":
+                                _scan_state["engine_stats"]["e5"]["cup_handle"] += 1
+                            else:
+                                _scan_state["engine_stats"]["e5"]["flat_base"] += 1
                             log.info("  BASE     %-6s  %s  Q=%d  entry=%.2f",
                                      ticker, base.get("base_type", ""), base.get("quality_score", 0), base["entry"])
                 except Exception as base_exc:
@@ -547,6 +589,7 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                                 res_brk["sector"] = SECTORS.get(ticker, "Unknown")
                                 collected_setups.append(res_brk)
                                 res_count += 1
+                                _scan_state["engine_stats"]["e6"]["res_breakout"] += 1
                                 log.info("  RES_BRK  %-6s  level=%.2f  vol=×%.1f",
                                          ticker, res_brk.get("resistance_level", 0),
                                          res_brk.get("volume_ratio", 0))
@@ -581,7 +624,7 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
             log.warning("Sector clustering failed: %s", exc)
 
         # ── Batch Save All Setups (5-10x faster than individual saves) ──────
-        if collected_setups:
+        if collected_setups and not dry_run:
             db_save_start = time.time()
             await batch_save_setups(DB_PATH, scan_ts, collected_setups)
             db_save_time = time.time() - db_save_start
@@ -613,6 +656,8 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
         except Exception as exc:
             log.warning("Sector summary failed: %s", exc)
 
+        _scan_state["engine_stats"]["total_tickers"] = len(tickers)
+        _scan_state["engine_stats"]["total_duration_s"] = round(time.time() - scan_start_time, 1)
         await complete_scan_run(DB_PATH, scan_ts, len(tickers))
         _scan_state["last_completed"] = scan_ts
 
@@ -685,7 +730,11 @@ async def health():
 
 
 @app.post("/api/run-scan")
-async def trigger_scan(background_tasks: BackgroundTasks):
+async def trigger_scan(
+    background_tasks: BackgroundTasks,
+    force: bool = Query(False, description="Bypass bearish halt gate"),
+    dry_run: bool = Query(False, description="Run pipeline without saving to DB"),
+):
     """
     Trigger a full market scan.  Returns immediately; scan runs in background.
     Poll /api/scan-status to track progress.
@@ -698,12 +747,14 @@ async def trigger_scan(background_tasks: BackgroundTasks):
         }
 
     scan_ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
-    background_tasks.add_task(_run_scan, scan_ts, ACTIVE_UNIVERSE)
+    background_tasks.add_task(_run_scan, scan_ts, ACTIVE_UNIVERSE, force, dry_run)
 
     return {
         "status": "started",
         "scan_timestamp": scan_ts,
         "tickers": len(ACTIVE_UNIVERSE),
+        "forced": force,
+        "dry_run": dry_run,
         "message": f"Scanning {len(ACTIVE_UNIVERSE)} tickers in background",
     }
 
@@ -720,6 +771,7 @@ async def scan_status():
         "started_at": _scan_state["started_at"],
         "last_completed": _scan_state["last_completed"],
         "last_error": _scan_state["last_error"],
+        "engine_stats": _scan_state.get("engine_stats", {}),
     }
 
 
