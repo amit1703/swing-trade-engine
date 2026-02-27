@@ -81,6 +81,7 @@ from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats
 from engines.engine5 import scan_base_pattern
 from engines.engine6 import scan_resistance_breakout
 from tickers import SCAN_UNIVERSE
+from validation import is_price_vital
 from universe_builder import load_universe, UNIVERSE_FILE
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -349,6 +350,15 @@ async def _run_scan(scan_ts: str, tickers: List[str]) -> None:
                     close_series = close_series.iloc[:, 0]
                 if close_series.isna().all():
                     log.debug("Skipped %s: all-NaN price data", ticker)
+                    return
+
+                # ── Price Action Vitality — skip zombie / buyout-flatline stocks ──
+                if not is_price_vital(df):
+                    log.debug(
+                        "Skipped %s: flatline/zombie stock "
+                        "(10-day H-L range < 2%% of high)",
+                        ticker,
+                    )
                     return
 
                 # ── Parallelize RS + S/R zone calculations (independent operations) ──

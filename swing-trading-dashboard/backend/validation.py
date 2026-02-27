@@ -167,6 +167,38 @@ def validate_setup_result(setup: Dict[str, Any], ticker: str) -> bool:
         return False
 
 
+def is_price_vital(
+    df: pd.DataFrame,
+    lookback: int = 10,
+    min_range_pct: float = 0.02,
+) -> bool:
+    """
+    Price Action Vitality check — filter zombie / buyout-flatline stocks.
+
+    A stock is considered non-vital (return False) if the absolute range
+    (High.max − Low.min) over the last `lookback` trading days is less than
+    `min_range_pct` of the period's high.  A buyout target that gaps up and
+    then trades in a $0.10 band for weeks will fail this check.
+
+    Returns True if the stock is actively traded; True also when there is
+    insufficient data to make a decision (do not filter on uncertainty).
+    """
+    if df is None or len(df) < lookback:
+        return True   # not enough data — stay neutral
+
+    if "High" not in df.columns or "Low" not in df.columns:
+        return True   # missing columns — stay neutral
+
+    recent_high = float(df["High"].iloc[-lookback:].max())
+    recent_low  = float(df["Low"].iloc[-lookback:].min())
+
+    if recent_high <= 0:
+        return True
+
+    range_pct = (recent_high - recent_low) / recent_high
+    return range_pct >= min_range_pct
+
+
 def validate_regime_dict(regime: Dict[str, Any]) -> bool:
     """
     Validate market regime dictionary has required fields.
