@@ -105,6 +105,12 @@ async def init_db(db_path: str) -> None:
         for idx_sql in _INDEXES:
             await db.execute(idx_sql)
         await db.commit()
+        # Migration: add targets_json column if it does not yet exist
+        try:
+            await db.execute("ALTER TABLE trades ADD COLUMN targets_json TEXT")
+            await db.commit()
+        except Exception:
+            pass  # column already exists — safe to ignore
 
 
 # ---------------------------------------------------------------------------
@@ -307,16 +313,20 @@ async def get_latest_setups(
 
 async def add_trade(db_path: str, trade: Dict) -> int:
     """Insert a new active trade; returns the new row id."""
+    targets = trade.get("targets") or [trade["target"]]
+    targets_json = json.dumps([float(t) for t in targets])
     async with aiosqlite.connect(db_path) as db:
         cur = await db.execute(
-            """INSERT INTO trades (ticker, entry_price, quantity, stop_loss, target, entry_date, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO trades
+               (ticker, entry_price, quantity, stop_loss, target, targets_json, entry_date, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 trade["ticker"].upper(),
                 trade["entry_price"],
                 trade["quantity"],
                 trade["stop_loss"],
-                trade["target"],
+                float(targets[0]),
+                targets_json,
                 trade["entry_date"],
                 trade.get("notes", ""),
             ),
@@ -329,27 +339,29 @@ async def get_trades(db_path: str, status: str = "active") -> List[Dict]:
     """Return all trades with the given status."""
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(
-            """SELECT id, ticker, entry_price, quantity, stop_loss, target,
+            """SELECT id, ticker, entry_price, quantity, stop_loss, target, targets_json,
                       entry_date, notes, status, created_at
                FROM trades WHERE status = ? ORDER BY created_at DESC""",
             (status,),
         ) as cur:
             rows = await cur.fetchall()
-            return [
-                {
+            result = []
+            for r in rows:
+                targets = json.loads(r[6]) if r[6] else [r[5]]
+                result.append({
                     "id":          r[0],
                     "ticker":      r[1],
                     "entry_price": r[2],
                     "quantity":    r[3],
                     "stop_loss":   r[4],
                     "target":      r[5],
-                    "entry_date":  r[6],
-                    "notes":       r[7],
-                    "status":      r[8],
-                    "created_at":  r[9],
-                }
-                for r in rows
-            ]
+                    "targets":     targets,
+                    "entry_date":  r[7],
+                    "notes":       r[8],
+                    "status":      r[9],
+                    "created_at":  r[10],
+                })
+            return result
 
 
 async def close_trade(db_path: str, trade_id: int) -> bool:
