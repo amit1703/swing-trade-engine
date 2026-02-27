@@ -43,7 +43,7 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
         </div>
       ) : count === 0 ? (
         <div className="py-5 text-center text-t-muted text-[10px] tracking-widest uppercase">
-          No setups <span className="terminal-cursor" />
+          No setups
         </div>
       ) : (
         <div className="overflow-x-auto">

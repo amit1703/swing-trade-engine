@@ -60,7 +60,7 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
               <span className={`font-condensed text-[11px] font-700 tracking-widest uppercase ${textClass} opacity-70`}>
                 {isBullish ? 'REGIME STATUS' : 'REGIME STATUS'}
               </span>
-              <span className={`font-condensed text-[26px] font-700 tracking-tight leading-none ${textClass} ${isHalt ? 'animate-pulse_halt' : ''}`}>
+              <span className={`font-condensed text-[26px] font-700 tracking-tight leading-none ${textClass} ${isHalt ? 'animate-pulse_halt' : ''} ${isBullish ? 'regime-go' : isHalt ? 'regime-halt' : ''}`}>
                 {isBullish ? 'MARKET GO' : 'MARKET HALT'}
               </span>
               {isHalt && (
@@ -110,7 +110,7 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
                 <span className="text-[11px] text-t-text font-mono">
                   {scanStatus.last_completed
                     ? fmtTime(scanStatus.last_completed)
-                    : <span className="text-t-muted terminal-cursor">waiting</span>
+                    : <span className="text-t-muted">waiting</span>
                   }
                 </span>
               </>
@@ -148,7 +148,7 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
 
           {/* Run scan button */}
           <button
-            className="btn-scan"
+            className={`btn-scan${scanStatus.in_progress ? ' scanning' : ''}`}
             onClick={onRunScan}
             disabled={scanStatus.in_progress}
           >

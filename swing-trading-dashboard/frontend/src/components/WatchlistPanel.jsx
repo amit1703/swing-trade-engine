@@ -23,7 +23,7 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
         </div>
       ) : items.length === 0 ? (
         <div className="py-5 text-center text-t-muted text-[9px] tracking-widest uppercase">
-          None <span className="terminal-cursor" />
+          None
         </div>
       ) : (
         <div className="flex flex-col gap-0">
@@ -56,7 +56,7 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
               <div
                 key={item.ticker}
                 onClick={() => onSelectTicker(item.ticker)}
-                className="flex items-center justify-between px-2 py-1.5 cursor-pointer"
+                className="flex items-center justify-between px-2 py-2 cursor-pointer"
                 style={{
                   borderLeft: isSelected ? '2px solid var(--accent)' : isConfirmedBrk ? '2px solid rgba(0,200,122,0.5)' : '2px solid transparent',
                   background: isSelected ? 'rgba(245,166,35,0.06)' : isConfirmedBrk ? 'rgba(0,200,122,0.04)' : 'transparent',
@@ -74,7 +74,7 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
                   </span>
                   {hasRsBlueDot && (
                     <span
-                      style={{ color: 'var(--blue)', fontSize: '8px' }}
+                      style={{ color: 'var(--purple)', fontSize: '8px' }}
                       aria-label="RS Blue Dot - institutional accumulation signal">
                       ⭐
                     </span>
