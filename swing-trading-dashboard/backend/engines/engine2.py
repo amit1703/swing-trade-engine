@@ -51,10 +51,11 @@ def _detect_descending_trendline(
 
     Algorithm:
     1. Find swing highs using find_peaks on last 120 days
-    2. Take the 2 most prominent peaks
-    3. Fit a line through them (compute slope)
-    4. Validate: negative slope, ≥2 touches within 0.8%
-    5. Generate {time, value} series from peak1 to today
+    2. Try ALL pairs of peaks; keep pairs with negative slope
+    3. Score by touch count (bars within 1% of line); pick highest-scoring pair
+    4. Relevance filter: trendline value today must be ≤ 120% of current close
+       (filters stale trendlines from old peaks far above current price)
+    5. Generate {time, value} series from p1 to today
 
     Returns dict with keys: series, peak1, peak2, slope, touches
     Or None if no valid descending trendline found.
@@ -74,44 +75,51 @@ def _detect_descending_trendline(
 
         # Find swing highs with find_peaks
         prominence_threshold = float(np.std(highs)) * 0.3
-        peak_idx, props = find_peaks(highs, prominence=prominence_threshold, distance=5)
+        peak_idx, _ = find_peaks(highs, prominence=prominence_threshold, distance=5)
 
         if len(peak_idx) < 2:
             return None
 
-        # Sort by prominence (descending), take top 2, then sort by time
-        prominences = props["prominences"]
-        sorted_order = np.argsort(prominences)[::-1]
-        top2_raw = peak_idx[sorted_order[:2]]
-        top2 = sorted(top2_raw.tolist())  # Sort by time index
+        # Try ALL pairs — pick the one with the most touches and correct direction
+        best_pair = None
+        best_touches = 0
 
-        p1_idx, p2_idx = top2[0], top2[1]
-        p1_price = float(highs[p1_idx])
-        p2_price = float(highs[p2_idx])
-        p1_date = date_slice[p1_idx]
-        p2_date = date_slice[p2_idx]
+        for i in range(len(peak_idx)):
+            for j in range(i + 1, len(peak_idx)):
+                pi_idx, pj_idx = int(peak_idx[i]), int(peak_idx[j])
+                pi_price = float(highs[pi_idx])
+                pj_price = float(highs[pj_idx])
+                pi_date  = date_slice[pi_idx]
+                pj_date  = date_slice[pj_idx]
 
-        # Compute slope (price per day)
-        day_diff = (p2_date - p1_date).days
-        if day_diff <= 0:
+                day_diff = (pj_date - pi_date).days
+                if day_diff <= 0:
+                    continue
+
+                slope = (pj_price - pi_price) / day_diff
+                if slope >= 0:  # Must be descending
+                    continue
+
+                # Count touches: bars within 1.0% of trendline
+                touches = 0
+                for k in range(len(highs)):
+                    days_k = (date_slice[k] - pi_date).days
+                    tl_val = pi_price + slope * days_k
+                    if tl_val > 0 and abs(highs[k] - tl_val) / tl_val <= 0.010:
+                        touches += 1
+
+                # Prefer more touches; on tie prefer later pair (more recent anchor)
+                if touches > best_touches or (
+                    touches == best_touches and best_pair is not None
+                    and pj_idx > best_pair[1]
+                ):
+                    best_touches = touches
+                    best_pair = (pi_idx, pj_idx, pi_price, pj_price, pi_date, pj_date, slope)
+
+        if best_pair is None or best_touches < 2:
             return None
 
-        slope = (p2_price - p1_price) / day_diff
-
-        # Validate: must be descending (negative slope)
-        if slope >= 0:
-            return None
-
-        # Count touches: bars within 0.8% of trendline value
-        touches = 0
-        for i in range(len(highs)):
-            days_from_p1 = (date_slice[i] - p1_date).days
-            trendline_val = p1_price + slope * days_from_p1
-            if trendline_val > 0 and abs(highs[i] - trendline_val) / trendline_val <= 0.008:
-                touches += 1
-
-        if touches < 2:
-            return None
+        _, _, p1_price, p2_price, p1_date, p2_date, slope = best_pair
 
         # Generate series at actual trading dates from p1 to end of df
         series = []
@@ -129,6 +137,16 @@ def _detect_descending_trendline(
         if not series:
             return None
 
+        # Relevance filter: trendline today must be within 20% above current close.
+        # Filters stale trendlines from old peaks (e.g., stock peaked at $175 and
+        # is now at $120 — trendline at $155 today is not a meaningful resistance).
+        adj = _adj_col(data)
+        lc_val = data[adj].iloc[-1]
+        lc = float(lc_val.item() if hasattr(lc_val, 'item') else lc_val)
+        tl_today = series[-1]["value"]
+        if lc > 0 and tl_today > lc * 1.20:
+            return None
+
         return {
             "series": series,
             "peak1": {
@@ -140,7 +158,7 @@ def _detect_descending_trendline(
                 "price": round(p2_price, 2),
             },
             "slope": round(slope, 6),
-            "touches": touches,
+            "touches": best_touches,
         }
 
     except Exception as exc:  # noqa: BLE001
@@ -155,11 +173,12 @@ def _detect_ascending_trendline(
     """
     Detect an ascending trendline from the last 120 days of Low prices.
 
-    Algorithm (mirrors descending):
-    1. Find swing lows using find_peaks (inverted)
-    2. Take 2 most prominent lows
-    3. Fit line through them (compute slope)
-    4. Validate: positive slope, ≥2 touches within 0.8%
+    Algorithm:
+    1. Find swing lows using find_peaks (inverted) on last 120 days
+    2. Try ALL pairs of troughs; keep pairs with positive slope (higher lows)
+    3. Score by touch count (bars within 1% of line); pick highest-scoring pair
+    4. Relevance filter: trendline value today must be ≥ 80% of current close
+       (filters stale trendlines anchored to very old deep lows far below price)
     5. Generate {time, value} series from trough1 to today
 
     Returns dict with keys: series, trough1, trough2, slope, touches
@@ -178,47 +197,56 @@ def _detect_ascending_trendline(
         lows = low[-lookback:]
         date_slice = dates[-lookback:]
 
-        # Find swing lows (inverted find_peaks: negate to find minima)
+        # Find swing lows (negate to find valleys as peaks)
         prominence_threshold = float(np.std(lows)) * 0.3
-        # Negate lows to find valleys as peaks
-        trough_idx, props = find_peaks(-lows, prominence=prominence_threshold, distance=5)
+        trough_idx, _ = find_peaks(-lows, prominence=prominence_threshold, distance=5)
 
         if len(trough_idx) < 2:
             return None
 
-        # Sort by prominence (descending), take top 2, then sort by time
-        prominences = props["prominences"]
-        sorted_order = np.argsort(prominences)[::-1]
-        top2_raw = trough_idx[sorted_order[:2]]
-        top2 = sorted(top2_raw.tolist())  # Sort by time index
+        # Try ALL pairs — pick the one with most touches and correct direction.
+        # The top-2-by-prominence approach fails when the most prominent troughs
+        # are in the wrong time order for an ascending line (e.g., the deeper trough
+        # is more recent → slope becomes negative → rejected incorrectly).
+        best_pair = None
+        best_touches = 0
 
-        t1_idx, t2_idx = top2[0], top2[1]
-        t1_price = float(lows[t1_idx])
-        t2_price = float(lows[t2_idx])
-        t1_date = date_slice[t1_idx]
-        t2_date = date_slice[t2_idx]
+        for i in range(len(trough_idx)):
+            for j in range(i + 1, len(trough_idx)):
+                ti_idx, tj_idx = int(trough_idx[i]), int(trough_idx[j])
+                ti_price = float(lows[ti_idx])
+                tj_price = float(lows[tj_idx])
+                ti_date  = date_slice[ti_idx]
+                tj_date  = date_slice[tj_idx]
 
-        # Compute slope (price per day)
-        day_diff = (t2_date - t1_date).days
-        if day_diff <= 0:
+                day_diff = (tj_date - ti_date).days
+                if day_diff <= 0:
+                    continue
+
+                slope = (tj_price - ti_price) / day_diff
+                if slope <= 0:  # Must be ascending (higher lows)
+                    continue
+
+                # Count touches: bars within 1.0% of trendline
+                touches = 0
+                for k in range(len(lows)):
+                    days_k = (date_slice[k] - ti_date).days
+                    tl_val = ti_price + slope * days_k
+                    if tl_val > 0 and abs(lows[k] - tl_val) / tl_val <= 0.010:
+                        touches += 1
+
+                # Prefer more touches; on tie prefer later pair (more recent anchor)
+                if touches > best_touches or (
+                    touches == best_touches and best_pair is not None
+                    and tj_idx > best_pair[1]
+                ):
+                    best_touches = touches
+                    best_pair = (ti_idx, tj_idx, ti_price, tj_price, ti_date, tj_date, slope)
+
+        if best_pair is None or best_touches < 2:
             return None
 
-        slope = (t2_price - t1_price) / day_diff
-
-        # Validate: must be ascending (positive slope)
-        if slope <= 0:
-            return None
-
-        # Count touches: bars within 0.8% of trendline value
-        touches = 0
-        for i in range(len(lows)):
-            days_from_t1 = (date_slice[i] - t1_date).days
-            trendline_val = t1_price + slope * days_from_t1
-            if trendline_val > 0 and abs(lows[i] - trendline_val) / trendline_val <= 0.008:
-                touches += 1
-
-        if touches < 2:
-            return None
+        _, _, t1_price, t2_price, t1_date, t2_date, slope = best_pair
 
         # Generate series at actual trading dates from t1 to end of df
         series = []
@@ -236,6 +264,16 @@ def _detect_ascending_trendline(
         if not series:
             return None
 
+        # Relevance filter: trendline today must be within 20% below current close.
+        # Filters trendlines anchored to very old deep lows that are now far below
+        # the current price and no longer relevant as support.
+        adj = _adj_col(data)
+        lc_val = data[adj].iloc[-1]
+        lc = float(lc_val.item() if hasattr(lc_val, 'item') else lc_val)
+        tl_today = series[-1]["value"]
+        if lc > 0 and tl_today < lc * 0.80:
+            return None
+
         return {
             "series": series,
             "trough1": {
@@ -247,7 +285,7 @@ def _detect_ascending_trendline(
                 "price": round(t2_price, 2),
             },
             "slope": round(slope, 6),
-            "touches": touches,
+            "touches": best_touches,
         }
 
     except Exception as exc:  # noqa: BLE001
