@@ -28,6 +28,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
+from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR
 
 
 # ---------------------------------------------------------------------------
@@ -185,12 +186,12 @@ def scan_pullback(
 
         # ── 5. CCI momentum hook ─────────────────────────────────────────
         # CCI must have dipped below -50 (oversold) and be turning up (hook)
-        if not (cci_prev < -50.0 and cci_today > cci_prev):
+        if not (cci_prev < CCI_STRICT_FLOOR and cci_today > cci_prev):
             if debug:
                 print(
                     f"Engine 3 Pullback: REJECTED - CCI hook failed "
                     f"(yesterday: {cci_prev:.1f}, today: {cci_today:.1f}, "
-                    f"required: < -50 then rising)"
+                    f"required: < {CCI_STRICT_FLOOR:.0f} then rising)"
                 )
             return None
 
@@ -311,13 +312,13 @@ def scan_relaxed_pullback(
             return None
 
         # ── 3. CCI Early Signal: turning from deeply negative ────────────────────
-        cci_turning = cci_today > cci_prev and cci_prev < -30.0
+        cci_turning = cci_today > cci_prev and cci_prev < CCI_RLX_FLOOR
         if not cci_turning:
             if debug:
                 print(
                     f"Engine 3 RLX Pullback: REJECTED - CCI relaxation failed "
                     f"(yesterday: {cci_prev:.1f}, today: {cci_today:.1f}, "
-                    f"required: < -30 and today rising)"
+                    f"required: < {CCI_RLX_FLOOR:.0f} and today rising)"
                 )
             return None
 

@@ -47,7 +47,9 @@ TR_WINDOW = 14  # True Range period for ATR
 EMA_SHORT = 8  # Short-term EMA period
 EMA_LONG = 20  # Long-term EMA period
 SMA_LONG = 50  # Long-term SMA period
-CCI_PERIOD = 20  # Commodity Channel Index period
+CCI_PERIOD = 20          # Commodity Channel Index period
+CCI_STRICT_FLOOR = -50.0  # CCI oversold floor for strict pullback hook
+CCI_RLX_FLOOR    = -30.0  # CCI oversold floor for relaxed pullback hook
 
 # ──────────────────────────────────────────────────────────────────────────
 # Risk Management & Stop Loss
