@@ -127,6 +127,11 @@ def scan_resistance_breakout(
 
                 # Basic cross: price was below zone, then closed above
                 if not (pre_close <= zone_upper and brk_close > zone_upper):
+                    if debug:
+                        print(
+                            f"Engine 6 Breakout: REJECTED - No zone cross on day -{days_back} "
+                            f"(pre {pre_close:.2f} → current {brk_close:.2f}, zone upper {zone_upper:.2f})"
+                        )
                     continue
 
                 brk_high  = high_arr[brk_idx]
@@ -151,24 +156,35 @@ def scan_resistance_breakout(
 
                 # Rule 1 — Launchpad: 3 pre-breakout bars tight under resistance
                 launchpad_ok = True
+                _lp_fail_bar = None
+                _lp_fail_range = None
                 for offset in range(1, _LAUNCHPAD_BARS + 1):
                     lp_idx = brk_idx - offset
                     if lp_idx < 0:
                         launchpad_ok = False
+                        _lp_fail_bar = offset
+                        _lp_fail_range = float("nan")
                         break
                     lp_high  = high_arr[lp_idx]
                     lp_low   = low_arr[lp_idx]
                     lp_range = lp_high - lp_low
                     if lp_high > zone_upper * _LAUNCHPAD_MAX_HIGH_PCT:
                         launchpad_ok = False
+                        _lp_fail_bar = offset
+                        _lp_fail_range = lp_range
                         break
                     if latr > 0 and lp_range >= _LAUNCHPAD_MAX_RANGE_ATR * latr:
                         launchpad_ok = False
+                        _lp_fail_bar = offset
+                        _lp_fail_range = lp_range
                         break
                 if not launchpad_ok:
                     if debug:
-                        print(f"Engine 6 Breakout: REJECTED - Launchpad criteria failed "
-                              f"(pre-breakout bars not tight under resistance)")
+                        print(
+                            f"Engine 6 Breakout: REJECTED - Launchpad criteria failed "
+                            f"(bar {_lp_fail_bar}: range {_lp_fail_range:.2f} >= "
+                            f"{_LAUNCHPAD_MAX_RANGE_ATR}× ATR {latr:.2f})"
+                        )
                     continue
 
                 # Rule 3 — Institutional volume: ≥ 150% of 50-day average
