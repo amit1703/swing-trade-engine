@@ -71,6 +71,7 @@ def scan_pullback(
     df: pd.DataFrame,
     sr_zones: List[Dict],
     trendline: Optional[Dict] = None,
+    debug: bool = False,
 ) -> Optional[Dict]:
     """
     Returns a setup dict if a valid tactical pullback is found, else None.
@@ -115,11 +116,21 @@ def scan_pullback(
 
         # ── 1. Trend filter ───────────────────────────────────────────────
         if not (l8 > l20 and lc > l50):
+            if debug:
+                print(
+                    f"Engine 3 Pullback: REJECTED - Trend filter failed "
+                    f"(EMA8 {l8:.2f} vs EMA20 {l20:.2f}, Close {lc:.2f} vs SMA50 {l50:.2f})"
+                )
             return None
 
         # ── 2. Value zone retest ──────────────────────────────────────────
         # Low must penetrate 8 EMA or 20 EMA to be "in the value zone"
         if not (ll <= l8 or ll <= l20):
+            if debug:
+                print(
+                    f"Engine 3 Pullback: REJECTED - Low {ll:.2f} not in value zone "
+                    f"(EMA8 {l8:.2f}, EMA20 {l20:.2f})"
+                )
             return None
 
         # ── 3a. Engine 1 support zone touch (HORIZONTAL) ───────────────────
@@ -155,16 +166,32 @@ def scan_pullback(
                         }
 
         if nearest_sup is None:
+            if debug:
+                print(
+                    f"Engine 3 Pullback: REJECTED - No KDE support zone or ascending TDL touch "
+                    f"(low: {ll:.2f})"
+                )
             return None
 
         # ── 4. Rejection (pin bar) ────────────────────────────────────────
         # Close must be at or above 20 EMA — price closed back into the trend
         if lc < l20:
+            if debug:
+                print(
+                    f"Engine 3 Pullback: REJECTED - No pin bar "
+                    f"(Close {lc:.2f} < EMA20 {l20:.2f})"
+                )
             return None
 
         # ── 5. CCI momentum hook ─────────────────────────────────────────
         # CCI must have dipped below -50 (oversold) and be turning up (hook)
         if not (cci_prev < -50.0 and cci_today > cci_prev):
+            if debug:
+                print(
+                    f"Engine 3 Pullback: REJECTED - CCI hook failed "
+                    f"(yesterday: {cci_prev:.1f}, today: {cci_today:.1f}, "
+                    f"required: < -50 then rising)"
+                )
             return None
 
         # ── Risk math ────────────────────────────────────────────────────

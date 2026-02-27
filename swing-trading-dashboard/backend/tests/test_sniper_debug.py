@@ -1,4 +1,6 @@
 """Tests for Sniper Debug Mode — verifies debug=True prints rejection reasons."""
+import random
+
 import pandas as pd
 import pytest
 
@@ -17,14 +19,20 @@ def _flatline_df(n: int = 15) -> pd.DataFrame:
     }, index=dates)
 
 
-def _trend_fail_df(n: int = 70) -> pd.DataFrame:
+def _trend_fail_df(n: int = 80) -> pd.DataFrame:
     """
-    Downtrend stock: first 50 bars at 100, last 20 at 60.
-    Result: lc=60, SMA50≈84, EMA8≈60.3, EMA20≈65.1
+    Downtrend stock: gradual linear decline from 100 to 60 over n bars,
+    with slight random noise so CCI mean-deviation is never zero.
+    Result: lc≈60, SMA50 > lc, EMA8 < EMA20
     → l8 NOT > l20  AND  lc < l50  → trend filter fails in all engines.
+    The noise keeps CCI non-NaN so scan_pullback reaches the trend gate.
     """
-    prices = [100.0] * 50 + [60.0] * 20
-    dates  = pd.date_range("2022-01-01", periods=n, freq="B")
+    rng = random.Random(0)
+    prices = [
+        round(100.0 - (40.0 * i / (n - 1)) + rng.uniform(-0.5, 0.5), 4)
+        for i in range(n)
+    ]
+    dates = pd.date_range("2022-01-01", periods=n, freq="B")
     return pd.DataFrame({
         "Open":      prices,
         "High":      [p + 1.0 for p in prices],
@@ -95,3 +103,25 @@ def test_engine6_debug_no_zones(capsys):
     out = capsys.readouterr().out
     assert "Engine 6 Breakout: REJECTED" in out
     assert "No KDE resistance zones" in out
+
+
+# ── Task 3: scan_pullback ────────────────────────────────────────────────
+
+from engines.engine3 import scan_pullback
+
+
+def test_pullback_debug_trend_filter(capsys):
+    """debug=True prints trend filter rejection for a downtrending stock."""
+    df = _trend_fail_df()
+    result = scan_pullback("TEST", df, [], None, debug=True)
+    assert result is None
+    out = capsys.readouterr().out
+    assert "Engine 3 Pullback: REJECTED" in out
+    assert "Trend filter" in out
+
+
+def test_pullback_debug_false_no_output(capsys):
+    """debug=False produces no stdout."""
+    df = _trend_fail_df()
+    scan_pullback("TEST", df, [], None, debug=False)
+    assert capsys.readouterr().out == ""
