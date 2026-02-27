@@ -44,6 +44,7 @@ def scan_resistance_breakout(
     ticker: str,
     df: pd.DataFrame,
     zones: List[Dict],
+    debug: bool = False,
 ) -> Optional[Dict]:
     """Return most recent qualifying resistance breakout, or None."""
     try:
@@ -69,6 +70,8 @@ def scan_resistance_breakout(
         l50     = float(l50_val.item() if hasattr(l50_val, 'item') else l50_val) if pd.notna(l50_val) else 0.0
 
         if l50 > 0 and lc < l50:
+            if debug:
+                print(f"Engine 6 Breakout: REJECTED - Below 50 SMA ({lc:.2f} < {l50:.2f})")
             return None
 
         # Volume SMA and ATR
@@ -92,6 +95,8 @@ def scan_resistance_breakout(
 
         resistance_zones = [z for z in zones if z.get("type") == "RESISTANCE"]
         if not resistance_zones:
+            if debug:
+                print("Engine 6 Breakout: REJECTED - No KDE resistance zones found")
             return None
 
         best: Optional[Dict] = None
@@ -106,6 +111,9 @@ def scan_resistance_breakout(
 
             # Current price must not be overextended (> 5% above zone)
             if lc > zone_upper * (1 + _MAX_EXTEND_PCT):
+                if debug:
+                    pct = (lc - zone_upper) / zone_upper
+                    print(f"Engine 6 Breakout: REJECTED - Price overextended (>{pct:.1%} above zone)")
                 continue
 
             for days_back in range(_MAX_DAYS_LOOKBACK + 1):
@@ -127,10 +135,18 @@ def scan_resistance_breakout(
 
                 # Rule 2a — Decisive close: ≥ 0.5% above zone
                 if brk_close <= zone_upper * (1 + _DECISIVE_CLOSE_MIN_PCT):
+                    if debug:
+                        print(f"Engine 6 Breakout: REJECTED - Decisive close failed "
+                              f"({brk_close:.2f} <= {zone_upper * (1 + _DECISIVE_CLOSE_MIN_PCT):.2f}, "
+                              f"need >{_DECISIVE_CLOSE_MIN_PCT:.1%} above zone)")
                     continue
 
                 # Rule 2b — Close in top 30% of day's range
                 if brk_range > 0 and brk_close < brk_low + _CLOSE_POSITION_MIN * brk_range:
+                    if debug:
+                        pos = (brk_close - brk_low) / brk_range if brk_range > 0 else 0
+                        print(f"Engine 6 Breakout: REJECTED - Close in bottom {pos:.0%} of range "
+                              f"(required top 30%)")
                     continue
 
                 # Rule 1 — Launchpad: 3 pre-breakout bars tight under resistance
@@ -150,12 +166,18 @@ def scan_resistance_breakout(
                         launchpad_ok = False
                         break
                 if not launchpad_ok:
+                    if debug:
+                        print(f"Engine 6 Breakout: REJECTED - Launchpad criteria failed "
+                              f"(pre-breakout bars not tight under resistance)")
                     continue
 
                 # Rule 3 — Institutional volume: ≥ 150% of 50-day average
                 brk_vol   = volume_arr[brk_idx]
                 vol_ratio = brk_vol / vol_sma50
                 if vol_ratio < _VOL_SURGE_THRESHOLD:
+                    if debug:
+                        print(f"Engine 6 Breakout: REJECTED - Breakout volume {vol_ratio:.1f}x "
+                              f"(required: 1.5x 50d SMA)")
                     continue
 
                 entry       = round(brk_high * 1.001, 2)
@@ -188,6 +210,8 @@ def scan_resistance_breakout(
                     best_days = days_back
                 break
 
+        if best is None and debug:
+            print("Engine 6 Breakout: REJECTED - No valid breakout found in last 3 days")
         return best
 
     except Exception as exc:
