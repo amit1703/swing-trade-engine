@@ -147,3 +147,25 @@ def test_rlx_pullback_debug_false_no_output(capsys):
     df = _trend_fail_df()
     scan_relaxed_pullback("TEST", df, [], None, debug=False)
     assert capsys.readouterr().out == ""
+
+
+# ── Task 5: scan_vcp ─────────────────────────────────────────────────────
+
+from engines.engine2 import scan_vcp
+
+
+def test_vcp_debug_trend_filter(capsys):
+    """debug=True prints trend filter rejection for a downtrending stock."""
+    df = _trend_fail_df()
+    result = scan_vcp("TEST", df, [], debug=True)
+    assert result is None
+    out = capsys.readouterr().out
+    assert "Engine 2 VCP: REJECTED" in out
+    assert "Trend filter" in out
+
+
+def test_vcp_debug_false_no_output(capsys):
+    """debug=False produces no stdout."""
+    df = _trend_fail_df()
+    scan_vcp("TEST", df, [], debug=False)
+    assert capsys.readouterr().out == ""

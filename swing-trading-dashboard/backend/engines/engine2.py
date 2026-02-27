@@ -598,6 +598,7 @@ def scan_vcp(
     rs_52w_high: float = 0.0,
     rs_blue_dot: bool = False,
     rs_score: float = 0.0,
+    debug: bool = False,
 ) -> Optional[Dict]:
     """
     Returns a setup dict if a valid VCP (Path A), Confirmed Breakout (Path B),
@@ -648,7 +649,7 @@ def scan_vcp(
         latr = float(atr14.iloc[-1].item() if hasattr(atr14.iloc[-1], 'item') else atr14.iloc[-1])
         lvol = float(volume.iloc[-1].item() if hasattr(volume.iloc[-1], 'item') else volume.iloc[-1])
 
-        if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, l200, latr]):
+        if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, latr]):
             return None
 
         # ── Shared: Baseline trend filter ────────────────────────────────
@@ -658,8 +659,13 @@ def scan_vcp(
         # often still below the 200 SMA at the time of the initial breakout.
         # Path A (DRY coiled spring) re-applies the 200 SMA gate below.
         if not (l8 > l20 and lc > l50):
+            if debug:
+                print(
+                    f"Engine 2 VCP: REJECTED - Trend filter failed "
+                    f"(EMA8 {l8:.2f} vs EMA20 {l20:.2f}, Close {lc:.2f} vs SMA50 {l50:.2f})"
+                )
             return None
-        is_above_200sma = lc > l200
+        is_above_200sma = (not np.isnan(l200)) and lc > l200
 
         # ── Shared: Volume SMA ────────────────────────────────────────────
         vol_sma50 = volume.rolling(50).mean()
@@ -718,6 +724,12 @@ def scan_vcp(
             stop_loss  = round(stop_base - 0.2 * latr, 2)
             risk       = entry - stop_loss
             if risk <= 0 or risk > entry * 0.15:
+                if debug:
+                    print(
+                        f"Engine 2 VCP: REJECTED - Breakout volume {volume_ratio:.1f}x "
+                        f"(required: ≥1.5x 50d SMA) — risk math failed "
+                        f"(risk={risk:.2f}, entry={entry:.2f})"
+                    )
                 pass  # fall through to Path C/A check
             else:
                 take_profit = round(entry + 2.0 * risk, 2)
@@ -752,6 +764,23 @@ def scan_vcp(
                     "contraction_pattern": contraction_pattern,
                     "is_progressive_tightening": is_progressive,
                 }
+
+        # ── Path B debug: no vol surge or rs_score not positive ──────────────
+        if debug and not confirmed_breakout:
+            if not resistance_zones:
+                print(
+                    f"Engine 2 VCP: REJECTED - Breakout volume {volume_ratio:.1f}x "
+                    f"(required: ≥1.5x 50d SMA) — no resistance zones available"
+                )
+            elif not is_vol_surge:
+                print(
+                    f"Engine 2 VCP: REJECTED - Breakout volume {volume_ratio:.1f}x "
+                    f"(required: ≥1.5x 50d SMA)"
+                )
+            elif rs_score <= 0:
+                print(
+                    f"Engine 2 VCP: REJECTED - RS score not positive ({rs_score:.3f})"
+                )
 
         # ── PATH C — Trendline Breakout ────────────────────────────────────
         # Check if price broke above a descending trendline with volume
@@ -806,6 +835,13 @@ def scan_vcp(
                     "contraction_pattern": contraction_pattern,
                     "is_progressive_tightening": is_progressive,
                 }
+
+        # ── Path C debug: no valid descending trendline detected ─────────────
+        if debug and not is_trendline_breakout:
+            if trendline_result is None or trendline_result.get("descending") is None:
+                print(
+                    f"Engine 2 VCP: REJECTED - No valid descending trendline detected"
+                )
 
         # ── PATH D — KDE Horizontal Breakout ─────────────────────────────────
         # Breakout above the NEAREST resistance zone above current price
@@ -869,6 +905,13 @@ def scan_vcp(
                         "is_progressive_tightening": is_progressive,
                     }
 
+        # ── Path D debug: no KDE breakout ────────────────────────────────────
+        if debug and nearest_res_above is None:
+            print(
+                f"Engine 2 VCP: REJECTED - Not within 5% of any resistance zone "
+                f"(Close {lc:.2f}, no nearby zone)"
+            )
+
         # ── PATH E — RS Strength Breakout ────────────────────────────────────
         # Institutional accumulation signal: RS Blue Dot + proximity to resistance
         # Uses nearest resistance above price (not highest distant level)
@@ -927,12 +970,23 @@ def scan_vcp(
         # Path A (coiled spring below resistance) requires the FULL trend template:
         # price must be above the 200 SMA (confirmed Stage 2 uptrend).
         if not (lc > l200):
+            if debug:
+                l200_str = f"{l200:.2f}" if not np.isnan(l200) else "N/A (insufficient data)"
+                print(
+                    f"Engine 2 VCP: REJECTED - Trend filter failed "
+                    f"(Close {lc:.2f} below SMA200 {l200_str} — Path A requires Stage 2)"
+                )
             return None
 
 
         # ── A2. True Range contraction ────────────────────────────────────
         # (tr already computed above for contraction counting)
         if len(tr) < 26:
+            if debug:
+                print(
+                    f"Engine 2 VCP: REJECTED - No volume dry-up "
+                    f"(insufficient TR data: {len(tr)} bars, need 26)"
+                )
             return None
 
         last5_tr_val = tr.iloc[-5:].mean()
@@ -940,6 +994,11 @@ def scan_vcp(
         last5_tr  = float(last5_tr_val.item() if hasattr(last5_tr_val, 'item') else last5_tr_val)
         prev20_tr = float(prev20_tr_val.item() if hasattr(prev20_tr_val, 'item') else prev20_tr_val)
         if last5_tr >= prev20_tr:
+            if debug:
+                print(
+                    f"Engine 2 VCP: REJECTED - No volume dry-up "
+                    f"(TR not contracting: last5={last5_tr:.4f} >= prev20={prev20_tr:.4f})"
+                )
             return None
 
         # ── A3. U-shape parabolic check ───────────────────────────────────
@@ -964,6 +1023,11 @@ def scan_vcp(
             is_u = False
 
         if not is_u:
+            if debug:
+                print(
+                    f"Engine 2 VCP: REJECTED - No volume dry-up "
+                    f"(U-shape parabola check failed — no coiled base detected)"
+                )
             return None
 
         # ── A4. Volume dry-up ─────────────────────────────────────────────
@@ -986,6 +1050,11 @@ def scan_vcp(
                 nearest_res = z
 
         if nearest_res is None:
+            if debug:
+                print(
+                    f"Engine 2 VCP: REJECTED - Not within 5% of any resistance zone "
+                    f"(Path A: no KDE zone within 5% above Close {lc:.2f})"
+                )
             return None
 
         # Volume gate: in dry-up phase below resistance OR already breaking
@@ -993,6 +1062,12 @@ def scan_vcp(
         in_dry_up   = lc <  nearest_res["lower"] and is_dry
 
         if not (at_breakout or in_dry_up):
+            if debug:
+                print(
+                    f"Engine 2 VCP: REJECTED - No volume dry-up "
+                    f"(last3_vol={last3_vol:.0f} vs avg_vol={avg_vol:.0f}, "
+                    f"is_dry={is_dry}, is_vol_surge={is_vol_surge})"
+                )
             return None
 
         # ── Risk math ─────────────────────────────────────────────────────
