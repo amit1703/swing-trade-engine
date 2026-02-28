@@ -147,7 +147,16 @@ export default function App() {
 
         if (!status.in_progress) {
           clearInterval(pollTimerRef.current)
-          loadAllData()
+          if (status.engine_stats?.dry_run && status.dry_run_setups) {
+            const dr = status.dry_run_setups
+            setVcpSetups(dr.vcp ?? [])
+            setPullbackSetups(dr.pullback ?? [])
+            setBaseSetups(dr.base ?? [])
+            setResBreakoutSetups(dr.res_breakout ?? [])
+            setWatchlistItems(dr.watchlist ?? [])
+          } else {
+            loadAllData()
+          }
         }
       } catch (err) {
         console.warn('[App] poll error:', err)
