@@ -104,7 +104,7 @@ def calculate_sr_zones(
 
         # ── Recency-weighted KDE ──────────────────────────────────────────────
         # Compute days ago for each price point
-        today = dates_valid.max()
+        today = dates_valid.max().astype('datetime64[D]')
         days_ago = (today - dates_valid.astype('datetime64[D]')).astype(float)
         days_ago = np.maximum(days_ago, 0.0)
 
