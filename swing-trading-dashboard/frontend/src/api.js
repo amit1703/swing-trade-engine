@@ -28,10 +28,11 @@ export const fetchChartData = (ticker) =>
 export const fetchSrZones = (ticker) =>
   fetch(`/api/sr-zones/${ticker}`).then(handleResponse)
 
-export const triggerScan = (force = false, dryRun = false) => {
+export const triggerScan = (force = false, dryRun = false, tickers = null) => {
   const params = new URLSearchParams()
-  if (force)  params.set('force', 'true')
-  if (dryRun) params.set('dry_run', 'true')
+  if (force)   params.set('force', 'true')
+  if (dryRun)  params.set('dry_run', 'true')
+  if (tickers) params.set('tickers', tickers)
   const qs = params.toString()
   return fetch(`/api/run-scan${qs ? '?' + qs : ''}`, { method: 'POST' }).then(handleResponse)
 }

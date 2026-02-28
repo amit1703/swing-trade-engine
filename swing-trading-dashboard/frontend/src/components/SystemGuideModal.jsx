@@ -81,6 +81,9 @@ export default function SystemGuideModal({ isOpen, onClose }) {
           <MetricsSection />
           <IndicatorsSection />
           <SetupTypesSection />
+          <ChartLegendSection />
+          <PortfolioHealthSection />
+          <KeyboardSection />
         </div>
       </div>
     </div>
@@ -211,6 +214,26 @@ function IndicatorsSection() {
       name: 'Quality Score (0–100)',
       desc: "O'Neil composite for Base patterns: RS vs SPY (25pts) + base tightness/depth (25pts) + volume dry-up (25pts) + RS blue dot at 52-week high (25pts).",
     },
+    {
+      badge: <GBadge style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.35)', fontWeight: 700 }}>SCORE</GBadge>,
+      name: 'Options Score (0–100)',
+      desc: 'Composite options flow signal: Vol/OI ratio (30pts) + absolute call volume (25pts) + call/put skew (25pts) + IV term structure slope (20pts). ≥60 required.',
+    },
+    {
+      badge: <GBadge style={{ background: 'rgba(168,85,247,0.10)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)' }}>VOL 42K</GBadge>,
+      name: 'Call Volume',
+      desc: 'Total call contract volume traded on the dominant expiry date. Higher absolute volume = greater conviction from options traders. Minimum 500 contracts required.',
+    },
+    {
+      badge: <GBadge style={{ background: 'rgba(168,85,247,0.10)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)' }}>C/P 3.20</GBadge>,
+      name: 'Call/Put Ratio',
+      desc: 'Ratio of call volume to put volume. Values >1.5 signal net bullish options flow. Extreme skew (>5) often means institutional directional positioning ahead of a catalyst.',
+    },
+    {
+      badge: <GBadge style={{ background: 'rgba(168,85,247,0.10)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)' }}>DTE 21</GBadge>,
+      name: 'Days to Expiry',
+      desc: 'Days remaining on the dominant options expiry. Short DTE (≤30) reflects high urgency — traders expect the move before expiry. Long DTE suggests a larger positioning play.',
+    },
   ]
 
   return (
@@ -278,6 +301,12 @@ function SetupTypesSection() {
       accent: 'var(--go)',
       desc: 'Stock built a tight 3-bar launchpad just below a heavy resistance level and is now breaking through with decisive close (top 30% of range) and >150% average volume.',
     },
+    {
+      name: 'Options Catalyst',
+      accent: '#a855f7',
+      desc: 'Unusual bullish options flow detected: high call volume relative to open interest, skewed call/put ratio, and positive IV term structure slope. Institutions are positioning for an upside catalyst. Score ≥60/100 required.',
+      fullWidth: true,
+    },
   ]
 
   return (
@@ -296,6 +325,7 @@ function SetupTypesSection() {
               borderLeft: `3px solid ${s.accent}`,
               padding: '12px 14px',
               display: 'flex', flexDirection: 'column', gap: 6,
+              ...(s.fullWidth ? { gridColumn: '1 / -1' } : {}),
             }}
           >
             <span style={{
@@ -308,6 +338,176 @@ function SetupTypesSection() {
             <span style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.55 }}>
               {s.desc}
             </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── Section 4: Chart Legend ──────────────────────────────────────────────── */
+
+function ChartLegendSection() {
+  const items = [
+    {
+      visual: (
+        <svg width="48" height="20" style={{ display: 'block' }}>
+          <rect x="0" y="4" width="48" height="12" fill="rgba(255,45,85,0.18)" />
+          <line x1="0" y1="4.5" x2="48" y2="4.5" stroke="rgba(255,45,85,0.75)" strokeWidth="1.2" strokeDasharray="5,4" />
+          <line x1="0" y1="15.5" x2="48" y2="15.5" stroke="rgba(255,45,85,0.75)" strokeWidth="1.2" strokeDasharray="5,4" />
+        </svg>
+      ),
+      name: 'KDE Resistance Band',
+      desc: 'Gaussian KDE density peak above current price — a statistically heavy supply zone where institutional sellers previously absorbed demand. Red dashed borders.',
+    },
+    {
+      visual: (
+        <svg width="48" height="20" style={{ display: 'block' }}>
+          <rect x="0" y="4" width="48" height="12" fill="rgba(0,200,122,0.16)" />
+          <line x1="0" y1="4.5" x2="48" y2="4.5" stroke="rgba(0,200,122,0.75)" strokeWidth="1.2" strokeDasharray="5,4" />
+          <line x1="0" y1="15.5" x2="48" y2="15.5" stroke="rgba(0,200,122,0.75)" strokeWidth="1.2" strokeDasharray="5,4" />
+        </svg>
+      ),
+      name: 'KDE Support Band',
+      desc: 'KDE density peak below current price — a historically significant demand zone where buyers consistently step in. Green dashed borders.',
+    },
+    {
+      visual: (
+        <svg width="48" height="20" style={{ display: 'block' }}>
+          <line x1="0" y1="10.5" x2="48" y2="10.5" stroke="rgba(255,140,0,0.90)" strokeWidth="1.5" />
+        </svg>
+      ),
+      name: 'Pivot Resistance Line',
+      desc: 'Two or more major swing highs clustered within 1.5% of each other and ≥7 bars apart. A tested overhead ceiling. Rendered as a thin solid amber line (no fill).',
+    },
+  ]
+
+  return (
+    <div>
+      <SectionLabel color="var(--muted)">Chart Legend</SectionLabel>
+      <div style={{ padding: '4px 12px 4px' }}>
+        {items.map((item, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '148px 1fr',
+              alignItems: 'center',
+              gap: 12,
+              padding: '8px 8px',
+              borderBottom: i < items.length - 1 ? '1px solid rgba(26,37,53,0.6)' : 'none',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ minWidth: 48, display: 'flex', justifyContent: 'flex-start' }}>
+                {item.visual}
+              </div>
+              <span style={{
+                fontFamily: 'Barlow Condensed, sans-serif',
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', color: 'var(--text)',
+                whiteSpace: 'nowrap',
+              }}>
+                {item.name}
+              </span>
+            </div>
+            <span style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.55 }}>
+              {item.desc}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── Section 5: Portfolio Health ─────────────────────────────────────────── */
+
+function PortfolioHealthSection() {
+  const signals = [
+    {
+      badge: <GBadge style={{ background: 'rgba(0,200,122,0.15)', color: 'var(--go)', border: '1px solid rgba(0,200,122,0.4)', fontWeight: 700, minWidth: 46, textAlign: 'center' }}>HOLD</GBadge>,
+      name: 'Hold',
+      desc: 'Close is above the 20 EMA. The trend is intact. Consider trailing your stop up to max(original stop, 20 EMA) once you are in profit.',
+    },
+    {
+      badge: <GBadge style={{ background: 'rgba(245,166,35,0.15)', color: 'var(--accent)', border: '1px solid rgba(245,166,35,0.4)', fontWeight: 700, minWidth: 46, textAlign: 'center' }}>CAUTION</GBadge>,
+      name: 'Caution',
+      desc: 'Close slipped below the 8 EMA. Momentum is fading. Reduce size or tighten your stop — do not add to the position.',
+    },
+    {
+      badge: <GBadge style={{ background: 'rgba(255,45,85,0.15)', color: 'var(--halt)', border: '1px solid rgba(255,45,85,0.4)', fontWeight: 700, minWidth: 46, textAlign: 'center' }}>EXIT</GBadge>,
+      name: 'Exit Signal',
+      desc: 'Close broke below the 20 EMA OR CCI dropped below −100. The thesis is invalidated. Exit at open unless the stock is gapping up through the EMA on high volume.',
+    },
+  ]
+
+  return (
+    <div>
+      <SectionLabel color="var(--go)">Portfolio Health Signals</SectionLabel>
+      <div style={{ padding: '4px 12px 4px' }}>
+        {signals.map((row, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '148px 1fr',
+              alignItems: 'center',
+              gap: 12,
+              padding: '8px 8px',
+              borderBottom: i < signals.length - 1 ? '1px solid rgba(26,37,53,0.6)' : 'none',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ minWidth: 40, display: 'flex', justifyContent: 'flex-start' }}>
+                {row.badge}
+              </div>
+              <span style={{
+                fontFamily: 'Barlow Condensed, sans-serif',
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', color: 'var(--text)',
+                whiteSpace: 'nowrap',
+              }}>
+                {row.name}
+              </span>
+            </div>
+            <span style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.55 }}>
+              {row.desc}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── Section 6: Keyboard Shortcuts ───────────────────────────────────────── */
+
+function KeyboardSection() {
+  const shortcuts = [
+    { key: '?', desc: 'Open this guide' },
+    { key: 'Esc', desc: 'Close this guide' },
+  ]
+
+  return (
+    <div>
+      <SectionLabel color="var(--muted)">Keyboard Shortcuts</SectionLabel>
+      <div style={{ padding: '8px 20px 4px', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+        {shortcuts.map((s) => (
+          <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <kbd style={{
+              fontFamily: 'IBM Plex Mono, monospace',
+              fontSize: 10, fontWeight: 700,
+              background: 'var(--panel)',
+              border: '1px solid var(--border-light)',
+              color: 'var(--text)',
+              padding: '2px 8px',
+              borderRadius: 2,
+              letterSpacing: '0.05em',
+            }}>
+              {s.key}
+            </kbd>
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>{s.desc}</span>
           </div>
         ))}
       </div>

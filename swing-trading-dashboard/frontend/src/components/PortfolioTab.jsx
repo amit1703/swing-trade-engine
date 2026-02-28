@@ -290,7 +290,7 @@ export default function PortfolioTab({ onTickerClick }) {
 // Add Trade Modal
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RISK_AMOUNT = 200   // default risk per trade in $
+const RISK_AMOUNT = 100   // default risk per trade in $
 
 function AddTradeModal({ onAdd, onClose }) {
   const [form, setForm] = useState({

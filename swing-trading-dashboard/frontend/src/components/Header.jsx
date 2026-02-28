@@ -7,7 +7,7 @@
  */
 import { useRef, useState } from 'react'
 
-export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, onOpenGuide, devMode, dryRun, onToggleDev, onToggleDryRun }) {
+export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, onOpenGuide, devMode, dryRun, onToggleDev, onToggleDryRun, onScanTicker }) {
   const isBullish = regime?.is_bullish
   const isNoData  = !regime || regime.regime === 'NO_DATA'
   const isHalt    = regime && !isBullish && regime.regime !== 'NO_DATA'
@@ -33,7 +33,7 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
       <div className="progress-bar w-full" style={{ opacity: scanStatus.in_progress ? 1 : 0, transition: 'opacity 0.3s' }}>
         <div
           className="progress-bar-fill"
-          style={{ width: `${scanStatus.progress_pct ?? 0}%` }}
+          style={{ width: `${scanStatus.progress_pct ?? 0}%`, transition: 'width 0.6s ease-out' }}
         />
       </div>
 
@@ -167,6 +167,11 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
             </button>
           )}
 
+          {/* Single-ticker debug scan — only visible when devMode active */}
+          {devMode && (
+            <TickerScan onScan={onScanTicker} disabled={scanStatus.in_progress} />
+          )}
+
           {/* Guide button */}
           <button
             onClick={onOpenGuide}
@@ -220,6 +225,88 @@ function MetricCell({ label, value, color }) {
     <div className="flex flex-col gap-0.5">
       <span className="text-[9px] tracking-widest uppercase text-t-muted">{label}</span>
       <span className={`text-[13px] font-600 font-mono tabular-nums leading-none ${color}`}>{value}</span>
+    </div>
+  )
+}
+
+function TickerScan({ onScan, disabled }) {
+  const [value, setValue] = useState('')
+  const inputRef = useRef(null)
+
+  const commit = () => {
+    const sym = value.trim().toUpperCase()
+    if (!sym || disabled) return
+    onScan?.(sym)
+    setValue('')
+    inputRef.current?.blur()
+  }
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter') commit()
+    if (e.key === 'Escape') { setValue(''); inputRef.current?.blur() }
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        border: '1px solid rgba(245,166,35,0.35)',
+        background: 'rgba(245,166,35,0.04)',
+        opacity: disabled ? 0.4 : 1,
+        transition: 'opacity 0.15s',
+      }}
+      title="Scan a single ticker (dev)"
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value.toUpperCase())}
+        onKeyDown={handleKey}
+        placeholder="TICKER"
+        maxLength={6}
+        spellCheck={false}
+        autoComplete="off"
+        disabled={disabled}
+        style={{
+          width: 72,
+          background: 'transparent',
+          border: 'none',
+          outline: 'none',
+          color: 'var(--accent)',
+          fontFamily: 'IBM Plex Mono, monospace',
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: '0.1em',
+          padding: '4px 8px',
+          caretColor: 'var(--accent)',
+        }}
+      />
+      <button
+        onClick={commit}
+        disabled={disabled || !value}
+        style={{
+          background: value && !disabled ? 'rgba(245,166,35,0.20)' : 'transparent',
+          border: 'none',
+          borderLeft: '1px solid rgba(245,166,35,0.25)',
+          color: value && !disabled ? 'var(--accent)' : 'var(--muted)',
+          fontFamily: 'IBM Plex Mono, monospace',
+          fontSize: 9,
+          fontWeight: 700,
+          padding: '0 8px',
+          height: '100%',
+          cursor: value && !disabled ? 'pointer' : 'default',
+          transition: 'background 0.12s, color 0.12s',
+          letterSpacing: '0.1em',
+          alignSelf: 'stretch',
+          display: 'flex',
+          alignItems: 'center',
+          textTransform: 'uppercase',
+        }}
+      >
+        SCAN
+      </button>
     </div>
   )
 }

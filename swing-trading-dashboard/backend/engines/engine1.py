@@ -297,9 +297,10 @@ def _find_pivot_resistance(
         cluster_highs = [float(pivot_highs[m]) for m in members]
         level = float(np.mean(cluster_highs))
 
-        # Only emit OVERHEAD resistance — pivot zones below current price
-        # would contaminate Engine 2/6 resistance checks.
-        if level <= current_price:
+        # Only emit overhead resistance — drop zones that are clearly below
+        # current price (>3% below). Keep zones within 3% below so we still
+        # see the line when the stock is wrestling with or just clearing it.
+        if level < current_price * 0.97:
             continue
 
         # Narrow band (±0.1 ATR) so engines see a tight zone, not a wide band.

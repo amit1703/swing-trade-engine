@@ -542,7 +542,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                         # Continue to pullback checks even if near-breakout fails
 
                 # Engine 3: Tactical pullback (strict, then relaxed)
-                pb = await loop.run_in_executor(None, scan_pullback, ticker, df, zones, tl)
+                pb = await loop.run_in_executor(None, scan_pullback, ticker, df, zones, tl, rs_score)
                 if pb:
                     # Sanitize pullback output
                     try:
@@ -563,7 +563,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                     # Only check relaxed if no strict pullback found
                     try:
                         pb_relaxed = await loop.run_in_executor(
-                            None, scan_relaxed_pullback, ticker, df, zones, tl
+                            None, scan_relaxed_pullback, ticker, df, zones, tl, rs_score
                         )
                         if pb_relaxed:
                             # Sanitize relaxed pullback output
@@ -588,7 +588,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                 try:
                     base = await loop.run_in_executor(
                         None, scan_base_pattern, ticker, df,
-                        spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score
+                        spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, zones
                     )
                     if base:
                         try:
@@ -814,10 +814,13 @@ async def trigger_scan(
     background_tasks: BackgroundTasks,
     force: bool = Query(False, description="Bypass bearish halt gate"),
     dry_run: bool = Query(False, description="Run pipeline without saving to DB"),
+    tickers: Optional[str] = Query(None, description="Comma-separated tickers for single-ticker debug scan"),
 ):
     """
     Trigger a full market scan.  Returns immediately; scan runs in background.
     Poll /api/scan-status to track progress.
+
+    Pass ?tickers=EQT,NVDA to run only those tickers (dev debug mode).
     """
     if _scan_state["in_progress"]:
         return {
@@ -826,16 +829,21 @@ async def trigger_scan(
             "total": _scan_state["total"],
         }
 
+    if tickers:
+        ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    else:
+        ticker_list = ACTIVE_UNIVERSE
+
     scan_ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
-    background_tasks.add_task(_run_scan, scan_ts, ACTIVE_UNIVERSE, force, dry_run)
+    background_tasks.add_task(_run_scan, scan_ts, ticker_list, force, dry_run)
 
     return {
         "status": "started",
         "scan_timestamp": scan_ts,
-        "tickers": len(ACTIVE_UNIVERSE),
+        "tickers": len(ticker_list),
         "forced": force,
         "dry_run": dry_run,
-        "message": f"Scanning {len(ACTIVE_UNIVERSE)} tickers in background",
+        "message": f"Scanning {len(ticker_list)} tickers in background",
     }
 
 
@@ -1012,16 +1020,16 @@ async def debug_ticker(ticker: str):
         sym, df, zones, 0.0, rs_ratio, rs_52w_high, rs_blue_dot, rs_score
     )
     # Engine 3 — Pullback (strict then relaxed)
-    e3 = await loop.run_in_executor(None, _run_engine, scan_pullback, sym, df, zones, tl)
+    e3 = await loop.run_in_executor(None, _run_engine, scan_pullback, sym, df, zones, tl, rs_score)
     e3_relaxed = False
     if e3 is None:
-        e3 = await loop.run_in_executor(None, _run_engine, scan_relaxed_pullback, sym, df, zones, tl)
+        e3 = await loop.run_in_executor(None, _run_engine, scan_relaxed_pullback, sym, df, zones, tl, rs_score)
         if e3 is not None:
             e3_relaxed = True
     # Engine 5 — Base pattern
     e5 = await loop.run_in_executor(
         None, _run_engine, scan_base_pattern,
-        sym, df, 0.0, rs_ratio, rs_52w_high, rs_blue_dot, rs_score
+        sym, df, 0.0, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, zones
     )
     # Engine 6 — Resistance breakout
     e6 = await loop.run_in_executor(

@@ -36,6 +36,8 @@ from scipy.signal import find_peaks
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, true_range as _tr
+from constants import TARGET_RR
+from zone_utils import nearest_resistance_target
 
 
 # ---------------------------------------------------------------------------
@@ -449,7 +451,7 @@ def scan_near_breakout(
         # scan_vcp is always called first; we only reach here if vcp returned None,
         # meaning the stock didn't pass the strict VCP trend filter. Catching these
         # confirmed breaks ensures they still surface in the WATCHLIST.
-        BRK_PCT = 0.03   # up to 3% above level = "recently broke out"
+        BRK_PCT = 0.01   # up to 1% above level = "recently broke out"
         for z in resistance_zones:
             upper = z["upper"]
             if upper > 0 and lc > upper:
@@ -731,14 +733,14 @@ def scan_vcp(
                         f"max_allowed={entry * 0.15:.2f})"
                     )
             else:
-                take_profit = round(entry + 2.0 * risk, 2)
+                take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
                 return {
                     "ticker":             ticker,
                     "setup_type":         "VCP",
                     "entry":              entry,
                     "stop_loss":          stop_loss,
                     "take_profit":        take_profit,
-                    "rr":                 2.0,
+                    "rr": actual_rr,
                     "setup_date":         str(data.index[-1].date()),
                     "is_breakout":        True,
                     "is_vol_surge":       True,
@@ -804,14 +806,14 @@ def scan_vcp(
             stop_loss  = round(stop_base - 0.2 * latr, 2)
             risk       = entry - stop_loss
             if risk > 0 and risk <= entry * 0.15:
-                take_profit = round(entry + 2.0 * risk, 2)
+                take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
                 return {
                     "ticker":             ticker,
                     "setup_type":         "VCP",
                     "entry":              entry,
                     "stop_loss":          stop_loss,
                     "take_profit":        take_profit,
-                    "rr":                 2.0,
+                    "rr": actual_rr,
                     "setup_date":         str(data.index[-1].date()),
                     "is_breakout":        True,
                     "is_vol_surge":       lvol >= 1.5 * avg_vol,
@@ -873,14 +875,14 @@ def scan_vcp(
                 risk       = entry - stop_loss
 
                 if risk > 0 and risk <= entry * 0.15:
-                    take_profit = round(entry + 2.0 * risk, 2)
+                    take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
                     return {
                         "ticker":             ticker,
                         "setup_type":         "VCP",
                         "entry":              entry,
                         "stop_loss":          stop_loss,
                         "take_profit":        take_profit,
-                        "rr":                 2.0,
+                        "rr": actual_rr,
                         "setup_date":         str(data.index[-1].date()),
                         "is_breakout":        True,
                         "is_vol_surge":       lvol >= 1.5 * avg_vol,
@@ -934,14 +936,14 @@ def scan_vcp(
                 risk       = entry - stop_loss
 
                 if risk > 0 and risk <= entry * 0.15:
-                    take_profit = round(entry + 2.0 * risk, 2)
+                    take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
                     return {
                         "ticker":             ticker,
                         "setup_type":         "VCP",
                         "entry":              entry,
                         "stop_loss":          stop_loss,
                         "take_profit":        take_profit,
-                        "rr":                 2.0,
+                        "rr": actual_rr,
                         "setup_date":         str(data.index[-1].date()),
                         "is_breakout":        True,
                         "is_vol_surge":       False,
@@ -977,6 +979,17 @@ def scan_vcp(
                 )
             return None
 
+        # ── A1b. RS quality gate ──────────────────────────────────────────
+        # DRY setups require stock to be at least neutral vs SPY (rs_score ≥ 0),
+        # matching the same bar as BRK (Path B). Coiling on a weak RS stock
+        # has significantly lower follow-through probability.
+        if rs_score < 0:
+            if debug:
+                print(
+                    f"Engine 2 VCP: REJECTED - RS score negative "
+                    f"({rs_score:.3f} < 0 — Path A requires rs_score ≥ 0)"
+                )
+            return None
 
         # ── A2. True Range contraction ────────────────────────────────────
         # (tr already computed above for contraction counting)
@@ -1077,7 +1090,7 @@ def scan_vcp(
         if risk <= 0 or risk > entry * 0.15:
             return None
 
-        take_profit = round(entry + 2.0 * risk, 2)
+        take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
 
         return {
             "ticker":             ticker,
@@ -1085,7 +1098,7 @@ def scan_vcp(
             "entry":              entry,
             "stop_loss":          stop_loss,
             "take_profit":        take_profit,
-            "rr":                 2.0,
+            "rr": actual_rr,
             "setup_date":         str(data.index[-1].date()),
             "is_breakout":        at_breakout,
             "is_vol_surge":       is_vol_surge,

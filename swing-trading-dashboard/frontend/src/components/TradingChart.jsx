@@ -21,26 +21,26 @@ import { SRBandPrimitive } from '../sr-band-primitive.js'
 
 // ── Design tokens (match index.css variables) ──────────────────────────────
 const COLORS = {
-  bg:           '#000000',
-  surface:      '#080c12',
+  bg:           '#000000',    // pure black background
+  surface:      '#050a0f',
   border:       '#1a2535',
   text:         '#c8cdd6',
   muted:        '#4a5a72',
   accent:       '#F5A623',
   go:           '#00c87a',
   halt:         '#ff2d55',
-  ema8:         '#9B6EFF',
-  ema20:        '#FFD700',
-  sma50:        '#F5A623',
+  ema8:         '#9B6EFF',    // purple
+  ema20:        '#FFD700',    // yellow
+  sma50:        '#4CAF50',    // green
   cci:          '#9B6EFF',
   cciOb:        'rgba(255, 45, 85, 0.12)',
   cciOs:        'rgba(0, 200, 122, 0.10)',
-  sma200:       '#FF5C8A',
-  trendline:    '#FFFFFF',
-  trendlineAsc: '#00E5FF',
-  baseFlatBox:  'rgba(0, 200, 122, 0.12)',
-  baseFlatEdge: 'rgba(0, 200, 122, 0.5)',
-  cupArc:       'rgba(155, 110, 255, 0.5)',
+  sma200:       '#FF5C8A',    // red-pink
+  trendline:    '#FFFFFF',    // white — descending TDL
+  trendlineAsc: '#FFFFFF',    // white — ascending TDL
+  baseFlatBox:  'rgba(255, 255, 255, 0.05)',
+  baseFlatEdge: 'rgba(255, 255, 255, 0.5)',
+  cupArc:       'rgba(255, 255, 255, 0.5)',
 }
 
 const SHARED_CHART_OPTS = {
@@ -51,8 +51,8 @@ const SHARED_CHART_OPTS = {
     fontSize: 10,
   },
   grid: {
-    vertLines: { color: '#0d1520', style: LineStyle.Solid },
-    horzLines: { color: '#0d1520', style: LineStyle.Solid },
+    vertLines: { color: '#101825', style: LineStyle.Solid },
+    horzLines: { color: '#101825', style: LineStyle.Solid },
   },
   crosshair: {
     mode: CrosshairMode.Normal,
@@ -76,13 +76,20 @@ const SHARED_CHART_OPTS = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function TradingChart({ ticker, chartData, loading }) {
-  const mainRef = useRef(null)
-  const cciRef  = useRef(null)
-  const wrapRef = useRef(null)
+  const mainRef    = useRef(null)
+  const cciRef     = useRef(null)
+  const wrapRef    = useRef(null)
+  const seriesRef  = useRef({})   // holds series + primitives for visibility toggles
 
   // Legend state — updated on crosshair move
   const [legend, setLegend] = useState(null)
 
+  // Visibility toggles: ema / sma / tdl / sr
+  const [vis, setVis] = useState({ ema: true, sma: true, tdl: true, sr: true })
+
+  // Chart creation effect must be defined BEFORE visibility effects so React
+  // runs it first (effects execute in definition order), ensuring seriesRef is
+  // populated before visibility effects apply options.
   useEffect(() => {
     if (!chartData || !mainRef.current || !cciRef.current) return
 
@@ -120,10 +127,10 @@ export default function TradingChart({ ticker, chartData, loading }) {
       downColor:        COLORS.halt,
       borderUpColor:    COLORS.go,
       borderDownColor:  COLORS.halt,
-      wickUpColor:      'rgba(0, 200, 122, 0.6)',
-      wickDownColor:    'rgba(255, 45, 85, 0.6)',
+      wickUpColor:      'rgba(0, 200, 122, 0.75)',
+      wickDownColor:    'rgba(255, 45, 85, 0.75)',
       priceLineVisible: true,
-      priceLineColor:   COLORS.accent,
+      priceLineColor:   'rgba(245,166,35,0.5)',
       priceLineStyle:   LineStyle.Dashed,
       priceLineWidth:   1,
       lastValueVisible: true,
@@ -131,10 +138,13 @@ export default function TradingChart({ ticker, chartData, loading }) {
     if (chartData.candles?.length) candleSeries.setData(chartData.candles)
 
     // ── S/R Band primitives (attached to candle series) ────────────────────
+    const srPrimitivesList = []
     if (chartData.sr_zones?.length) {
       chartData.sr_zones.forEach((zone) => {
         try {
-          candleSeries.attachPrimitive(new SRBandPrimitive(zone))
+          const prim = new SRBandPrimitive(zone)
+          candleSeries.attachPrimitive(prim)
+          srPrimitivesList.push(prim)
         } catch (e) {
           // Fallback: draw two price lines if primitive API unavailable
           const isPivot = zone.source === 'pivot'
@@ -198,8 +208,10 @@ export default function TradingChart({ ticker, chartData, loading }) {
         lineWidth:        1.5,
         lineStyle:        LineStyle.Solid,
         priceLineVisible: false,
-        lastValueVisible: false,
+        lastValueVisible: true,
+        lastPriceAnimation: 0,
         crosshairMarkerVisible: false,
+        title: 'TDL',
       })
       descTrendlineSeries.setData(chartData.trendline.descending.series)
     }
@@ -210,8 +222,10 @@ export default function TradingChart({ ticker, chartData, loading }) {
         lineWidth:        1.5,
         lineStyle:        LineStyle.Solid,
         priceLineVisible: false,
-        lastValueVisible: false,
+        lastValueVisible: true,
+        lastPriceAnimation: 0,
         crosshairMarkerVisible: false,
+        title: 'ASC',
       })
       ascTrendlineSeries.setData(chartData.trendline.ascending.series)
     }
@@ -416,6 +430,18 @@ export default function TradingChart({ ticker, chartData, loading }) {
       })
     })
 
+    // ── Store series refs for visibility toggles ───────────────────────────
+    seriesRef.current = {
+      ema8:   ema8Series,
+      ema20:  ema20Series,
+      sma50:  sma50Series,
+      sma200: sma200Series,
+      descTL: descTrendlineSeries,
+      ascTL:  ascTrendlineSeries,
+      srPrimitives: srPrimitivesList,
+      mainChart,
+    }
+
     // ── Resize observer ────────────────────────────────────────────────────
     const wrap = wrapRef.current
     const observer = new ResizeObserver(() => {
@@ -428,12 +454,34 @@ export default function TradingChart({ ticker, chartData, loading }) {
 
     // ── Cleanup ────────────────────────────────────────────────────────────
     return () => {
+      seriesRef.current = {}
       observer.disconnect()
       try { mainChart.remove() } catch (_) {}
       try { cciChart.remove()  } catch (_) {}
       setLegend(null)
     }
   }, [chartData]) // re-create charts whenever data changes
+
+  // ── Visibility effects — defined AFTER chart creation so they run after it ─
+  useEffect(() => {
+    seriesRef.current.ema8?.applyOptions({ visible: vis.ema })
+    seriesRef.current.ema20?.applyOptions({ visible: vis.ema })
+  }, [vis.ema, chartData])
+
+  useEffect(() => {
+    seriesRef.current.sma50?.applyOptions({ visible: vis.sma })
+    seriesRef.current.sma200?.applyOptions({ visible: vis.sma })
+  }, [vis.sma, chartData])
+
+  useEffect(() => {
+    seriesRef.current.descTL?.applyOptions({ visible: vis.tdl })
+    seriesRef.current.ascTL?.applyOptions({ visible: vis.tdl })
+  }, [vis.tdl, chartData])
+
+  useEffect(() => {
+    seriesRef.current.srPrimitives?.forEach(p => p.setVisible(vis.sr))
+    seriesRef.current.mainChart?.applyOptions({})
+  }, [vis.sr, chartData])
 
   // ── Empty states ──────────────────────────────────────────────────────────
   if (loading) {
@@ -575,23 +623,20 @@ export default function TradingChart({ ticker, chartData, loading }) {
           )}
         </div>
 
-        {/* S/R zone strip */}
-        {chartData.sr_zones?.length > 0 && (
-          <div style={{
-            position: 'absolute', bottom: 4, left: 10, zIndex: 10,
-            pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            <span style={{ fontSize: 8, color: COLORS.muted, letterSpacing: '1px', textTransform: 'uppercase' }}>S/R</span>
-            {chartData.sr_zones.map((z, i) => (
-              <span key={i} style={{
-                fontSize: 9, fontFamily: '"IBM Plex Mono", monospace',
-                color: z.type === 'RESISTANCE' ? COLORS.halt : COLORS.go,
-              }}>
-                {z.type[0]}{z.level.toFixed(2)}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Visibility toggle bar — top right */}
+        <div style={{
+          position: 'absolute', top: 8, right: 10, zIndex: 10,
+          display: 'flex', alignItems: 'center', gap: 4,
+        }}>
+          <VisToggle label="EMA" active={vis.ema} activeColor={COLORS.ema8}
+            onClick={() => setVis(v => ({ ...v, ema: !v.ema }))} />
+          <VisToggle label="SMA" active={vis.sma} activeColor={COLORS.sma50}
+            onClick={() => setVis(v => ({ ...v, sma: !v.sma }))} />
+          <VisToggle label="TDL" active={vis.tdl} activeColor="rgba(255,255,255,0.8)"
+            onClick={() => setVis(v => ({ ...v, tdl: !v.tdl }))} />
+          <VisToggle label="S/R" active={vis.sr} activeColor="rgba(255,255,255,0.6)"
+            onClick={() => setVis(v => ({ ...v, sr: !v.sr }))} />
+        </div>
 
         <div
           ref={mainRef}
@@ -629,6 +674,31 @@ function LegendItem({ dot, label, value }) {
         </span>
       )}
     </span>
+  )
+}
+
+function VisToggle({ label, active, activeColor, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        fontFamily: '"IBM Plex Mono", monospace',
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: '0.08em',
+        padding: '3px 8px',
+        background: 'rgba(0,0,0,0.75)',
+        border: `1px solid ${active ? activeColor : 'rgba(255,255,255,0.1)'}`,
+        color: active ? activeColor : 'rgba(255,255,255,0.2)',
+        cursor: 'pointer',
+        textDecoration: active ? 'none' : 'line-through',
+        backdropFilter: 'blur(4px)',
+        transition: 'border-color 0.15s, color 0.15s',
+        userSelect: 'none',
+      }}
+    >
+      {label}
+    </button>
   )
 }
 

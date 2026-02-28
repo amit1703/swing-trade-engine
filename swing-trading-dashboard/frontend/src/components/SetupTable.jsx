@@ -114,8 +114,8 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                     {/* Target — green */}
                     <td style={{ color: 'var(--go)' }}>{fmt(s.take_profit)}</td>
 
-                    {/* R:R */}
-                    <td className="text-t-muted">{s.rr?.toFixed(1) ?? '2.0'}</td>
+                    {/* R:R — computed from actual prices; falls back to stored rr */}
+                    <td className="text-t-muted">{calcRR(s.entry, s.stop_loss, s.take_profit) ?? s.rr?.toFixed(1) ?? '—'}</td>
 
                     {/* Signal column */}
                     <td style={{ textAlign: 'left' }}>
@@ -379,3 +379,11 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
 
 /** Format a price number to 2 decimal places */
 const fmt = (n) => (n == null ? '—' : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+
+/** Compute R:R from actual prices, returns formatted string or null */
+const calcRR = (entry, stop, target) => {
+  if (!entry || !stop || !target) return null
+  const risk = entry - stop
+  if (risk <= 0) return null
+  return ((target - entry) / risk).toFixed(1)
+}

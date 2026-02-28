@@ -28,9 +28,11 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import atr as _atr
+from constants import TARGET_RR, VOL_SURGE_MULTIPLIER
+from zone_utils import nearest_resistance_target
 
 
-_VOL_SURGE_THRESHOLD     = 1.50   # Rule 3: ≥ 150% of 50-day average
+_VOL_SURGE_THRESHOLD     = VOL_SURGE_MULTIPLIER  # Rule 3: ≥ 150% of 50-day average (from constants)
 _MAX_DAYS_LOOKBACK       = 3      # Search window for breakout bar
 _MAX_EXTEND_PCT          = 0.05   # Overextension gate (current close vs zone)
 _DECISIVE_CLOSE_MIN_PCT  = 0.005  # Rule 2a: close must be > 0.5% above zone
@@ -212,7 +214,7 @@ def scan_resistance_breakout(
                 risk        = entry - stop_loss
                 if risk <= 0 or risk > entry * 0.15:
                     continue
-                take_profit = round(entry + 2.0 * risk, 2)
+                take_profit, actual_rr = nearest_resistance_target(entry, zones, risk)
 
                 breakout_pct = round((brk_close - zone_upper) / zone_upper * 100, 2)
 
@@ -223,7 +225,7 @@ def scan_resistance_breakout(
                     "entry":               entry,
                     "stop_loss":           stop_loss,
                     "take_profit":         take_profit,
-                    "rr":                  2.0,
+                    "rr": actual_rr,
                     "resistance_level":    round(zone_level, 2),
                     "zone_upper":          round(zone_upper, 2),
                     "breakout_pct":        breakout_pct,

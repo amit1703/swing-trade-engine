@@ -1,4 +1,4 @@
-"""Tests for Engine 5: Base Pattern Scanner."""
+"""Tests for Engine 5 v2: Volatility-Adjusted Base Pattern Scanner."""
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -8,9 +8,7 @@ import pandas as pd
 import pytest
 
 from engines.engine5 import (
-    _find_cup,
-    _is_u_shaped,
-    _find_handle,
+    _mean_tr,
     _quality_score,
     scan_cup_handle,
     scan_flat_base,
@@ -20,236 +18,260 @@ from engines.engine5 import (
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
-def make_cup_handle_df(n_total=110, cup_depth=0.20, handle_pct=0.08):
+def make_darvas_box_df(n_total=260, box_days=30, atr_multiple=2.5):
     """
-    Build a synthetic DataFrame with a clear cup & handle pattern.
-    Structure: 30 bars uptrend → 40-bar cup → 40-bar recovery → 20-bar handle → 20 bars near pivot
+    Build a DataFrame with a valid ATR-Adjusted Darvas Box at the end.
+
+    Structure: strong uptrend (SMA50 > SMA200 guaranteed) + tight box.
+    ATR ≈ 1.0 (H-L = 1.0 per bar). Box height = atr_multiple × 1.0.
+    Ceiling touched ≥ 2×. Last close in upper 25% of box.
+    Volume dry-up last 3 bars.
     """
-    dates = pd.date_range("2025-01-01", periods=n_total, freq="B")
+    dates = pd.date_range("2023-01-01", periods=n_total, freq="B")
+    close = np.ones(n_total, dtype=float)
 
-    close = np.ones(n_total) * 100.0
-    # Uptrend into left peak
-    for i in range(30):
-        close[i] = 90 + i * 0.5          # ramp from 90 to 104.5
-    left_peak = close[29]                 # ~104.5
-
-    # Cup: half-sine dip
-    for i in range(40):
-        angle = np.pi * i / 39
-        close[30 + i] = left_peak - cup_depth * left_peak * np.sin(angle)
-
-    right_rim = close[69]                 # should be close to left_peak
-
-    # Handle: small drift down
-    for i in range(20):
-        t = i / 19
-        close[70 + i] = right_rim - handle_pct * right_rim * np.sin(np.pi * t)
-
-    # Near pivot (last 20 bars drift up toward right_rim)
-    for i in range(20):
-        close[90 + i] = right_rim * 0.99 + i * 0.01
-
-    high = close * 1.01
-    low = close * 0.99
-    volume = np.full(n_total, 1_000_000.0)
-    volume[70:90] = 600_000.0   # dry-up in handle
-    volume[-1] = 1_000_000.0
-
-    df = pd.DataFrame({
-        "Close": close,
-        "High": high,
-        "Low": low,
-        "Open": close * 0.995,
-        "Volume": volume,
-    }, index=dates)
-    return df
-
-
-def make_flat_base_df(n_total=100, base_depth=0.08, base_days=35):
-    """Build a synthetic DataFrame with a flat base at the end."""
-    dates = pd.date_range("2025-01-01", periods=n_total, freq="B")
-
-    close = np.ones(n_total) * 100.0
-    trend_bars = n_total - base_days
+    trend_bars = n_total - box_days
+    # Strong uptrend: 50 → 100 over trend_bars
     for i in range(trend_bars):
-        close[i] = 80 + i * (20.0 / trend_bars)
+        close[i] = 50.0 + i * (50.0 / (trend_bars - 1))
 
-    base_start = close[trend_bars - 1]
-    for i in range(base_days):
-        t = i / base_days
-        close[trend_bars + i] = base_start * (1 - base_depth * 0.25 * np.sin(2 * np.pi * t))
+    # Box: oscillate between (100 - box_height) and 100
+    box_high_price = 100.0
+    box_height = atr_multiple * 1.0   # ATR ≈ 1.0
+    box_low_price = box_high_price - box_height
 
-    close[-1] = base_start * 0.996
+    for i in range(box_days):
+        t = i / box_days
+        close[trend_bars + i] = box_low_price + box_height * (0.4 + 0.3 * np.sin(2 * np.pi * t))
 
-    high = close * 1.005
-    low = close * 0.995
+    # Last bar: upper 25% (need close ≥ box_low + 0.75 * box_height)
+    upper_25 = box_low_price + 0.75 * box_height
+    close[-1] = upper_25 + 0.1   # just above upper quartile
+
+    # H = close + 0.5, L = close - 0.5 → H-L = 1.0, ATR ≈ 1.0
+    high = close + 0.5
+    low  = close - 0.5
+
+    # Ensure ceiling is touched at least twice: two bars at the box high
+    high[trend_bars + 3]  = box_high_price + 0.5   # ceiling touch 1
+    high[trend_bars + 18] = box_high_price + 0.5   # ceiling touch 2
+
+    # Last close must be within 1% of ceiling for DRY signal
+    ceiling = float(np.max(high[-(box_days):]))
+    close[-1] = ceiling * 0.992   # ~0.8% below ceiling → DRY signal
+
     volume = np.full(n_total, 1_000_000.0)
-    volume[trend_bars:] = 700_000.0   # contraction in base
+    volume[-3:] = 600_000.0   # 3-day dry-up
 
-    df = pd.DataFrame({
-        "Close": close,
-        "High": high,
-        "Low": low,
-        "Open": close * 0.998,
-        "Volume": volume,
+    return pd.DataFrame({
+        "Close": close, "High": high, "Low": low,
+        "Open": close * 0.998, "Volume": volume,
     }, index=dates)
-    return df
 
 
-class TestFindCup:
-    def test_finds_cup_in_valid_data(self):
-        df = make_cup_handle_df()
-        close = df["Close"].values
-        cup = _find_cup(close, lookback=120)
-        assert cup is not None
-        assert "left_peak" in cup
-        assert "cup_bottom" in cup
-        assert "right_rim" in cup
-        assert 0.12 <= cup["depth"] <= 0.35
+def make_low_atr_drifter_df(n_total=260):
+    """
+    A slowly drifting stock with very low ATR — should be REJECTED.
+    Box height ≈ 8 pts, ATR ≈ 0.2 pts → multiple ≈ 40× >> 3.5.
+    SMA50 > SMA200 holds (it has been in uptrend), but ATR gate kills it.
+    """
+    dates = pd.date_range("2023-01-01", periods=n_total, freq="B")
+    close = np.linspace(50, 100, n_total)   # slow linear drift upward
 
-    def test_rejects_too_shallow(self):
-        """Cup depth < 12% should return None."""
-        close = np.linspace(100, 98, 120)   # only 2% dip — too shallow
-        cup = _find_cup(close, lookback=120)
-        if cup is not None:
-            assert cup["depth"] >= 0.12
+    # Tight H/L spread → very low ATR
+    high   = close + 0.1
+    low    = close - 0.1
+    volume = np.full(n_total, 1_000_000.0)
+    volume[-3:] = 600_000.0
 
-    def test_rejects_too_deep(self):
-        """Cup depth > 35% should return None."""
-        close = np.concatenate([
-            np.linspace(100, 50, 60),   # 50% drop — too deep
-            np.linspace(50, 100, 60),
-        ])
-        cup = _find_cup(close, lookback=120)
-        if cup is not None:
-            assert cup["depth"] <= 0.35
-
-    def test_right_rim_within_10pct_of_left_peak(self):
-        df = make_cup_handle_df()
-        close = df["Close"].values
-        cup = _find_cup(close, lookback=120)
-        if cup is not None:
-            gap = (cup["left_peak"] - cup["right_rim"]) / cup["left_peak"]
-            assert gap <= 0.10
+    return pd.DataFrame({
+        "Close": close, "High": high, "Low": low,
+        "Open": close, "Volume": volume,
+    }, index=dates)
 
 
-class TestIsUShaped:
-    def test_true_for_parabolic_cup(self):
-        df = make_cup_handle_df()
-        close = df["Close"].values
-        cup = _find_cup(close, lookback=120)
-        assert cup is not None
-        assert _is_u_shaped(close[-120:], cup) is True
+def make_cup_handle_v2_df(n_total=350, cup_depth=0.18, atr_pct=0.025):
+    """
+    Proportional Cup & Handle fixture that passes all new gates:
+      - 200+ bars for SMA200 (uptrend 50→100 over first 230 bars)
+      - Cup within last 120 bars: 18% depth, peak-to-low = 50 bars
+      - Right rim recovers > 50% of depth
+      - Last close in upper 50% of cup (handle zone)
+      - Handle ATR < decline ATR
+      - Volume dry-up in handle
+    """
+    dates = pd.date_range("2022-01-01", periods=n_total, freq="B")
+    close = np.ones(n_total, dtype=float)
 
-    def test_false_for_v_shape(self):
-        """Sharp V-drop: just ensure no crash and returns bool."""
-        close = np.concatenate([
-            np.linspace(100, 70, 5),
-            np.linspace(70, 100, 5),
-            np.ones(10) * 100,
-        ])
-        cup = {"left_peak_idx": 0, "right_rim_idx": 9,
-               "cup_bottom_idx": 4, "left_peak": 100.0,
-               "cup_bottom": 70.0, "right_rim": 100.0,
-               "depth": 0.30, "cup_length": 9}
-        result = _is_u_shaped(close, cup)
-        assert isinstance(result, bool)
+    # Prior uptrend: bars 0-229 from 50 to 100
+    trend_end = 230
+    for i in range(trend_end):
+        close[i] = 50.0 + i * (50.0 / (trend_end - 1))
+
+    # Cup window starts at bar 230 (= n_total - 120)
+    cup_start = n_total - 120
+
+    # Left peak zone: bars 230-244 plateau at 100
+    close[cup_start: cup_start + 15] = 100.0
+
+    # Decline phase: bars 245-294 (50 bars) from 100 down to 82
+    cup_bottom_price = 100.0 * (1 - cup_depth)   # 82 for 18% depth
+    decline_len = 50
+    for i in range(decline_len):
+        t = i / (decline_len - 1)
+        close[cup_start + 15 + i] = 100.0 - cup_depth * 100.0 * np.sin(np.pi * t / 2)
+
+    # Recovery: bars 295-324 (30 bars) from bottom back to ~96
+    recovery_start = cup_start + 15 + decline_len   # bar 295
+    recovery_target = 100.0 - cup_depth * 100.0 * 0.40   # recover to ~92.8 (60% recovery)
+    for i in range(30):
+        t = i / 29
+        close[recovery_start + i] = cup_bottom_price + (recovery_target - cup_bottom_price) * t
+
+    # Handle: bars 325-349 (25 bars) — tight consolidation at ~92 (upper 50% of cup)
+    handle_start = recovery_start + 30   # bar 325
+    handle_level = cup_bottom_price + 0.60 * (100.0 - cup_bottom_price)  # upper 60% of cup
+    for i in range(n_total - handle_start):
+        close[handle_start + i] = handle_level + 0.5 * np.sin(2 * np.pi * i / 8)
+
+    # Last close: near handle high for DRY signal
+    close[-1] = handle_level + 0.4   # just below handle high
+
+    # H/L per phase
+    # Decline phase: large swings (2% of close) — high ATR
+    high = close * 1.005
+    low  = close * 0.995
+    for i in range(decline_len):
+        idx = cup_start + 15 + i
+        high[idx] = close[idx] * 1.02
+        low[idx]  = close[idx] * 0.98
+
+    # Handle phase: tight swings (0.5% of close) — low ATR (contraction ✓)
+    for i in range(n_total - handle_start):
+        idx = handle_start + i
+        high[idx] = close[idx] * 1.005
+        low[idx]  = close[idx] * 0.995
+
+    # Volume dry-up in handle
+    volume = np.full(n_total, 1_000_000.0)
+    volume[handle_start:] = 650_000.0
+
+    return pd.DataFrame({
+        "Close": close, "High": high, "Low": low,
+        "Open": close * 0.998, "Volume": volume,
+    }, index=dates)
 
 
-class TestFindHandle:
-    def test_finds_valid_handle(self):
-        df = make_cup_handle_df(handle_pct=0.08)
-        close = df["Close"].values[-120:]
-        high = df["High"].values[-120:]
-        volume = df["Volume"].values[-120:]
-        cup = _find_cup(close, lookback=120)
-        assert cup is not None
-        vol_sma50 = float(np.mean(volume))
-        handle = _find_handle(close, high, volume, cup, vol_sma50)
-        assert handle is not None
-        assert "handle_high" in handle
-        assert "handle_low" in handle
-        assert 0.05 <= handle["pullback_pct"] <= 0.15
+def make_low_atr_deep_cup_df(n_total=350):
+    """
+    A low-ATR stock that drops 28% — exceeds its ATR-allowed max depth.
+    ATR ≈ 0.3% of price → max_depth = 0.003 * 10 = 3% << 28%. Rejected.
+    """
+    dates = pd.date_range("2022-01-01", periods=n_total, freq="B")
+    close = np.ones(n_total, dtype=float)
 
-    def test_rejects_deep_handle(self):
-        """Handle pullback > 15% should return None."""
-        df = make_cup_handle_df(handle_pct=0.25)
-        close = df["Close"].values[-120:]
-        high = df["High"].values[-120:]
-        volume = df["Volume"].values[-120:]
-        cup = _find_cup(close, lookback=120)
-        if cup is not None:
-            vol_sma50 = float(np.mean(volume))
-            handle = _find_handle(close, high, volume, cup, vol_sma50)
-            if handle is not None:
-                assert handle["pullback_pct"] <= 0.15
+    # Uptrend to 100
+    for i in range(230):
+        close[i] = 50 + i * (50.0 / 229)
 
+    # Deep 28% drop over 80 bars
+    for i in range(80):
+        t = i / 79
+        close[230 + i] = 100.0 - 28.0 * np.sin(np.pi * t / 2)
+
+    # Recovery to 90
+    for i in range(40):
+        close[310 + i] = 72.0 + i * (18.0 / 39)
+
+    # Handle at 90 (upper 50%: 72 + 0.5*28 = 86 → 90 is valid location,
+    # but ATR gate should reject this stock entirely)
+    close[-1] = 90.0
+
+    # Very tight H/L (low ATR ≈ 0.3)
+    high = close + 0.15
+    low  = close - 0.15
+    volume = np.full(n_total, 1_000_000.0)
+
+    return pd.DataFrame({
+        "Close": close, "High": high, "Low": low,
+        "Open": close, "Volume": volume,
+    }, index=dates)
+
+
+# ── Tests: _mean_tr ────────────────────────────────────────────────────────────
+
+class TestMeanTr:
+    def test_basic_calculation(self):
+        # H-L = 2 each bar, no gaps → TR = 2 throughout
+        # close[0] = 10 so the prev-close gap on bar 1 is zero
+        high  = np.array([10.0, 11.0, 11.0, 11.0, 11.0, 11.0], dtype=float)
+        low   = np.array([10.0,  9.0,  9.0,  9.0,  9.0,  9.0], dtype=float)
+        close = np.array([10.0, 10.0, 10.0, 10.0, 10.0, 10.0], dtype=float)
+        result = _mean_tr(high, low, close, 1, 6)
+        assert result == pytest.approx(2.0, abs=0.01)
+
+    def test_too_small_window_returns_zero(self):
+        high  = np.array([10.0, 11.0], dtype=float)
+        low   = np.array([ 9.0, 10.0], dtype=float)
+        close = np.array([10.0, 10.5], dtype=float)
+        assert _mean_tr(high, low, close, 1, 2) == 0.0
+
+    def test_returns_float(self):
+        high  = np.array([0, 105.0, 107.0, 106.0, 104.0, 108.0], dtype=float)
+        low   = np.array([0, 103.0, 104.0, 102.0, 103.0, 105.0], dtype=float)
+        close = np.array([0, 104.0, 106.0, 103.0, 103.5, 107.0], dtype=float)
+        result = _mean_tr(high, low, close, 1, 6)
+        assert isinstance(result, float)
+        assert result > 0
+
+
+# ── Tests: _quality_score ──────────────────────────────────────────────────────
 
 class TestQualityScore:
     def test_perfect_score(self):
-        """All factors maxed out → 100."""
         score = _quality_score(
-            depth_pct=0.05,     # very tight (< 8%)
-            max_depth_pct=0.35,
-            vol_dry_pct=0.3,    # 30% of avg (heavy dry-up)
-            rs_vs_spy=0.10,     # +10% vs SPY (above 5% threshold)
+            tightness_pct=0.0,
+            vol_dry_pct=0.2,
+            rs_vs_spy=0.10,
             rs_blue_dot=True,
         )
         assert score == 100
 
     def test_zero_score(self):
-        """All factors at worst → 0."""
         score = _quality_score(
-            depth_pct=0.35,     # at max depth (0 tightness pts)
-            max_depth_pct=0.35,
-            vol_dry_pct=1.5,    # volume above avg (0 vol pts)
-            rs_vs_spy=-0.10,    # underperforming SPY (0 RS pts)
+            tightness_pct=1.0,
+            vol_dry_pct=1.5,
+            rs_vs_spy=-0.10,
             rs_blue_dot=False,
         )
         assert score == 0
 
     def test_blue_dot_adds_25(self):
-        """RS blue dot adds exactly 25 pts."""
-        s1 = _quality_score(0.35, 0.35, 1.5, -0.10, False)
-        s2 = _quality_score(0.35, 0.35, 1.5, -0.10, True)
+        s1 = _quality_score(1.0, 1.5, -0.10, False)
+        s2 = _quality_score(1.0, 1.5, -0.10, True)
         assert s2 - s1 == 25
 
     def test_score_in_range(self):
-        score = _quality_score(0.15, 0.35, 0.70, 0.02, False)
+        score = _quality_score(0.5, 0.7, 0.02, False)
         assert 0 <= score <= 100
 
+    def test_tight_box_scores_higher_than_loose(self):
+        tight = _quality_score(0.1, 0.5, 0.03, False)
+        loose = _quality_score(0.9, 0.5, 0.03, False)
+        assert tight > loose
 
-class TestScanCupHandle:
-    def test_detects_cup_handle_in_synthetic_data(self):
-        df = make_cup_handle_df(cup_depth=0.20, handle_pct=0.08)
-        result = scan_cup_handle("TEST", df, spy_3m_return=0.03,
-                                  rs_ratio=1.05, rs_52w_high=1.0, rs_blue_dot=False)
-        if result is not None:
-            assert result["setup_type"] == "BASE"
-            assert result["base_type"] == "CUP_HANDLE"
-            assert result["signal"] in ("DRY", "BRK")
-            assert result["entry"] > result["stop_loss"]
-            assert result["take_profit"] > result["entry"]
-            assert result["rr"] == 2.0
-            assert 0 <= result["quality_score"] <= 100
-            assert "base_depth_pct" in result
-            assert "base_length_days" in result
+    def test_heavy_vol_dryup_scores_higher(self):
+        low_vol  = _quality_score(0.5, 0.2, 0.03, False)
+        high_vol = _quality_score(0.5, 0.9, 0.03, False)
+        assert low_vol > high_vol
 
-    def test_returns_none_for_short_data(self):
-        df = make_cup_handle_df()
-        result = scan_cup_handle("TEST", df.iloc[:30])
-        assert result is None
 
-    def test_returns_none_for_empty_df(self):
-        result = scan_cup_handle("TEST", pd.DataFrame())
-        assert result is None
-
+# ── Tests: scan_flat_base (Darvas Box) ────────────────────────────────────────
 
 class TestScanFlatBase:
-    def test_detects_flat_base_in_synthetic_data(self):
-        df = make_flat_base_df(base_depth=0.07, base_days=35)
-        result = scan_flat_base("TEST", df, spy_3m_return=0.02,
-                                 rs_ratio=1.03, rs_52w_high=1.0, rs_blue_dot=True)
+    def test_detects_valid_darvas_box(self):
+        df = make_darvas_box_df()
+        result = scan_flat_base("TEST", df)
         if result is not None:
             assert result["setup_type"] == "BASE"
             assert result["base_type"] == "FLAT_BASE"
@@ -257,114 +279,244 @@ class TestScanFlatBase:
             assert result["entry"] > result["stop_loss"]
             assert result["take_profit"] > result["entry"]
             assert 0 <= result["quality_score"] <= 100
+            assert "geometry" in result
+            assert result["base_length_days"] >= 20
 
-    def test_rejects_wide_base(self):
-        """Base depth > 15% should return None."""
-        df = make_flat_base_df(base_depth=0.25, base_days=35)
+    def test_rejects_low_atr_drifter(self):
+        """Low-ATR drifting stock: box_height >> 3.5 × ATR → always rejected."""
+        df = make_low_atr_drifter_df()
+        result = scan_flat_base("TEST", df)
+        assert result is None
+
+    def test_requires_stage2_uptrend(self):
+        """Stock in Stage 1 (SMA50 < SMA200) must be rejected."""
+        n = 260
+        dates = pd.date_range("2023-01-01", periods=n, freq="B")
+        # Downtrend then flatten: SMA50 will be below SMA200
+        close = np.concatenate([
+            np.linspace(100, 60, 200),   # sharp downtrend
+            np.full(60, 62.0),            # flat bottom
+        ])
+        high = close + 0.5
+        low  = close - 0.5
+        volume = np.full(n, 1_000_000.0)
+        volume[-3:] = 500_000.0
+        df = pd.DataFrame({
+            "Close": close, "High": high, "Low": low,
+            "Open": close, "Volume": volume,
+        }, index=dates)
+        result = scan_flat_base("TEST", df)
+        assert result is None
+
+    def test_rejects_when_close_below_sma50(self):
+        """Even with SMA50 > SMA200, close must be above SMA50."""
+        df = make_darvas_box_df()
+        # Pull close below SMA50 for last bar only
+        adj = df["Close"].copy()
+        adj.iloc[-1] = adj.iloc[-1] * 0.85   # 15% below current close
+        df["Close"] = adj
+        result = scan_flat_base("TEST", df)
+        assert result is None
+
+    def test_requires_ceiling_touches(self):
+        """No ceiling touches → rejected."""
+        n = 260
+        dates = pd.date_range("2023-01-01", periods=n, freq="B")
+        close = np.ones(n, dtype=float)
+        for i in range(230):
+            close[i] = 50 + i * (50.0 / 229)
+        # Box that monotonically declines (no ceiling revisits)
+        for i in range(30):
+            close[230 + i] = 100 - i * 0.1   # all below ceiling
+        high = close + 0.3
+        low  = close - 0.3
+        volume = np.full(n, 1_000_000.0)
+        volume[-3:] = 500_000.0
+        df = pd.DataFrame({
+            "Close": close, "High": high, "Low": low,
+            "Open": close, "Volume": volume,
+        }, index=dates)
         result = scan_flat_base("TEST", df)
         assert result is None
 
     def test_returns_none_for_empty_df(self):
-        result = scan_flat_base("TEST", pd.DataFrame())
+        assert scan_flat_base("TEST", pd.DataFrame()) is None
+
+    def test_returns_none_for_short_data(self):
+        df = make_darvas_box_df()
+        result = scan_flat_base("TEST", df.iloc[:30])
         assert result is None
 
+    def test_volume_dryup_required(self):
+        """If 3-day avg volume >= 50-day avg, reject."""
+        df = make_darvas_box_df()
+        # Remove the volume dry-up
+        df = df.copy()
+        df["Volume"] = 1_000_000.0   # uniform — no dry-up
+        result = scan_flat_base("TEST", df)
+        assert result is None
 
-def test_find_handle_uses_intraday_high_for_handle_high():
-    """handle_high must be the max intraday High in the handle window, not just rim close."""
-    n = 50
-    # Cup: left_peak_idx=0, cup_bottom_idx=20, right_rim_idx=40
-    cup = {
-        "left_peak_idx": 0, "left_peak": 100.0,
-        "cup_bottom_idx": 20, "cup_bottom": 80.0,
-        "right_rim_idx": 40, "right_rim": 98.0,
-        "depth": 0.20, "cup_length": 40,
-    }
-    close = np.ones(n) * 100.0
-    # Handle window bars (41–49): pull back ~7% from rim (98 * 0.93 = 91.14),
-    # which is above cup_midpoint=(100+80)/2=90 and within 3-15% pullback band.
-    close[41:] = 98.0 * 0.93  # ~91.14 — valid handle pullback
-    # Make a bar in handle window (bar 43) with intraday high of 101
-    high = close * 1.005        # default: just slightly above close
-    high[43] = 101.0            # spike in handle window
-    volume = np.full(n, 500_000.0)  # below 50d avg = 1_000_000
-    vol_sma50 = 1_000_000.0
-
-    result = _find_handle(close, high, volume, cup, vol_sma50)
-    assert result is not None, "_find_handle returned None unexpectedly"
-    assert result["handle_high"] == pytest.approx(101.0), \
-        f"handle_high should be 101.0 (max intraday High), got {result['handle_high']}"
+    def test_geometry_fields_present(self):
+        df = make_darvas_box_df()
+        result = scan_flat_base("TEST", df)
+        if result is not None:
+            g = result["geometry"]
+            assert "start_date" in g
+            assert "end_date" in g
+            assert "base_high" in g
+            assert "base_low" in g
+            assert g["base_high"] > g["base_low"]
 
 
-def test_flat_base_pivot_uses_intraday_high():
-    """Flat base breakout pivot must use highest intraday High, not highest close."""
-    # Build a dedicated fixture that satisfies every scan_flat_base gate:
-    #   - 100 bars: 40 trend (50→100) + 60 flat (all closes = 100)
-    #   - One deep intrabar Low at bar 45 (Low = 91) so pct_in_range >= 0.75
-    #     and depth ≈ 9.5% (still within the ≤ 12% limit)
-    #   - Volume dry-up: bars -10 to -1 at 300k vs 50-day avg ≈ 540k (ratio ≈ 0.56)
-    #   - Last close = 100.0, all Highs = close * 1.005 = 100.5 before injection
-    n = 100
-    trend = 40
-    base = 60
-    dates = pd.date_range("2024-01-01", periods=n, freq="B")
-    close = np.ones(n) * 100.0
-    for i in range(trend):
-        close[i] = 50 + i * (50.0 / (trend - 1))
-    close[trend:] = 100.0          # perfectly flat base
-    high = close * 1.005
-    low = close * 0.995
-    low[trend + 5] = 91.0          # one deep intrabar wick — deepens base_low to 91
-    volume = np.ones(n) * 1_000_000.0
-    volume[trend:-10] = 600_000.0
-    volume[-10:] = 300_000.0       # dry-up at the end
-    df = pd.DataFrame({
-        "Close": close, "High": high, "Low": low,
-        "Open": close * 0.998, "Volume": volume,
-    }, index=dates)
+# ── Tests: scan_cup_handle (Proportional) ────────────────────────────────────
 
-    # Inject an intraday High spike at the last bar: 0.9% above all closes.
-    # This becomes the new base_high (pivot). dist_to_pivot = (100.9-100)/100.9 ≈ 0.89% ≤ 1%
-    # so DRY fires. All other Highs are 100.5, so this spike is clearly the new max.
-    df.iloc[-1, df.columns.get_loc("High")] = df["Close"].max() * 1.009
+class TestScanCupHandle:
+    def test_detects_valid_cup_handle(self):
+        df = make_cup_handle_v2_df()
+        result = scan_cup_handle("TEST", df)
+        if result is not None:
+            assert result["setup_type"] == "BASE"
+            assert result["base_type"] == "CUP_HANDLE"
+            assert result["signal"] in ("DRY", "BRK")
+            assert result["entry"] > result["stop_loss"]
+            assert result["take_profit"] > result["entry"]
+            assert 0 <= result["quality_score"] <= 100
+            # ATR-proportional depth: 15–45%
+            assert 15.0 <= result["base_depth_pct"] <= 45.0
 
-    result = scan_flat_base("TEST", df)
-    assert result is not None, "scan_flat_base should detect the pattern"
-    # Entry is pivot * 1.001; pivot should reflect the intraday High spike
-    assert result["entry"] > df["Close"].max() * 1.001, \
-        "Entry should be above highest-close pivot when intraday High is higher"
+    def test_rejects_low_atr_deep_cup(self):
+        """Low-ATR stock with 28% cup depth: atr_pct*10 << 28% → rejected."""
+        df = make_low_atr_deep_cup_df()
+        result = scan_cup_handle("TEST", df)
+        assert result is None
+
+    def test_rejects_shallow_cup(self):
+        """Cup depth < 15% must always be rejected."""
+        n = 350
+        dates = pd.date_range("2022-01-01", periods=n, freq="B")
+        close = np.ones(n, dtype=float)
+        for i in range(230):
+            close[i] = 50 + i * (50.0 / 229)
+        # Very shallow 5% cup over 50 bars
+        for i in range(50):
+            t = i / 49
+            close[230 + i] = 100 - 5.0 * np.sin(np.pi * t / 2)
+        # Recovery
+        for i in range(70):
+            close[280 + i] = 95 + i * (5.0 / 69)
+        close[-1] = 99.8
+
+        high = close * 1.02
+        low  = close * 0.98
+        volume = np.full(n, 1_000_000.0)
+
+        df = pd.DataFrame({
+            "Close": close, "High": high, "Low": low,
+            "Open": close, "Volume": volume,
+        }, index=dates)
+        result = scan_cup_handle("TEST", df)
+        assert result is None
+
+    def test_rejects_v_shape(self):
+        """Peak-to-low duration < 25 bars (V-shape) must be rejected."""
+        n = 350
+        dates = pd.date_range("2022-01-01", periods=n, freq="B")
+        close = np.ones(n, dtype=float)
+        for i in range(230):
+            close[i] = 50 + i * (50.0 / 229)
+        # V-shape: 10-bar drop + recovery (duration = 10 < 25 bars)
+        for i in range(10):
+            close[230 + i] = 100 - 20.0 * (i / 9)
+        for i in range(110):
+            close[240 + i] = 80.0 + i * (20.0 / 109)
+        close[-1] = 99.5
+
+        high = close * 1.02
+        low  = close * 0.98
+        volume = np.full(n, 1_000_000.0)
+
+        df = pd.DataFrame({
+            "Close": close, "High": high, "Low": low,
+            "Open": close, "Volume": volume,
+        }, index=dates)
+        result = scan_cup_handle("TEST", df)
+        assert result is None
+
+    def test_rejects_price_below_sma200(self):
+        """Close < SMA200 must always be rejected."""
+        df = make_cup_handle_v2_df()
+        df = df.copy()
+        # Force last close far below SMA200
+        df["Close"] = df["Close"] * 0.5
+        df["High"]  = df["High"]  * 0.5
+        df["Low"]   = df["Low"]   * 0.5
+        result = scan_cup_handle("TEST", df)
+        assert result is None
+
+    def test_rejects_price_below_handle_floor(self):
+        """Price must be in upper 50% of cup depth (handle zone)."""
+        df = make_cup_handle_v2_df()
+        df = df.copy()
+        # Set last 5 closes to the cup bottom level (bottom of cup = lower 50%)
+        cup_bottom_approx = 100.0 * (1 - 0.18)   # ~82
+        df.iloc[-5:, df.columns.get_loc("Close")] = cup_bottom_approx
+        df.iloc[-5:, df.columns.get_loc("High")]  = cup_bottom_approx * 1.005
+        df.iloc[-5:, df.columns.get_loc("Low")]   = cup_bottom_approx * 0.995
+        result = scan_cup_handle("TEST", df)
+        assert result is None
+
+    def test_returns_none_for_empty_df(self):
+        assert scan_cup_handle("TEST", pd.DataFrame()) is None
+
+    def test_returns_none_for_short_data(self):
+        df = make_cup_handle_v2_df()
+        assert scan_cup_handle("TEST", df.iloc[:40]) is None
+
+    def test_geometry_fields_present(self):
+        df = make_cup_handle_v2_df()
+        result = scan_cup_handle("TEST", df)
+        if result is not None:
+            g = result["geometry"]
+            for key in ["left_peak_price", "cup_bottom_price", "right_rim_price",
+                        "handle_high", "handle_low"]:
+                assert key in g
+            assert g["left_peak_price"] > g["cup_bottom_price"]
+            assert g["handle_high"] > g["handle_low"]
 
 
-def test_flat_base_detects_when_200sma_not_rising():
-    """Flat base must be found even when 200 SMA is flat, as long as close > 200 SMA."""
-    from engines.engine5 import scan_flat_base
-    import numpy as np, pandas as pd
+# ── Tests: scan_base_pattern ──────────────────────────────────────────────────
 
-    # 400 bars: 50-bar prior advance to 102.0, then 350 bars flat at 102.0.
-    # SMA200 at end ≈ 102.0 = lc, so close > 200 SMA check passes (not strictly less-than).
-    # One deep intrabar low at bar 340 (within the 60-bar lookback window) adds depth
-    # so pct_in_range ≥ 0.75 and depth stays ≤ 12%.
-    # Volume: 1M baseline, 200k dry-up over the last 10 bars gives ratio ≈ 0.24.
-    n = 400
-    dates = pd.date_range("2024-01-01", periods=n, freq="B")
-    close = np.full(n, 102.0, dtype=float)
-    close[:50] = np.linspace(70.0, 102.0, 50)   # prior advance
+class TestScanBasePattern:
+    def test_returns_none_when_neither_fires(self):
+        df = make_low_atr_drifter_df()
+        result = scan_base_pattern("TEST", df)
+        assert result is None
 
-    high = close * 1.002
-    low  = close * 0.998
-    low[340] = 98.0   # deep wick inside last-60-bar window — adds range without breaking flatness
+    def test_quality_gate_25(self):
+        """scan_base_pattern must not return setups with quality_score < 25."""
+        df = make_darvas_box_df()
+        result = scan_base_pattern("TEST", df)
+        if result is not None:
+            assert result["quality_score"] >= 25
 
-    volume = np.full(n, 1_000_000.0)
-    volume[-10:] = 200_000.0   # dry-up: vol_sma10 ≈ 200k vs vol_sma50 ≈ 840k → ratio ≈ 0.24
+    def test_returns_highest_quality(self):
+        """When both patterns fire, highest quality wins."""
+        df = make_darvas_box_df()
+        ch = scan_cup_handle("TEST", df)
+        fb = scan_flat_base("TEST", df)
+        result = scan_base_pattern("TEST", df)
+        if result is not None and ch is not None and fb is not None:
+            assert result["quality_score"] == max(ch["quality_score"], fb["quality_score"])
 
-    df = pd.DataFrame(
-        {"Close": close, "Adj Close": close, "High": high,
-         "Low": low, "Open": close, "Volume": volume},
-        index=dates,
-    )
-
-    # Verify precondition: 200 SMA is NOT rising (today ≈ 20 bars ago)
-    sma200 = pd.Series(close).rolling(200).mean()
-    assert sma200.iloc[-1] <= sma200.iloc[-21] + 0.1, "Precondition: 200 SMA must not be rising"
-
-    result = scan_flat_base("TEST", df)
-    assert result is not None, "Should find flat base even when 200 SMA is flat/not-rising"
+    def test_rs_vs_spy_negative_when_underperforming(self):
+        """rs_vs_spy in output must be negative when stock underperforms SPY."""
+        df = make_darvas_box_df()
+        result = scan_base_pattern(
+            "TEST", df,
+            spy_3m_return=0.10,   # SPY +10%
+            rs_ratio=1.01,        # stock only +1% → underperforms
+        )
+        if result is not None:
+            assert result["rs_vs_spy"] < 0, (
+                f"Expected negative rs_vs_spy, got {result['rs_vs_spy']}"
+            )

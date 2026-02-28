@@ -86,10 +86,10 @@ def test_pivots_too_close_in_bars_not_paired():
 
 
 def test_pivots_too_far_apart_in_price_not_paired():
-    """Two pivots > 1.5% apart in price → do not cluster → no zone."""
+    """Two pivots > 2.0% apart in price → do not cluster → no zone."""
     highs = np.ones(150) * 100.0
     highs = _spike_at(highs, 40, 105.0)
-    highs = _spike_at(highs, 80, 107.0)  # 1.9% diff — above PIVOT_TOUCH_MARGIN_PCT
+    highs = _spike_at(highs, 80, 108.0)  # 2.78% diff — above PIVOT_TOUCH_MARGIN_PCT (2.0%)
     df = _make_df(highs=highs)
     zones = _find_pivot_resistance(df, daily_atr=2.0, current_price=95.0)
     assert zones == []

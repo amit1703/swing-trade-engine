@@ -10,8 +10,8 @@ Filter chain (all must pass):
   2. Value Zone   : Daily Low penetrates 8 EMA or 20 EMA (enters value zone)
   3. Support Touch: Low touches an Engine 1 SUPPORT zone
   4. Rejection    : Daily Close ≥ 20 EMA (pin bar — closed back above)
-  5. CCI Hook     : CCI[yesterday] < −100  AND  CCI[today] > CCI[yesterday]
-                    (momentum turning from oversold)
+  5. CCI Hook     : CCI[yesterday] < −50  AND  CCI[today] > CCI[yesterday]
+                    (momentum turning from oversold — constant: CCI_STRICT_FLOOR)
 
 Risk Math:
   Entry      = High of setup candle + 0.1 %
@@ -28,7 +28,8 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
-from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR
+from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT
+from zone_utils import nearest_resistance_target
 
 
 # ---------------------------------------------------------------------------
@@ -58,9 +59,9 @@ def _check_ascending_trendline_touch(
     # Get today's value from the series
     tl_value = trendline_dict["series"][-1]["value"]
 
-    # Check if low is within 1.5% of trendline
+    # Check if low is within TRENDLINE_TOUCH_TOLERANCE_PCT of trendline
     if tl_value > 0:
-        tolerance = tl_value * 0.015
+        tolerance = tl_value * TRENDLINE_TOUCH_TOLERANCE_PCT
         if abs(low_price - tl_value) <= tolerance:
             return True, tl_value
 
@@ -72,6 +73,7 @@ def scan_pullback(
     df: pd.DataFrame,
     sr_zones: List[Dict],
     trendline: Optional[Dict] = None,
+    rs_score: float = 0.0,
     debug: bool = False,
 ) -> Optional[Dict]:
     """
@@ -113,6 +115,17 @@ def scan_pullback(
         cci_prev = float(cci20.iloc[-2].item() if hasattr(cci20.iloc[-2], 'item') else cci20.iloc[-2])
 
         if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, latr, cci_today, cci_prev]):
+            return None
+
+        # ── 0. RS quality gate ────────────────────────────────────────────
+        # Require stock not to be a persistent underperformer vs SPY.
+        # Loose floor (-0.05) allows stocks that are flat vs SPY to qualify.
+        if rs_score < -0.05:
+            if debug:
+                print(
+                    f"Engine 3 Pullback: REJECTED - RS score too weak "
+                    f"({rs_score:.3f} < -0.05 — persistent underperformer)"
+                )
             return None
 
         # ── 1. Trend filter ───────────────────────────────────────────────
@@ -206,7 +219,7 @@ def scan_pullback(
         if risk <= 0 or risk > entry * 0.15:
             return None
 
-        take_profit = round(entry + 2.0 * risk, 2)
+        take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
 
         return {
             "ticker": ticker,
@@ -214,7 +227,7 @@ def scan_pullback(
             "entry": entry,
             "stop_loss": stop_loss,
             "take_profit": take_profit,
-            "rr": 2.0,
+            "rr": actual_rr,
             "setup_date": str(data.index[-1].date()),
             "cci_today": round(cci_today, 2),
             "cci_yesterday": round(cci_prev, 2),
@@ -234,6 +247,7 @@ def scan_relaxed_pullback(
     df: pd.DataFrame,
     sr_zones: List[Dict],
     trendline: Optional[Dict] = None,
+    rs_score: float = 0.0,
     debug: bool = False,
 ) -> Optional[Dict]:
     """
@@ -284,6 +298,15 @@ def scan_relaxed_pullback(
         cci_prev = float(cci20.iloc[-2].item() if hasattr(cci20.iloc[-2], 'item') else cci20.iloc[-2])
 
         if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, latr, cci_today, cci_prev]):
+            return None
+
+        # ── 0. RS quality gate ────────────────────────────────────────────
+        if rs_score < -0.05:
+            if debug:
+                print(
+                    f"Engine 3 RLX Pullback: REJECTED - RS score too weak "
+                    f"({rs_score:.3f} < -0.05 — persistent underperformer)"
+                )
             return None
 
         # ── 1. Trend filter ───────────────────────────────────────────────
@@ -384,7 +407,7 @@ def scan_relaxed_pullback(
         if risk <= 0 or risk > entry * 0.15:
             return None
 
-        take_profit = round(entry + 2.0 * risk, 2)
+        take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
 
         return {
             "ticker": ticker,
@@ -392,7 +415,7 @@ def scan_relaxed_pullback(
             "entry": entry,
             "stop_loss": stop_loss,
             "take_profit": take_profit,
-            "rr": 2.0,
+            "rr": actual_rr,
             "setup_date": str(data.index[-1].date()),
             "cci_today": round(cci_today, 2),
             "cci_yesterday": round(cci_prev, 2),

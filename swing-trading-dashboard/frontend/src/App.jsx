@@ -68,6 +68,7 @@ export default function App() {
   const [debugTicker,    setDebugTicker   ] = useState(null)
   const [debugData,      setDebugData     ] = useState(null)
   const [debugLoading,   setDebugLoading  ] = useState(false)
+  const [sortBy,         setSortBy        ] = useState('default')
 
   const pollTimerRef = useRef(null)
 
@@ -122,6 +123,33 @@ export default function App() {
       setScanStatus((s) => ({ ...s, in_progress: true, progress: 0 }))
     } catch (err) {
       console.error('[App] triggerScan:', err)
+    }
+  }, [devMode, dryRun])
+
+  const applySort = useCallback((setups) => {
+    if (sortBy === 'default') return setups
+    const s = [...setups]
+    const riskPct = (x) => {
+      const r = (x.entry ?? 0) - (x.stop_loss ?? 0)
+      return x.entry > 0 ? r / x.entry : 999
+    }
+    switch (sortBy) {
+      case 'risk_pct':      return s.sort((a, b) => riskPct(a) - riskPct(b))
+      case 'risk_pct_desc': return s.sort((a, b) => riskPct(b) - riskPct(a))
+      case 'rr_desc':   return s.sort((a, b) => (b.rr ?? 0) - (a.rr ?? 0))
+      case 'vol_desc':  return s.sort((a, b) => (b.volume_ratio ?? 0) - (a.volume_ratio ?? 0))
+      case 'entry_asc': return s.sort((a, b) => (a.entry ?? 0) - (b.entry ?? 0))
+      case 'ticker':    return s.sort((a, b) => a.ticker.localeCompare(b.ticker))
+      default:          return setups
+    }
+  }, [sortBy])
+
+  const handleScanTicker = useCallback(async (ticker) => {
+    try {
+      await triggerScan(devMode, dryRun, ticker)
+      setScanStatus((s) => ({ ...s, in_progress: true, progress: 0 }))
+    } catch (err) {
+      console.error('[App] triggerScan (single):', err)
     }
   }, [devMode, dryRun])
 
@@ -222,6 +250,7 @@ export default function App() {
         dryRun={dryRun}
         onToggleDev={() => { const next = !devMode; setDevMode(next); if (!next) setDryRun(false) }}
         onToggleDryRun={() => setDryRun(v => !v)}
+        onScanTicker={handleScanTicker}
       />
 
       {/* ── Tab bar ────────────────────────────────────────────────────── */}
@@ -320,49 +349,75 @@ export default function App() {
                 background: 'var(--panel)',
               }}
             >
-              <SetupTable
-                title="VCP Breakouts"
-                accentColor="blue"
-                setups={vcpSetups}
-                selectedTicker={selectedTicker}
-                onSelectTicker={handleTickerClick}
-                loading={loadingSetups}
-                devMode={devMode}
-                onDebug={handleDebug}
-              />
+              {/* Sort bar */}
+              <SortBar sortBy={sortBy} onSort={setSortBy} />
 
-              <SetupTable
-                title="Tactical Pullbacks"
-                accentColor="accent"
-                setups={pullbackSetups}
-                selectedTicker={selectedTicker}
-                onSelectTicker={handleTickerClick}
-                loading={loadingSetups}
-                devMode={devMode}
-                onDebug={handleDebug}
-              />
+              {/* ── Derive VCP sub-categories ─────────────────────────── */}
+              {(() => {
+                const rsLeads      = vcpSetups.filter(s => s.is_rs_lead)
+                const confirmedBrk = vcpSetups.filter(s => s.signal === 'BRK' && !s.is_rs_lead && !s.is_trendline_breakout)
+                const tdlBreaks    = vcpSetups.filter(s => s.is_trendline_breakout)
+                const drySetups    = vcpSetups.filter(s => s.signal === 'DRY')
 
-              <SetupTable
-                title="Base Patterns"
-                accentColor="green"
-                setups={baseSetups}
-                selectedTicker={selectedTicker}
-                onSelectTicker={handleTickerClick}
-                loading={loadingSetups}
-                devMode={devMode}
-                onDebug={handleDebug}
-              />
+                const tblProps = {
+                  selectedTicker,
+                  onSelectTicker: handleTickerClick,
+                  loading: loadingSetups,
+                  devMode,
+                  onDebug: handleDebug,
+                }
 
-              <SetupTable
-                title="Resistance Breakouts"
-                accentColor="green"
-                setups={resBreakoutSetups}
-                selectedTicker={selectedTicker}
-                onSelectTicker={handleTickerClick}
-                loading={loadingSetups}
-                devMode={devMode}
-                onDebug={handleDebug}
-              />
+                return (
+                  <>
+                    {/* ── Group 1: Breakouts ─────────────────────────── */}
+                    <SectionLabel label="BREAKOUTS" color="var(--t-blue)" />
+
+                    {rsLeads.length > 0 && (
+                      <SetupTable title="RS Leaders" accentColor="blue"
+                        setups={applySort(rsLeads)} {...tblProps} />
+                    )}
+
+                    {confirmedBrk.length > 0 && (
+                      <SetupTable title="Confirmed BRK" accentColor="blue"
+                        setups={applySort(confirmedBrk)} {...tblProps} />
+                    )}
+
+                    {tdlBreaks.length > 0 && (
+                      <SetupTable title="TDL Breaks" accentColor="blue"
+                        setups={applySort(tdlBreaks)} {...tblProps} />
+                    )}
+
+                    {rsLeads.length === 0 && confirmedBrk.length === 0 && tdlBreaks.length === 0 && (
+                      <EmptyGroup label="No active breakouts" />
+                    )}
+
+                    {/* ── Group 2: Approaching (DRY / coiling) ──────── */}
+                    <SectionLabel label="COILING" color="var(--t-accent, #F5A623)" />
+
+                    {drySetups.length > 0 ? (
+                      <SetupTable title="Near Pivot (DRY)" accentColor="accent"
+                        setups={applySort(drySetups)} {...tblProps} />
+                    ) : (
+                      <EmptyGroup label="No coiling setups" />
+                    )}
+
+                    {/* ── Group 3: Pullbacks ─────────────────────────── */}
+                    <SectionLabel label="PULLBACKS" color="var(--t-accent, #F5A623)" />
+
+                    <SetupTable title="Tactical Pullbacks" accentColor="accent"
+                      setups={applySort(pullbackSetups)} {...tblProps} />
+
+                    {/* ── Group 4: Bases & Resistance ────────────────── */}
+                    <SectionLabel label="BASES & BREAKOUTS" color="var(--t-green, #4CAF50)" />
+
+                    <SetupTable title="Base Patterns" accentColor="green"
+                      setups={applySort(baseSetups)} {...tblProps} />
+
+                    <SetupTable title="Resistance Breakouts" accentColor="green"
+                      setups={applySort(resBreakoutSetups)} {...tblProps} />
+                  </>
+                )
+              })()}
 
               <div className="mt-auto border-t border-t-border">
                 <div className="px-3 py-3">
@@ -441,6 +496,89 @@ export default function App() {
           onClose={() => { setDebugTicker(null); setDebugData(null) }}
         />
       )}
+    </div>
+  )
+}
+
+// ── Sort bar ──────────────────────────────────────────────────────────────
+
+const SORT_OPTIONS = [
+  { key: 'default',        label: 'Default' },
+  { key: 'risk_pct',       label: 'Risk % ↑' },
+  { key: 'risk_pct_desc',  label: 'Risk % ↓' },
+  { key: 'rr_desc',        label: 'R:R ↓'   },
+  { key: 'vol_desc',       label: 'Vol ↓'   },
+  { key: 'entry_asc',      label: '$ ↑'     },
+  { key: 'ticker',         label: 'A–Z'     },
+]
+
+function SortBar({ sortBy, onSort }) {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        padding: '5px 8px',
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--surface)',
+        flexShrink: 0,
+      }}
+    >
+      <span style={{
+        fontFamily: 'Barlow Condensed, sans-serif',
+        fontSize: 9, fontWeight: 700, letterSpacing: '0.15em',
+        textTransform: 'uppercase', color: 'var(--muted)',
+        marginRight: 4, whiteSpace: 'nowrap',
+      }}>
+        Sort
+      </span>
+      {SORT_OPTIONS.map((opt) => {
+        const active = sortBy === opt.key
+        return (
+          <button
+            key={opt.key}
+            onClick={() => onSort(opt.key)}
+            style={{
+              fontFamily: 'IBM Plex Mono, monospace',
+              fontSize: 9, fontWeight: active ? 700 : 500,
+              letterSpacing: '0.06em',
+              padding: '2px 7px',
+              background: active ? 'rgba(245,166,35,0.15)' : 'transparent',
+              border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+              color: active ? 'var(--accent)' : 'var(--muted)',
+              cursor: 'pointer',
+              transition: 'all 0.12s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Section label divider ─────────────────────────────────────────────────
+
+function SectionLabel({ label, color = 'var(--muted)' }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-1"
+         style={{ borderTop: '1px solid var(--border)', background: 'rgba(255,255,255,0.015)' }}>
+      <span style={{
+        fontSize: 8, fontWeight: 700, letterSpacing: '0.12em',
+        color, fontFamily: 'IBM Plex Mono, monospace',
+      }}>
+        {label}
+      </span>
+    </div>
+  )
+}
+
+function EmptyGroup({ label }) {
+  return (
+    <div className="px-3 py-2 text-[9px] tracking-widest uppercase"
+         style={{ color: 'var(--muted)', opacity: 0.45 }}>
+      — {label}
     </div>
   )
 }

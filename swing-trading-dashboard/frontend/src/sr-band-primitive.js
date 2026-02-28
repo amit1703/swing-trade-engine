@@ -1,24 +1,28 @@
 /**
  * SRBandPrimitive — lightweight-charts v4 ISeriesPrimitive
  *
- * Renders a filled horizontal band between `zone.upper` and `zone.lower`
- * with dashed border lines. Drawn behind candles (zOrder = 'bottom').
+ * Renders S/R zones as white lines / white bands on a black background.
  *
- * RESISTANCE zones → red fill / red dashes
- * SUPPORT zones    → green fill / green dashes
+ * KDE bands   → white fill + white dashed borders + "R/S $level" label
+ * Pivot lines → white solid line + "PIV $level" label
+ *
+ * Supports `setVisible(bool)` for the chart toggle bar.
  */
 
 class BandPaneRenderer {
   constructor(zone, getSeriesFn) {
     this._zone = zone
     this._getSeries = getSeriesFn
+    this._visible = true
   }
 
   draw(target) {
+    if (!this._visible) return
+
     const series = this._getSeries()
     if (!series) return
 
-    const { upper, lower, type, source } = this._zone
+    const { upper, lower, level, type, source } = this._zone
 
     target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
       const y1 = series.priceToCoordinate(upper)
@@ -33,35 +37,49 @@ class BandPaneRenderer {
       if (bandH < 0.5) return
 
       const w = mediaSize.width
-
       const isPivot = source === 'pivot'
       const isRes   = type === 'RESISTANCE'
 
       ctx.save()
 
       if (isPivot) {
-        // Pivot resistance: single sharp horizontal line at the level price.
-        // No fill — avoids stacked rectangles cluttering the chart.
-        const yLevel = series.priceToCoordinate(this._zone.level)
+        // Pivot: single sharp white horizontal line
+        const yLevel = series.priceToCoordinate(level ?? upper)
         if (yLevel !== null) {
-          ctx.strokeStyle = isRes ? 'rgba(255, 140, 0, 0.90)' : 'rgba(0, 229, 255, 0.85)'
+          const lineAlpha = isRes ? 0.85 : 0.60
+          ctx.strokeStyle = `rgba(255,255,255,${lineAlpha})`
           ctx.lineWidth   = 1.5
           ctx.setLineDash([])
           ctx.beginPath()
           ctx.moveTo(0, Math.round(yLevel) + 0.5)
           ctx.lineTo(w, Math.round(yLevel) + 0.5)
           ctx.stroke()
+
+          // Label at right edge
+          const label = `PIV ${(level ?? upper).toFixed(2)}`
+          ctx.font = '600 9px "IBM Plex Mono", monospace'
+          ctx.textAlign = 'right'
+          ctx.textBaseline = 'bottom'
+          const textY = Math.round(yLevel) - 3
+          const metrics = ctx.measureText(label)
+          const pad = 4
+          // Pill background
+          ctx.fillStyle = 'rgba(0,0,0,0.55)'
+          ctx.fillRect(w - metrics.width - pad * 2 - 4, textY - 10, metrics.width + pad * 2, 11)
+          // Text
+          ctx.fillStyle = `rgba(255,255,255,${lineAlpha})`
+          ctx.fillText(label, w - pad - 4, textY)
         }
       } else {
-        // KDE band: filled rectangle with dashed border lines
-        const fillColor   = isRes ? 'rgba(255, 45, 85, 0.18)' : 'rgba(0, 200, 122, 0.16)'
-        const strokeColor = isRes ? 'rgba(255, 45, 85, 0.75)' : 'rgba(0, 200, 122, 0.75)'
+        // KDE band: white fill + white dashed borders
+        const fillAlpha   = isRes ? 0.09 : 0.07
+        const strokeAlpha = isRes ? 0.65 : 0.55
 
-        ctx.fillStyle = fillColor
+        ctx.fillStyle = `rgba(255,255,255,${fillAlpha})`
         ctx.fillRect(0, minY, w, bandH)
 
-        ctx.strokeStyle = strokeColor
-        ctx.lineWidth   = 1.2
+        ctx.strokeStyle = `rgba(255,255,255,${strokeAlpha})`
+        ctx.lineWidth   = 1.0
         ctx.setLineDash([5, 4])
 
         ctx.beginPath()
@@ -75,6 +93,18 @@ class BandPaneRenderer {
         ctx.stroke()
 
         ctx.setLineDash([])
+
+        // Label at right edge inside band
+        if (bandH > 8) {
+          const midY = (minY + maxY) / 2
+          const levelVal = level ?? ((upper + lower) / 2)
+          const label = (isRes ? 'R ' : 'S ') + levelVal.toFixed(2)
+          ctx.font = '600 8px "IBM Plex Mono", monospace'
+          ctx.textAlign = 'right'
+          ctx.textBaseline = 'middle'
+          ctx.fillStyle = `rgba(255,255,255,${strokeAlpha + 0.1})`
+          ctx.fillText(label, w - 6, midY)
+        }
       }
 
       ctx.restore()
@@ -112,6 +142,13 @@ export class SRBandPrimitive {
   detached() {
     this._series = null
     this._paneViews = []
+  }
+
+  /** Toggle visibility without detaching the primitive. */
+  setVisible(v) {
+    if (this._paneViews[0]) {
+      this._paneViews[0]._renderer._visible = v
+    }
   }
 
   updateAllViews() {}

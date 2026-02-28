@@ -19,6 +19,7 @@ KDE_BREAKOUT_UPPER_PCT = 0.025  # 2.5% above resistance for KDE breakouts
 KDE_BREAKOUT_LOWER_PCT = 0.001  # 0.1% below resistance for near-breakout detection
 DRY_RESISTANCE_PROXIMITY_PCT = 0.05  # 5% proximity for dry setups
 WATCHLIST_PROXIMITY_PCT = 0.015  # 1.5% below resistance for watchlist items
+TRENDLINE_TOUCH_TOLERANCE_PCT = 0.015  # 1.5% tolerance for ascending trendline touch check
 
 # ──────────────────────────────────────────────────────────────────────────
 # Time Periods & Candle Counts
@@ -58,6 +59,7 @@ CCI_RLX_FLOOR    = -30.0  # CCI oversold floor for relaxed pullback hook
 ATR_STOP_MULTIPLIER = 0.2  # 20% of ATR below swing low for stop placement
 ENTRY_PRICE_MULTIPLIER = 1.001  # 0.1% above current price for entry orders
 MIN_RISK_REWARD_RATIO = 1.0  # Minimum acceptable R:R ratio for setups
+TARGET_RR             = 2.0  # Default take-profit multiplier (change to 3.0 for 3:1 target)
 
 # ──────────────────────────────────────────────────────────────────────────
 # Data Processing
@@ -70,8 +72,8 @@ FETCH_MAX_RETRIES = 3  # Maximum retry attempts for data fetches
 FETCH_BACKOFF_BASE = 1.0  # Base delay for exponential backoff (seconds)
 CACHE_TTL_SUCCESS = 14400  # Seconds to cache a successful fetch (4 hours)
 CACHE_TTL_FAILURE = 900    # Seconds to cache a failed fetch — retry sooner (15 min)
-PIVOT_LOOKBACK_DAYS       = 120    # ~6 months of trading days
-PIVOT_TOUCH_MARGIN_PCT    = 0.015  # 1.5% — highs must cluster within this
+PIVOT_LOOKBACK_DAYS       = 252    # 1 full trading year — captures macro bases
+PIVOT_TOUCH_MARGIN_PCT    = 0.020  # 2.0% — catches real double-tops (was 1.5%)
 PIVOT_MIN_SEPARATION_DAYS = 7      # minimum bars between two matching highs
 PIVOT_MIN_TOUCHES         = 2      # minimum pivots to form a valid zone
 
