@@ -48,6 +48,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from constants import (
+    CACHE_TTL_FAILURE,
+    CACHE_TTL_SUCCESS,
     CONCURRENCY_LIMIT,
     DATA_FETCH_PERIOD,
     DB_PATH,
@@ -149,6 +151,7 @@ _scan_state: Dict = {
     "dry_run_setups": None,
 }
 _semaphore: Optional[asyncio.Semaphore] = None
+_ticker_cache: dict = {}  # ticker → (timestamp: float, df: Optional[pd.DataFrame])
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -195,6 +198,16 @@ async def _fetch(ticker: str, retry_count: int = 0) -> Optional[pd.DataFrame]:
     Semaphore is acquired per-attempt (not held across retries) to prevent
     deadlock when multiple tasks retry simultaneously.
     """
+    # ── In-memory TTL cache ───────────────────────────────────────────────────
+    # Successive scan runs within the same session reuse cached data, preventing
+    # yfinance rate-limiting from causing different tickers to be dropped each run.
+    entry = _ticker_cache.get(ticker)
+    if entry is not None:
+        cached_ts, cached_df = entry
+        ttl = CACHE_TTL_SUCCESS if cached_df is not None else CACHE_TTL_FAILURE
+        if time.time() - cached_ts < ttl:
+            return cached_df
+
     for attempt in range(retry_count, FETCH_MAX_RETRIES + 1):
         need_retry = False
         backoff_delay = 0.0
@@ -226,6 +239,7 @@ async def _fetch(ticker: str, retry_count: int = 0) -> Optional[pd.DataFrame]:
                             "Fetch DROPPED %s: empty/None data after %d retries",
                             ticker, FETCH_MAX_RETRIES,
                         )
+                        _ticker_cache[ticker] = (time.time(), None)
                         return None
                 else:
                     # Flatten MultiIndex (newer yfinance versions)
@@ -234,6 +248,7 @@ async def _fetch(ticker: str, retry_count: int = 0) -> Optional[pd.DataFrame]:
                     # Deduplicate columns (yfinance can produce duplicates)
                     if df.columns.duplicated().any():
                         df = df.loc[:, ~df.columns.duplicated()]
+                    _ticker_cache[ticker] = (time.time(), df)
                     return df
 
             except Exception as exc:
@@ -253,10 +268,12 @@ async def _fetch(ticker: str, retry_count: int = 0) -> Optional[pd.DataFrame]:
                         "Fetch DROPPED %s: %s after %d retries",
                         ticker, type(exc).__name__, FETCH_MAX_RETRIES,
                     )
+                    _ticker_cache[ticker] = (time.time(), None)
                     return None
         # Semaphore released — sleep outside before next attempt
         if need_retry:
             await asyncio.sleep(backoff_delay)
+    _ticker_cache[ticker] = (time.time(), None)
     return None
 
 

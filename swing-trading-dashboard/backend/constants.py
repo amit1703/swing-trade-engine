@@ -68,6 +68,8 @@ CONCURRENCY_LIMIT = 15  # Max concurrent yfinance API requests (lowered for stab
 BATCH_SAVE_SIZE = 100  # Batch size for database operations (if needed)
 FETCH_MAX_RETRIES = 3  # Maximum retry attempts for data fetches
 FETCH_BACKOFF_BASE = 1.0  # Base delay for exponential backoff (seconds)
+CACHE_TTL_SUCCESS = 14400  # Seconds to cache a successful fetch (4 hours)
+CACHE_TTL_FAILURE = 900    # Seconds to cache a failed fetch — retry sooner (15 min)
 
 # ──────────────────────────────────────────────────────────────────────────
 # Scan Settings
