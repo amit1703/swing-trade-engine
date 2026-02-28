@@ -77,6 +77,9 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                 const qualityScore      = typeof s.quality_score === 'number' ? s.quality_score : null
                 const isBaseBrk         = s.setup_type === 'BASE' && s.signal === 'BRK'
                 const isBaseDry         = s.setup_type === 'BASE' && s.signal === 'DRY'
+                const daysOld           = s.setup_date
+                  ? Math.floor((Date.now() - new Date(s.setup_date + 'T00:00:00').getTime()) / 86400000)
+                  : null
 
                 // Row background: green tint for volume-surge rows
                 const rowStyle = isVolSurge
@@ -118,7 +121,8 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                     <td className="text-t-muted">{calcRR(s.entry, s.stop_loss, s.take_profit) ?? s.rr?.toFixed(1) ?? '—'}</td>
 
                     {/* Signal column */}
-                    <td style={{ textAlign: 'left' }}>
+                    <td style={{ textAlign: 'left', verticalAlign: 'middle' }}>
+                      <div className="flex items-center gap-1 flex-wrap">
                       {s.setup_type === 'VCP' ? (
                         <div className="flex items-center gap-1 flex-wrap">
                           {/* LEAD badge — RS LEAD setups (cyan, priority) */}
@@ -341,6 +345,24 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                           )}
                         </div>
                       )}
+
+                      {/* Age badge — shown when setup is ≥ 1 day old */}
+                      {daysOld != null && daysOld >= 1 && (
+                        <span
+                          className="badge"
+                          style={{
+                            fontSize: 7,
+                            background: 'transparent',
+                            color: daysOld >= 5 ? 'rgba(255,45,85,0.7)' : 'var(--muted)',
+                            border: `1px solid ${daysOld >= 5 ? 'rgba(255,45,85,0.3)' : 'var(--border)'}`,
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={`Setup detected ${daysOld} day${daysOld !== 1 ? 's' : ''} ago`}
+                        >
+                          {daysOld}d
+                        </span>
+                      )}
+                      </div>
                     </td>
 
                     {/* Dev mode debug button */}

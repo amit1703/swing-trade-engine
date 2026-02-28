@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchTrades, addTrade, closeTrade } from '../api.js'
+import { fetchTrades, addTrade, closeTrade, fetchClosedTrades } from '../api.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Health config
@@ -30,16 +30,19 @@ const HEALTH = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PortfolioTab({ onTickerClick }) {
-  const [trades,      setTrades     ] = useState([])
-  const [loading,     setLoading    ] = useState(false)
-  const [showModal,   setShowModal  ] = useState(false)
-  const refreshTimer                  = useRef(null)
+  const [trades,        setTrades       ] = useState([])
+  const [closedTrades,  setClosedTrades ] = useState([])
+  const [loading,       setLoading      ] = useState(false)
+  const [showModal,     setShowModal    ] = useState(false)
+  const [closingTrade,  setClosingTrade ] = useState(null)   // trade object to close
+  const refreshTimer                      = useRef(null)
 
   const loadTrades = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetchTrades()
-      setTrades(res.trades ?? [])
+      const [active, closed] = await Promise.allSettled([fetchTrades(), fetchClosedTrades()])
+      if (active.status === 'fulfilled')  setTrades(active.value.trades ?? [])
+      if (closed.status === 'fulfilled')  setClosedTrades(closed.value.trades ?? [])
     } catch (err) {
       console.error('[Portfolio] fetchTrades:', err)
     } finally {
@@ -54,10 +57,13 @@ export default function PortfolioTab({ onTickerClick }) {
     return () => clearInterval(refreshTimer.current)
   }, [loadTrades])
 
-  const handleClose = useCallback(async (id) => {
+  const handleClose = useCallback(async (id, exitPrice, exitDate) => {
     try {
-      await closeTrade(id)
+      await closeTrade(id, exitPrice ?? null, exitDate ?? null)
+      // Remove from active list and refresh closed list
       setTrades((prev) => prev.filter((t) => t.id !== id))
+      const closed = await fetchClosedTrades()
+      setClosedTrades(closed.trades ?? [])
     } catch (err) {
       console.error('[Portfolio] closeTrade:', err)
     }
@@ -137,7 +143,7 @@ export default function PortfolioTab({ onTickerClick }) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="terminal-table" style={{ minWidth: 900 }}>
+            <table className="terminal-table" style={{ minWidth: 940 }}>
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left' }}>Ticker</th>
@@ -151,6 +157,7 @@ export default function PortfolioTab({ onTickerClick }) {
                   <th>T1 $</th>
                   <th>T2 $</th>
                   <th>T3 $</th>
+                  <th>Days</th>
                   <th style={{ textAlign: 'center' }}>Health</th>
                   <th style={{ textAlign: 'center' }}>Act</th>
                 </tr>
@@ -160,6 +167,9 @@ export default function PortfolioTab({ onTickerClick }) {
                   const h   = HEALTH[t.health] ?? HEALTH.UNKNOWN
                   const plPos = (t.pl_dollar ?? 0) >= 0
                   const isExit = t.health === 'EXIT'
+                  const daysHeld = t.entry_date
+                    ? Math.floor((Date.now() - new Date(t.entry_date + 'T00:00:00').getTime()) / 86400000)
+                    : null
 
                   return (
                     <tr
@@ -227,6 +237,11 @@ export default function PortfolioTab({ onTickerClick }) {
                           {t.targets?.[2] != null ? fmt2(t.targets[2]) : <Dash />}
                       </td>
 
+                      {/* Days held */}
+                      <td className="text-t-muted" style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 10 }}>
+                        {daysHeld != null ? daysHeld : <Dash />}
+                      </td>
+
                       {/* Health badge */}
                       <td style={{ textAlign: 'center' }}>
                         <span
@@ -242,10 +257,10 @@ export default function PortfolioTab({ onTickerClick }) {
                         </span>
                       </td>
 
-                      {/* Close button */}
+                      {/* Close button — opens CloseTradeModal */}
                       <td style={{ textAlign: 'center' }}>
                         <button
-                          onClick={() => handleClose(t.id)}
+                          onClick={() => setClosingTrade(t)}
                           title="Close trade"
                           style={{
                             background: 'transparent',
@@ -275,11 +290,100 @@ export default function PortfolioTab({ onTickerClick }) {
         )}
       </div>
 
+      {/* ── Closed Trades History ────────────────────────────────────────── */}
+      {closedTrades.length > 0 && (
+        <div className="flex-shrink-0 border-t" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+          <div className="px-5 py-2 flex items-center gap-4" style={{ borderBottom: '1px solid var(--border)' }}>
+            <span style={{
+              fontFamily: 'Barlow Condensed, sans-serif',
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
+              textTransform: 'uppercase', color: 'var(--muted)',
+            }}>
+              Closed Trades
+            </span>
+            <span style={{
+              fontSize: 9, padding: '1px 5px',
+              background: 'var(--border)', color: 'var(--muted)',
+            }}>
+              {closedTrades.length}
+            </span>
+            {(() => {
+              const totalPL = closedTrades.reduce((s, t) => s + (t.pl_dollar ?? 0), 0)
+              return (
+                <span style={{
+                  fontFamily: 'IBM Plex Mono, monospace', fontSize: 11, fontWeight: 700,
+                  color: totalPL >= 0 ? 'var(--go)' : 'var(--halt)',
+                }}>
+                  {totalPL >= 0 ? '+' : ''}{fmt$(totalPL)} realised
+                </span>
+              )
+            })()}
+          </div>
+          <div className="overflow-x-auto" style={{ maxHeight: 240, overflowY: 'auto' }}>
+            <table className="terminal-table" style={{ minWidth: 700 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Ticker</th>
+                  <th>Entry $</th>
+                  <th>Exit $</th>
+                  <th>Qty</th>
+                  <th>P/L $</th>
+                  <th>P/L %</th>
+                  <th>Days</th>
+                  <th>Closed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {closedTrades.map((t) => {
+                  const plPos = (t.pl_dollar ?? 0) >= 0
+                  return (
+                    <tr key={t.id}>
+                      <td>
+                        <button
+                          className="font-600 tracking-wide text-left"
+                          style={{ color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}
+                          onClick={() => onTickerClick?.(t.ticker)}
+                        >
+                          {t.ticker}
+                        </button>
+                      </td>
+                      <td className="text-t-muted">{fmt2(t.entry_price)}</td>
+                      <td className="text-t-text">{t.exit_price != null ? fmt2(t.exit_price) : <Dash />}</td>
+                      <td className="text-t-muted">{fmtN(t.quantity)}</td>
+                      <td style={{ color: plPos ? 'var(--go)' : 'var(--halt)', fontWeight: 600 }}>
+                        {t.pl_dollar != null ? `${plPos ? '+' : ''}${fmt$(t.pl_dollar)}` : <Dash />}
+                      </td>
+                      <td style={{ color: plPos ? 'var(--go)' : 'var(--halt)' }}>
+                        {t.pl_pct != null ? `${plPos ? '+' : ''}${t.pl_pct.toFixed(2)}%` : <Dash />}
+                      </td>
+                      <td className="text-t-muted">{t.days_held != null ? t.days_held : <Dash />}</td>
+                      <td className="text-t-muted" style={{ fontSize: 9 }}>{t.exit_date ?? '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ── Add Trade Modal ───────────────────────────────────────────────── */}
       {showModal && (
         <AddTradeModal
           onAdd={handleAdded}
           onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {/* ── Close Trade Modal ─────────────────────────────────────────────── */}
+      {closingTrade && (
+        <CloseTradeModal
+          trade={closingTrade}
+          onConfirm={(exitPrice, exitDate) => {
+            handleClose(closingTrade.id, exitPrice, exitDate)
+            setClosingTrade(null)
+          }}
+          onClose={() => setClosingTrade(null)}
         />
       )}
     </div>
@@ -653,6 +757,109 @@ function AddTradeModal({ onAdd, onClose }) {
               style={{ opacity: submitting ? 0.6 : 1 }}
             >
               {submitting ? 'ADDING…' : 'ADD TRADE'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Close Trade Modal
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CloseTradeModal({ trade, onConfirm, onClose }) {
+  const [exitPrice, setExitPrice] = useState('')
+  const [exitDate,  setExitDate ] = useState(new Date().toISOString().slice(0, 10))
+  const [error,     setError    ] = useState('')
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    const ep = parseFloat(exitPrice)
+    if (exitPrice !== '' && (isNaN(ep) || ep <= 0)) {
+      setError('Enter a valid exit price')
+      return
+    }
+    onConfirm(exitPrice !== '' ? ep : null, exitDate || null)
+  }
+
+  const pl = exitPrice !== '' && trade.entry_price
+    ? ((parseFloat(exitPrice) - trade.entry_price) * trade.quantity)
+    : null
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.82)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 1000,
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border-light)',
+        width: 340,
+        boxShadow: '0 0 0 1px rgba(255,45,85,0.1), 0 0 60px rgba(0,0,0,0.9)',
+      }}>
+        <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+          <span className="font-condensed text-[14px] font-700 tracking-widest uppercase" style={{ color: 'var(--halt)' }}>
+            CLOSE {trade.ticker}
+          </span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <ModalField label="Exit Price $" hint="leave blank to record without price">
+            <ModalInput
+              type="number" step="0.01" min="0"
+              value={exitPrice}
+              onChange={(e) => { setExitPrice(e.target.value); setError('') }}
+              placeholder="optional"
+              autoFocus
+            />
+          </ModalField>
+          <ModalField label="Exit Date">
+            <ModalInput
+              type="date"
+              value={exitDate}
+              onChange={(e) => setExitDate(e.target.value)}
+            />
+          </ModalField>
+
+          {pl != null && (
+            <div className="px-4 py-2" style={{ background: 'var(--panel)', borderBottom: '1px solid var(--border)' }}>
+              <span className="text-[9px] uppercase tracking-widest text-t-muted">Realised P/L&nbsp;</span>
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12, fontWeight: 700, color: pl >= 0 ? 'var(--go)' : 'var(--halt)' }}>
+                {pl >= 0 ? '+' : ''}{fmt$(pl)}
+              </span>
+            </div>
+          )}
+
+          {error && (
+            <div className="px-4 py-2 text-[10px]" style={{ color: 'var(--halt)', background: 'rgba(255,45,85,0.06)' }}>
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
+            <button type="button" onClick={onClose}
+              style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 11, fontWeight: 600, padding: '5px 14px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              CANCEL
+            </button>
+            <button type="submit"
+              style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 11, fontWeight: 700, padding: '5px 14px', background: 'rgba(255,45,85,0.18)', border: '1px solid rgba(255,45,85,0.4)', color: 'var(--halt)', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              CONFIRM CLOSE
             </button>
           </div>
         </form>

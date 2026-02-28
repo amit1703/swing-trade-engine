@@ -78,6 +78,7 @@ from database import (
     add_trade,
     get_trades,
     close_trade,
+    get_closed_trades,
 )
 from engines.engine0 import check_market_regime
 from engines.engine1 import calculate_sr_zones
@@ -1234,6 +1235,22 @@ async def get_chart_data(ticker: str):
     except Exception as exc:
         log.warning("Could not fetch info for %s: %s", sym, exc)
 
+    # Earnings date — next scheduled earnings (from yfinance calendar)
+    earnings_date: Optional[str] = None
+    try:
+        loop = asyncio.get_event_loop()
+        cal = await loop.run_in_executor(None, lambda: yf.Ticker(sym).calendar)
+        if isinstance(cal, dict):
+            ed_list = cal.get("Earnings Date", [])
+            if ed_list:
+                ed = ed_list[0]
+                if hasattr(ed, "strftime"):
+                    earnings_date = ed.strftime("%Y-%m-%d")
+                elif isinstance(ed, str):
+                    earnings_date = ed[:10]
+    except Exception as exc:
+        log.warning("Could not fetch earnings date for %s: %s", sym, exc)
+
     # RS Line for chart display — compute fresh against SPY
     rs_line_series: list = []
     rs_52w_high_val: Optional[float] = None
@@ -1269,6 +1286,7 @@ async def get_chart_data(ticker: str):
         "trendline": trendline,
         "base_setup": base_setup,
         "ticker_info": ticker_info,
+        "earnings_date": earnings_date,
     }
 
 
@@ -1284,6 +1302,11 @@ class TradeIn(BaseModel):
     targets:     List[float] = Field(..., min_length=1, max_length=3)
     entry_date:  str
     notes:       str = ""
+
+
+class CloseTradeIn(BaseModel):
+    exit_price: Optional[float] = None
+    exit_date:  Optional[str]   = None
 
 
 async def _enrich_trade(trade: Dict) -> Dict:
@@ -1374,9 +1397,22 @@ async def list_trades():
 
 
 @app.delete("/api/trades/{trade_id}", status_code=200)
-async def delete_trade(trade_id: int):
-    """Close (soft-delete) an active trade by id."""
-    ok = await close_trade(DB_PATH, trade_id)
+async def delete_trade(trade_id: int, body: CloseTradeIn = None):
+    """Close (soft-delete) an active trade, optionally recording exit price/date."""
+    exit_price = body.exit_price if body else None
+    exit_date  = body.exit_date  if body else None
+    # Default exit_date to today if exit_price provided but date omitted
+    if exit_price is not None and exit_date is None:
+        from datetime import date as _date
+        exit_date = _date.today().isoformat()
+    ok = await close_trade(DB_PATH, trade_id, exit_price=exit_price, exit_date=exit_date)
     if not ok:
         raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found or already closed")
     return {"id": trade_id, "status": "closed"}
+
+
+@app.get("/api/trades/closed")
+async def list_closed_trades():
+    """Return the 50 most recently closed trades with realised P/L."""
+    trades = await get_closed_trades(DB_PATH)
+    return {"trades": trades, "count": len(trades)}

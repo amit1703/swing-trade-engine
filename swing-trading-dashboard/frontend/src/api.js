@@ -55,8 +55,15 @@ export const addTrade = (body) =>
     body: JSON.stringify(body),
   }).then(handleResponse)
 
-export const closeTrade = (id) =>
-  fetch(`/api/trades/${id}`, { method: 'DELETE' }).then(handleResponse)
+export const closeTrade = (id, exitPrice = null, exitDate = null) =>
+  fetch(`/api/trades/${id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ exit_price: exitPrice, exit_date: exitDate }),
+  }).then(handleResponse)
+
+export const fetchClosedTrades = () =>
+  fetch('/api/trades/closed').then(handleResponse)
 
 export const fetchOptionsSetups = () =>
   fetch('/api/setups/options-catalyst').then(handleResponse)

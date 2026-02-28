@@ -118,6 +118,16 @@ async def init_db(db_path: str) -> None:
             await db.commit()
         except Exception:
             pass  # column already exists — safe to ignore
+        # Migration: add exit_price and exit_date to trades if they do not yet exist
+        for col_sql in [
+            "ALTER TABLE trades ADD COLUMN exit_price REAL",
+            "ALTER TABLE trades ADD COLUMN exit_date  TEXT",
+        ]:
+            try:
+                await db.execute(col_sql)
+                await db.commit()
+            except Exception:
+                pass  # column already exists — safe to ignore
 
 
 # ---------------------------------------------------------------------------
@@ -371,15 +381,74 @@ async def get_trades(db_path: str, status: str = "active") -> List[Dict]:
             return result
 
 
-async def close_trade(db_path: str, trade_id: int) -> bool:
-    """Mark a trade as closed.  Returns True if a row was updated."""
+async def close_trade(
+    db_path: str,
+    trade_id: int,
+    exit_price: Optional[float] = None,
+    exit_date: Optional[str] = None,
+) -> bool:
+    """Mark a trade as closed, optionally recording the exit price and date.
+    Returns True if a row was updated."""
     async with aiosqlite.connect(db_path) as db:
         cur = await db.execute(
-            "UPDATE trades SET status = 'closed' WHERE id = ? AND status = 'active'",
-            (trade_id,),
+            """UPDATE trades
+               SET status = 'closed', exit_price = ?, exit_date = ?
+               WHERE id = ? AND status = 'active'""",
+            (exit_price, exit_date, trade_id),
         )
         await db.commit()
         return cur.rowcount > 0
+
+
+async def get_closed_trades(db_path: str, limit: int = 50) -> List[Dict]:
+    """Return the most recent closed trades (up to limit)."""
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute(
+            """SELECT id, ticker, entry_price, quantity, stop_loss, target, targets_json,
+                      entry_date, notes, exit_price, exit_date, created_at
+               FROM trades WHERE status = 'closed'
+               ORDER BY exit_date DESC, created_at DESC LIMIT ?""",
+            (limit,),
+        ) as cur:
+            rows = await cur.fetchall()
+            result = []
+            for r in rows:
+                targets = json.loads(r[6]) if r[6] else [r[5]]
+                exit_price_val = r[9]
+                entry_price_val = r[2]
+                pl_dollar = None
+                pl_pct = None
+                if exit_price_val is not None and entry_price_val:
+                    qty = r[3] or 0
+                    pl_dollar = round((exit_price_val - entry_price_val) * qty, 2)
+                    pl_pct = round((exit_price_val - entry_price_val) / entry_price_val * 100, 2)
+                days_held = None
+                if r[7] and r[10]:
+                    try:
+                        from datetime import date
+                        d0 = date.fromisoformat(r[7])
+                        d1 = date.fromisoformat(r[10])
+                        days_held = (d1 - d0).days
+                    except Exception:
+                        pass
+                result.append({
+                    "id":          r[0],
+                    "ticker":      r[1],
+                    "entry_price": r[2],
+                    "quantity":    r[3],
+                    "stop_loss":   r[4],
+                    "target":      r[5],
+                    "targets":     targets,
+                    "entry_date":  r[7],
+                    "notes":       r[8],
+                    "exit_price":  exit_price_val,
+                    "exit_date":   r[10],
+                    "pl_dollar":   pl_dollar,
+                    "pl_pct":      pl_pct,
+                    "days_held":   days_held,
+                    "created_at":  r[11],
+                })
+            return result
 
 
 async def get_sr_zones_for_ticker_from_db(db_path: str, ticker: str) -> List[Dict]:

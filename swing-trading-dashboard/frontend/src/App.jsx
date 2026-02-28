@@ -69,6 +69,7 @@ export default function App() {
   const [debugData,      setDebugData     ] = useState(null)
   const [debugLoading,   setDebugLoading  ] = useState(false)
   const [sortBy,         setSortBy        ] = useState('default')
+  const [hotOnly,        setHotOnly       ] = useState(false)
 
   const pollTimerRef = useRef(null)
 
@@ -127,22 +128,24 @@ export default function App() {
   }, [devMode, dryRun])
 
   const applySort = useCallback((setups) => {
-    if (sortBy === 'default') return setups
-    const s = [...setups]
+    const filtered = hotOnly ? setups.filter(s => s.hot_sector) : setups
+    if (sortBy === 'default') return filtered
+    const s = [...filtered]
     const riskPct = (x) => {
       const r = (x.entry ?? 0) - (x.stop_loss ?? 0)
       return x.entry > 0 ? r / x.entry : 999
     }
     switch (sortBy) {
-      case 'risk_pct':      return s.sort((a, b) => riskPct(a) - riskPct(b))
-      case 'risk_pct_desc': return s.sort((a, b) => riskPct(b) - riskPct(a))
-      case 'rr_desc':   return s.sort((a, b) => (b.rr ?? 0) - (a.rr ?? 0))
-      case 'vol_desc':  return s.sort((a, b) => (b.volume_ratio ?? 0) - (a.volume_ratio ?? 0))
-      case 'entry_asc': return s.sort((a, b) => (a.entry ?? 0) - (b.entry ?? 0))
-      case 'ticker':    return s.sort((a, b) => a.ticker.localeCompare(b.ticker))
-      default:          return setups
+      case 'risk_pct':        return s.sort((a, b) => riskPct(a) - riskPct(b))
+      case 'risk_pct_desc':   return s.sort((a, b) => riskPct(b) - riskPct(a))
+      case 'rr_desc':         return s.sort((a, b) => (b.rr ?? 0) - (a.rr ?? 0))
+      case 'vol_desc':        return s.sort((a, b) => (b.volume_ratio ?? 0) - (a.volume_ratio ?? 0))
+      case 'entry_asc':       return s.sort((a, b) => (a.entry ?? 0) - (b.entry ?? 0))
+      case 'ticker':          return s.sort((a, b) => a.ticker.localeCompare(b.ticker))
+      case 'rs_score_desc':   return s.sort((a, b) => (b.rs_score ?? -999) - (a.rs_score ?? -999))
+      default:                return filtered
     }
-  }, [sortBy])
+  }, [sortBy, hotOnly])
 
   const handleScanTicker = useCallback(async (ticker) => {
     try {
@@ -350,7 +353,7 @@ export default function App() {
               }}
             >
               {/* Sort bar */}
-              <SortBar sortBy={sortBy} onSort={setSortBy} />
+              <SortBar sortBy={sortBy} onSort={setSortBy} hotOnly={hotOnly} onToggleHot={() => setHotOnly(v => !v)} />
 
               {/* ── Derive VCP sub-categories ─────────────────────────── */}
               {(() => {
@@ -510,9 +513,10 @@ const SORT_OPTIONS = [
   { key: 'vol_desc',       label: 'Vol ↓'   },
   { key: 'entry_asc',      label: '$ ↑'     },
   { key: 'ticker',         label: 'A–Z'     },
+  { key: 'rs_score_desc',  label: 'RS ↓'   },
 ]
 
-function SortBar({ sortBy, onSort }) {
+function SortBar({ sortBy, onSort, hotOnly, onToggleHot }) {
   return (
     <div
       style={{
@@ -521,6 +525,7 @@ function SortBar({ sortBy, onSort }) {
         borderBottom: '1px solid var(--border)',
         background: 'var(--surface)',
         flexShrink: 0,
+        flexWrap: 'wrap',
       }}
     >
       <span style={{
@@ -554,6 +559,24 @@ function SortBar({ sortBy, onSort }) {
           </button>
         )
       })}
+      <button
+        onClick={onToggleHot}
+        title="Show only hot-sector setups (3+ setups in same sector)"
+        style={{
+          fontFamily: 'IBM Plex Mono, monospace',
+          fontSize: 9, fontWeight: hotOnly ? 700 : 500,
+          letterSpacing: '0.06em',
+          padding: '2px 7px',
+          background: hotOnly ? 'rgba(255,100,0,0.15)' : 'transparent',
+          border: `1px solid ${hotOnly ? 'rgba(255,100,0,0.7)' : 'var(--border)'}`,
+          color: hotOnly ? '#FF6400' : 'var(--muted)',
+          cursor: 'pointer',
+          transition: 'all 0.12s',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        🔥 Hot
+      </button>
     </div>
   )
 }

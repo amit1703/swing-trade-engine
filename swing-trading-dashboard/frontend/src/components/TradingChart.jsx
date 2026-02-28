@@ -87,8 +87,8 @@ export default function TradingChart({ ticker, chartData, loading }) {
   // Legend state — updated on crosshair move
   const [legend, setLegend] = useState(null)
 
-  // Visibility toggles: ema / sma / tdl / sr / rs
-  const [vis, setVis] = useState({ ema: true, sma: true, tdl: true, sr: true, rs: true })
+  // Visibility toggles: ema / sma / tdl / sr / rs / vol
+  const [vis, setVis] = useState({ ema: true, sma: true, tdl: true, sr: true, rs: true, vol: true })
 
   // Chart creation effect must be defined BEFORE visibility effects so React
   // runs it first (effects execute in definition order), ensuring seriesRef is
@@ -158,6 +158,45 @@ export default function TradingChart({ ticker, chartData, loading }) {
       lastValueVisible: true,
     })
     if (chartData.candles?.length) candleSeries.setData(chartData.candles)
+
+    // ── Volume histogram (bottom 25% of main chart) ─────────────────────────
+    const volSeries = mainChart.addHistogramSeries({
+      priceFormat:   { type: 'volume' },
+      priceScaleId:  'volume',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+    mainChart.priceScale('volume').applyOptions({
+      scaleMargins: { top: 0.78, bottom: 0 },
+    })
+    if (chartData.candles?.length) {
+      volSeries.setData(chartData.candles.map((c) => ({
+        time:  c.time,
+        value: c.volume,
+        color: c.close >= c.open ? 'rgba(0,200,122,0.30)' : 'rgba(255,45,85,0.25)',
+      })))
+    }
+
+    // Volume 50-bar SMA line on same scale
+    const volSmaData = []
+    const candles = chartData.candles ?? []
+    if (candles.length >= 50) {
+      for (let i = 49; i < candles.length; i++) {
+        let sum = 0
+        for (let j = i - 49; j <= i; j++) sum += candles[j].volume
+        volSmaData.push({ time: candles[i].time, value: sum / 50 })
+      }
+    }
+    const volSmaSeries = mainChart.addLineSeries({
+      color:            'rgba(245,166,35,0.55)',
+      lineWidth:        1,
+      lineStyle:        LineStyle.Dashed,
+      priceScaleId:     'volume',
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+    })
+    if (volSmaData.length) volSmaSeries.setData(volSmaData)
 
     // ── S/R Band primitives (attached to candle series) ────────────────────
     const srPrimitivesList = []
@@ -510,6 +549,8 @@ export default function TradingChart({ ticker, chartData, loading }) {
       rsSeries,
       rsChart,
       mainChart,
+      volSeries,
+      volSmaSeries,
     }
 
     // ── Resize observer ────────────────────────────────────────────────────
@@ -559,6 +600,11 @@ export default function TradingChart({ ticker, chartData, loading }) {
     seriesRef.current.rsSeries?.applyOptions({ visible: vis.rs })
     seriesRef.current.rsChart?.applyOptions({})
   }, [vis.rs, chartData])
+
+  useEffect(() => {
+    seriesRef.current.volSeries?.applyOptions({ visible: vis.vol })
+    seriesRef.current.volSmaSeries?.applyOptions({ visible: vis.vol })
+  }, [vis.vol, chartData])
 
   // ── Empty states ──────────────────────────────────────────────────────────
   if (loading) {
@@ -633,7 +679,29 @@ export default function TradingChart({ ticker, chartData, loading }) {
             </>)}
           </div>
 
-          {/* Row 3: ATR + 200 SMA status */}
+          {/* Row 3: ATR + 200 SMA status + Earnings warning */}
+          {(() => {
+            const earningsDate = chartData.earnings_date
+              ? new Date(chartData.earnings_date + 'T00:00:00')
+              : null
+            const daysToEarnings = earningsDate
+              ? Math.ceil((earningsDate.getTime() - Date.now()) / 86400000)
+              : null
+            const earningsWarning = daysToEarnings != null && daysToEarnings >= 0 && daysToEarnings <= 14
+            return earningsWarning ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <span style={{
+                  fontSize: 8, padding: '2px 7px', borderRadius: 3, fontWeight: 700,
+                  background: 'rgba(255,165,0,0.15)',
+                  color: '#FFA500',
+                  border: '1px solid rgba(255,165,0,0.4)',
+                  letterSpacing: '0.05em',
+                }}>
+                  ⚠ EARNINGS {daysToEarnings === 0 ? 'TODAY' : `${daysToEarnings}d`}
+                </span>
+              </div>
+            ) : null
+          })()}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10, marginTop: 2 }}>
             {chartData.ticker_info?.atr != null && (
               <span style={{ color: COLORS.text, fontFamily: '"IBM Plex Mono", monospace' }}>
@@ -717,6 +785,8 @@ export default function TradingChart({ ticker, chartData, loading }) {
             <VisToggle label="RS" active={vis.rs} activeColor={COLORS.rs}
               onClick={() => setVis(v => ({ ...v, rs: !v.rs }))} />
           )}
+          <VisToggle label="VOL" active={vis.vol} activeColor="rgba(0,200,122,0.6)"
+            onClick={() => setVis(v => ({ ...v, vol: !v.vol }))} />
         </div>
 
         <div
