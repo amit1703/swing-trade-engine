@@ -7,7 +7,7 @@
  */
 import { useRef, useState } from 'react'
 
-export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, onOpenGuide }) {
+export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, onOpenGuide, devMode, dryRun, onToggleDev, onToggleDryRun }) {
   const isBullish = regime?.is_bullish
   const isNoData  = !regime || regime.regime === 'NO_DATA'
   const isHalt    = regime && !isBullish && regime.regime !== 'NO_DATA'
@@ -68,6 +68,11 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
                   SPY &lt; 20 EMA — ENGINES 2 &amp; 3 DISABLED
                 </span>
               )}
+              {isHalt && devMode && (
+                <span className="text-[9px] font-600 tracking-widest text-t-accent uppercase animate-pulse">
+                  ⚠ ENGINES FORCE-ENABLED
+                </span>
+              )}
             </div>
           )}
 
@@ -116,6 +121,51 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
               </>
             )}
           </div>
+
+          {/* Dev mode toggle */}
+          <button
+            onClick={onToggleDev}
+            style={{
+              fontFamily: 'IBM Plex Mono, monospace',
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              padding: '5px 10px',
+              background: devMode ? 'rgba(245,166,35,0.12)' : 'transparent',
+              border: `1px solid ${devMode ? 'var(--accent)' : 'var(--border-light)'}`,
+              color: devMode ? 'var(--accent)' : 'var(--muted)',
+              cursor: 'pointer',
+              textTransform: 'uppercase',
+              transition: 'all 0.15s',
+              boxShadow: devMode ? '0 0 8px rgba(245,166,35,0.2)' : 'none',
+            }}
+            title="Toggle Dev Mode"
+          >
+            {devMode ? '⚠ DEV' : 'DEV'}
+          </button>
+
+          {/* Dry-run sub-toggle — only visible when devMode active */}
+          {devMode && (
+            <button
+              onClick={onToggleDryRun}
+              style={{
+                fontFamily: 'IBM Plex Mono, monospace',
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: '0.06em',
+                padding: '4px 8px',
+                background: dryRun ? 'rgba(155,110,255,0.12)' : 'transparent',
+                border: `1px solid ${dryRun ? '#9b6eff' : 'var(--border-light)'}`,
+                color: dryRun ? '#9b6eff' : 'var(--muted)',
+                cursor: 'pointer',
+                textTransform: 'uppercase',
+                transition: 'all 0.15s',
+              }}
+              title="Dry Run — scan without saving to DB"
+            >
+              DRY RUN
+            </button>
+          )}
 
           {/* Guide button */}
           <button
