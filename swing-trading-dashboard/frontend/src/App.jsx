@@ -115,6 +115,22 @@ export default function App() {
     }
   }, [])
 
+  // ── Options ticker click → load chart data WITHOUT switching tabs ────────
+  const handleOptionsTickerClick = useCallback(async (ticker) => {
+    setSelectedTicker(ticker)
+    setChartData(null)
+    setLoadingChart(true)
+    try {
+      const data = await fetchChartData(ticker)
+      setChartData(data)
+    } catch (err) {
+      console.error('[App] fetchChartData (options):', err)
+      setChartData(null)
+    } finally {
+      setLoadingChart(false)
+    }
+  }, [])
+
   // ── Run scan ──────────────────────────────────────────────────────────────
   const handleRunScan = useCallback(async () => {
     try {
@@ -397,8 +413,9 @@ export default function App() {
                 setups={optionsSetups}
                 title="Options Catalyst"
                 accentColor="purple"
-                onSelectTicker={handleTickerClick}
+                onSelectTicker={handleOptionsTickerClick}
                 selectedTicker={selectedTicker}
+                loading={loadingSetups}
               />
             </div>
             <div className="flex-1">
