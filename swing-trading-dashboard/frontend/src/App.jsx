@@ -98,9 +98,9 @@ export default function App() {
     }
   }, [])
 
-  // ── Ticker click → load chart data + switch to scanner tab ───────────────
-  const handleTickerClick = useCallback(async (ticker) => {
-    setActiveTab('scanner')
+  // ── Ticker click → load chart data; optionally switch to scanner tab ──────
+  const handleTickerClick = useCallback(async (ticker, switchTab = true) => {
+    if (switchTab) setActiveTab('scanner')
     setSelectedTicker(ticker)
     setChartData(null)
     setLoadingChart(true)
@@ -109,22 +109,6 @@ export default function App() {
       setChartData(data)
     } catch (err) {
       console.error('[App] fetchChartData:', err)
-      setChartData(null)
-    } finally {
-      setLoadingChart(false)
-    }
-  }, [])
-
-  // ── Options ticker click → load chart data WITHOUT switching tabs ────────
-  const handleOptionsTickerClick = useCallback(async (ticker) => {
-    setSelectedTicker(ticker)
-    setChartData(null)
-    setLoadingChart(true)
-    try {
-      const data = await fetchChartData(ticker)
-      setChartData(data)
-    } catch (err) {
-      console.error('[App] fetchChartData (options):', err)
       setChartData(null)
     } finally {
       setLoadingChart(false)
@@ -407,20 +391,31 @@ export default function App() {
         )}
 
         {activeTab === 'options' && (
-          <div className="flex flex-1 gap-4 overflow-hidden">
-            <div className="w-[400px] flex-shrink-0">
+          <div className="flex flex-1 overflow-hidden">
+            <aside
+              className="flex flex-col overflow-y-auto flex-shrink-0"
+              style={{
+                width: 400,
+                borderRight: '1px solid var(--border)',
+                background: 'var(--panel)',
+              }}
+            >
               <SetupTable
                 setups={optionsSetups}
                 title="Options Catalyst"
                 accentColor="purple"
-                onSelectTicker={handleOptionsTickerClick}
+                onSelectTicker={(t) => handleTickerClick(t, false)}
                 selectedTicker={selectedTicker}
                 loading={loadingSetups}
               />
-            </div>
-            <div className="flex-1">
-              <TradingChart ticker={selectedTicker} chartData={chartData} />
-            </div>
+            </aside>
+            <main className="flex-1 min-w-0 overflow-hidden" style={{ background: 'var(--bg)' }}>
+              <TradingChart
+                ticker={selectedTicker}
+                chartData={chartData}
+                loading={loadingChart}
+              />
+            </main>
           </div>
         )}
 
