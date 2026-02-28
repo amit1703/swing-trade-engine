@@ -850,6 +850,143 @@ async def get_sr_zones(ticker: str):
     return {"ticker": ticker.upper(), "zones": zones, "count": len(zones)}
 
 
+@app.get("/api/debug/{ticker}")
+async def debug_ticker(ticker: str):
+    """
+    Dev mode: run all engines live for a single ticker and return
+    structured pass/fail results for the DebugDrawer component.
+    """
+    sym = ticker.upper()
+    loop = asyncio.get_event_loop()
+
+    # Fetch OHLCV
+    df = await _fetch(sym)
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail=f"No data for {sym}")
+    if len(df) < MIN_CANDLES_FOR_ANALYSIS:
+        raise HTTPException(status_code=422, detail=f"Insufficient history for {sym}")
+
+    # Indicators for display
+    adj = "Adj Close" if "Adj Close" in df.columns else "Close"
+    close_adj = df[adj]
+    ema8_s  = _ema(close_adj, 8)
+    ema20_s = _ema(close_adj, 20)
+    sma50_s = _sma(close_adj, 50)
+    cci20_s = _cci(df["High"], df["Low"], close_adj, 20)
+
+    lc   = float(close_adj.iloc[-1])
+    l8   = float(ema8_s.iloc[-1])  if pd.notna(ema8_s.iloc[-1])  else None
+    l20  = float(ema20_s.iloc[-1]) if pd.notna(ema20_s.iloc[-1]) else None
+    l50  = float(sma50_s.iloc[-1]) if pd.notna(sma50_s.iloc[-1]) else None
+    lcci = float(cci20_s.iloc[-1]) if pd.notna(cci20_s.iloc[-1]) else None
+
+    # Zones: DB first, fresh computation as fallback
+    zones = await get_sr_zones_for_ticker_from_db(DB_PATH, sym)
+    if not zones:
+        try:
+            zones = await loop.run_in_executor(None, calculate_sr_zones, sym, df)
+        except Exception:
+            zones = []
+
+    # RS metrics
+    rs_ratio    = 0.0
+    rs_52w_high = 0.0
+    rs_blue_dot = False
+    rs_score    = 0
+    try:
+        spy_df = await _fetch("SPY")
+        if spy_df is not None and len(spy_df) >= MIN_CANDLES_FOR_RS:
+            rs_line = await loop.run_in_executor(None, calculate_rs_line, df, spy_df)
+            if rs_line is not None and len(rs_line) >= MIN_CANDLES_FOR_RS:
+                rs_stats    = get_rs_stats(rs_line)
+                rs_ratio    = round(float(rs_stats.get("rs_ratio", 0.0)), 4)
+                rs_52w_high = float(rs_stats.get("rs_52w_high", 0.0))
+                rs_blue_dot = bool(detect_rs_blue_dot(rs_line))
+                rs_score    = int(await loop.run_in_executor(None, calculate_rs_score, df, spy_df))
+    except Exception as exc:
+        log.warning("debug RS failed for %s: %s", sym, exc)
+
+    # Regime from DB (latest)
+    regime_row = await get_latest_regime(DB_PATH) or {
+        "is_bullish": False, "spy_close": 0.0, "spy_20ema": 0.0, "regime": "NO_DATA"
+    }
+
+    # Trendline (used by pullback engines)
+    try:
+        tl = await loop.run_in_executor(None, detect_trendline, sym, df)
+    except Exception:
+        tl = None
+
+    # Helper: run a sync engine function safely
+    def _run_engine(fn, *args):
+        try:
+            return fn(*args)
+        except Exception:
+            return None
+
+    # Engine 2 — VCP
+    e2 = await loop.run_in_executor(
+        None, _run_engine, scan_vcp,
+        sym, df, zones, 0.0, rs_ratio, rs_52w_high, rs_blue_dot, rs_score
+    )
+    # Engine 3 — Pullback (strict then relaxed)
+    e3 = await loop.run_in_executor(None, _run_engine, scan_pullback, sym, df, zones, tl)
+    e3_relaxed = False
+    if e3 is None:
+        e3 = await loop.run_in_executor(None, _run_engine, scan_relaxed_pullback, sym, df, zones, tl)
+        if e3 is not None:
+            e3_relaxed = True
+    # Engine 5 — Base pattern
+    e5 = await loop.run_in_executor(
+        None, _run_engine, scan_base_pattern,
+        sym, df, 0.0, rs_ratio, rs_52w_high, rs_blue_dot, rs_score
+    )
+    # Engine 6 — Resistance breakout
+    e6 = await loop.run_in_executor(
+        None, _run_engine, scan_resistance_breakout, sym, df, zones
+    ) if zones else None
+
+    def _eng(result, extra_keys=()):
+        if result is None:
+            return {"triggered": False, "signal": None}
+        out = {"triggered": True, "signal": result.get("setup_type") or result.get("signal")}
+        for k in extra_keys:
+            if k in result:
+                out[k] = result[k]
+        return out
+
+    e3_out = _eng(e3, ("is_relaxed",))
+    if e3 is not None and e3_relaxed:
+        e3_out["is_relaxed"] = True
+
+    return {
+        "ticker": sym,
+        "regime": {
+            "is_bullish": regime_row.get("is_bullish"),
+            "spy_close":  regime_row.get("spy_close"),
+            "spy_20ema":  regime_row.get("spy_20ema"),
+        },
+        "indicators": {
+            "close":       round(lc, 2),
+            "ema8":        round(l8, 2)   if l8   is not None else None,
+            "ema20":       round(l20, 2)  if l20  is not None else None,
+            "sma50":       round(l50, 2)  if l50  is not None else None,
+            "cci":         round(lcci, 1) if lcci is not None else None,
+            "above_ema8":  bool(l8  is not None and lc > l8),
+            "above_ema20": bool(l20 is not None and lc > l20),
+            "above_sma50": bool(l50 is not None and lc > l50),
+            "rs_ratio":    rs_ratio,
+            "rs_blue_dot": rs_blue_dot,
+            "rs_score":    rs_score,
+        },
+        "zones":   zones,
+        "engine2": _eng(e2, ("is_breakout", "is_vol_surge", "path", "is_rs_lead")),
+        "engine3": e3_out,
+        "engine5": _eng(e5, ("base_type", "quality_score")),
+        "engine6": _eng(e6, ("days_since_breakout", "volume_ratio")),
+    }
+
+
 @app.get("/api/chart/{ticker}")
 async def get_chart_data(ticker: str):
     """

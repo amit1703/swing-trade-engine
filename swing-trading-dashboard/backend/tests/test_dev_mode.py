@@ -2,11 +2,29 @@ import pytest
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+import pandas as pd
+import numpy as np
+
 from fastapi.testclient import TestClient
 import main as m
 from main import app
 
 client = TestClient(app)
+
+
+def _make_df(n=300):
+    """Synthetic bullish trending OHLCV DataFrame for engine testing."""
+    dates = pd.date_range("2023-01-01", periods=n, freq="B")
+    base = 100.0
+    prices = [base + i * 0.1 for i in range(n)]
+    return pd.DataFrame({
+        "Open":      [p - 0.2 for p in prices],
+        "High":      [p + 0.5 for p in prices],
+        "Low":       [p - 0.5 for p in prices],
+        "Close":     prices,
+        "Adj Close": prices,
+        "Volume":    [2_000_000] * n,
+    }, index=dates)
 
 
 @pytest.fixture(autouse=True)
@@ -98,3 +116,38 @@ def test_dry_run_skips_save_scan_run(monkeypatch):
     time.sleep(0.3)
 
     assert save_calls == [], f"save_scan_run called {len(save_calls)} time(s) in dry_run mode"
+
+
+def test_debug_endpoint_returns_structure(monkeypatch):
+    """GET /api/debug/{ticker} must return required top-level keys."""
+    df = _make_df()
+
+    async def mock_fetch(ticker, retry_count=0):
+        return df
+
+    monkeypatch.setattr(m, "_fetch", mock_fetch)
+
+    resp = client.get("/api/debug/FAKE")
+    assert resp.status_code == 200
+    data = resp.json()
+    for key in ("ticker", "regime", "indicators", "zones", "engine2", "engine3", "engine5", "engine6"):
+        assert key in data, f"Missing key: {key}"
+    ind = data["indicators"]
+    assert "close" in ind
+    assert "ema20" in ind
+
+
+def test_debug_endpoint_engine_keys(monkeypatch):
+    """Each engine block must have 'triggered' boolean."""
+    df = _make_df()
+
+    async def mock_fetch(ticker, retry_count=0):
+        return df
+
+    monkeypatch.setattr(m, "_fetch", mock_fetch)
+
+    resp = client.get("/api/debug/FAKE")
+    assert resp.status_code == 200
+    data = resp.json()
+    for eng in ("engine2", "engine3", "engine5", "engine6"):
+        assert "triggered" in data[eng], f"{eng} missing 'triggered'"
