@@ -56,3 +56,7 @@ export const addTrade = (body) =>
 
 export const closeTrade = (id) =>
   fetch(`/api/trades/${id}`, { method: 'DELETE' }).then(handleResponse)
+
+export async function fetchOptionsSetups() {
+  return fetch('/api/setups/options-catalyst').then(handleResponse)
+}

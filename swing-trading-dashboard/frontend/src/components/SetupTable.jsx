@@ -20,6 +20,8 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
     ? { badge: 'bg-t-blueDim text-t-blue border border-t-blue/30', dot: '#00C8FF', sectionDot: 'bg-t-blue' }
     : accentColor === 'green'
     ? { badge: 'bg-t-goDim text-t-go border border-t-go/30', dot: '#00c87a', sectionDot: 'bg-t-go' }
+    : accentColor === 'purple'
+    ? { badge: 'bg-purple-900/30 text-purple-400 border border-purple-500/30', dot: '#a855f7', sectionDot: 'bg-purple-500' }
     : { badge: 'bg-t-accentDim text-t-accent border border-t-accent/30', dot: '#F5A623', sectionDot: 'bg-t-accent' }
 
   return (
@@ -241,6 +243,42 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                           {s.days_since_breakout != null && (
                             <span className="font-mono text-[8px] tabular-nums text-t-muted">
                               {s.days_since_breakout === 0 ? 'today' : `${s.days_since_breakout}d ago`}
+                            </span>
+                          )}
+                        </div>
+                      ) : s.setup_type === 'OPTIONS_CATALYST' ? (
+                        /* Options Catalyst: score, call volume, call/put ratio, DTE */
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {s.options_score != null && (
+                            <span
+                              className="badge"
+                              style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.35)', fontWeight: 700 }}
+                            >
+                              SCORE {s.options_score}
+                            </span>
+                          )}
+                          {s.total_call_volume != null && (
+                            <span
+                              className="badge"
+                              style={{ background: 'rgba(168,85,247,0.10)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)' }}
+                            >
+                              VOL {(s.total_call_volume / 1000).toFixed(1)}K
+                            </span>
+                          )}
+                          {s.call_put_ratio != null && (
+                            <span
+                              className="badge"
+                              style={{ background: 'rgba(168,85,247,0.10)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)' }}
+                            >
+                              C/P {s.call_put_ratio.toFixed(2)}
+                            </span>
+                          )}
+                          {s.dte != null && (
+                            <span
+                              className="badge"
+                              style={{ background: 'rgba(168,85,247,0.10)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.25)' }}
+                            >
+                              DTE {s.dte}
                             </span>
                           )}
                         </div>

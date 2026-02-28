@@ -24,6 +24,7 @@ import {
   fetchScanStatus,
   fetchWatchlist,
   fetchDebugTicker,
+  fetchOptionsSetups,
 } from './api.js'
 
 import Header        from './components/Header.jsx'
@@ -54,6 +55,7 @@ export default function App() {
   const [pullbackSetups, setPullbackSetups] = useState([])
   const [baseSetups,        setBaseSetups       ] = useState([])
   const [resBreakoutSetups, setResBreakoutSetups] = useState([])
+  const [optionsSetups,     setOptionsSetups    ] = useState([])
   const [watchlistItems, setWatchlistItems] = useState([])
   const [selectedTicker, setSelectedTicker] = useState(null)
   const [chartData,      setChartData     ] = useState(null)
@@ -73,13 +75,14 @@ export default function App() {
   const loadAllData = useCallback(async () => {
     setLoadingSetups(true)
     try {
-      const [reg, vcp, pb, base, wl, res] = await Promise.allSettled([
+      const [reg, vcp, pb, base, wl, res, opts] = await Promise.allSettled([
         fetchRegime(),
         fetchSetups('vcp'),
         fetchSetups('pullback'),
         fetchSetups('base'),
         fetchWatchlist(),
         fetchSetups('res-breakout'),
+        fetchOptionsSetups(),
       ])
       if (reg.status === 'fulfilled')  setRegime(reg.value)
       if (vcp.status === 'fulfilled')  setVcpSetups(vcp.value.setups ?? [])
@@ -87,6 +90,7 @@ export default function App() {
       if (base.status === 'fulfilled') setBaseSetups(base.value.setups ?? [])
       if (wl.status === 'fulfilled')   setWatchlistItems(wl.value.items ?? [])
       if (res.status === 'fulfilled')  setResBreakoutSetups(res.value.setups ?? [])
+      if (opts.status === 'fulfilled') setOptionsSetups(opts.value.setups ?? [])
     } catch (err) {
       console.error('[App] loadAllData:', err)
     } finally {
@@ -269,12 +273,34 @@ export default function App() {
             </button>
           )
         })}
+        <button
+          onClick={() => setActiveTab('options')}
+          style={{
+            fontFamily: 'Barlow Condensed, sans-serif',
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
+            padding: '0 18px',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeTab === 'options' ? '2px solid #a855f7' : '2px solid transparent',
+            color: activeTab === 'options' ? '#a855f7' : 'var(--muted)',
+            cursor: 'pointer',
+            transition: 'color 0.12s, border-color 0.12s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          OPTIONS
+        </button>
       </div>
 
       {/* ── Body ───────────────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0">
 
-        {activeTab === 'scanner' ? (
+        {activeTab === 'scanner' && (
           <>
             {/* Watchlist panel (narrow, leftmost) */}
             <WatchlistPanel
@@ -362,7 +388,26 @@ export default function App() {
               />
             </main>
           </>
-        ) : (
+        )}
+
+        {activeTab === 'options' && (
+          <div className="flex flex-1 gap-4 overflow-hidden">
+            <div className="w-[400px] flex-shrink-0">
+              <SetupTable
+                setups={optionsSetups}
+                title="Options Catalyst"
+                accentColor="purple"
+                onSelectTicker={handleTickerClick}
+                selectedTicker={selectedTicker}
+              />
+            </div>
+            <div className="flex-1">
+              <TradingChart ticker={selectedTicker} chartData={chartData} />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'portfolio' && (
           /* Portfolio tab — full width */
           <div className="flex-1 min-w-0 overflow-hidden">
             <PortfolioTab onTickerClick={handleTickerClick} />
