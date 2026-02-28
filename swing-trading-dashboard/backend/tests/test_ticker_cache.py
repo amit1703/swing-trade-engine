@@ -68,7 +68,8 @@ def test_failure_is_negatively_cached(mock_sleep):
         assert result1 is None
         assert result2 is None
         # First call exhausts all retry attempts; second call is a negative-cache hit
-        assert mock_instance.history.call_count == FETCH_MAX_RETRIES + 1
+        expected_attempts = FETCH_MAX_RETRIES + 1  # initial attempt + FETCH_MAX_RETRIES retries
+        assert mock_instance.history.call_count == expected_attempts
 
 
 @patch('asyncio.sleep', new_callable=AsyncMock)

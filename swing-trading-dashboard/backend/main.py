@@ -195,6 +195,11 @@ async def _fetch(ticker: str, retry_count: int = 0) -> Optional[pd.DataFrame]:
     """
     Download daily OHLCV for one ticker with retry logic and exponential backoff.
 
+    Returns a cached DataFrame if a fresh entry exists in _ticker_cache:
+      - Successful fetches are cached for CACHE_TTL_SUCCESS seconds (4 h).
+      - Failed fetches are negatively cached for CACHE_TTL_FAILURE seconds (15 min)
+        so transient errors do not cause repeated retries within the same session.
+
     Semaphore is acquired per-attempt (not held across retries) to prevent
     deadlock when multiple tasks retry simultaneously.
     """
