@@ -33,6 +33,7 @@ import PortfolioTab  from './components/PortfolioTab.jsx'
 import WatchlistPanel from './components/WatchlistPanel.jsx'
 import SystemGuideModal from './components/SystemGuideModal.jsx'
 import EngineHealthPanel from './components/EngineHealthPanel.jsx'
+import DebugDrawer      from './components/DebugDrawer.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -354,7 +355,15 @@ export default function App() {
       {/* System Guide modal */}
       <SystemGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
 
-      {/* DebugDrawer — rendered in Task 6 */}
+      {/* DebugDrawer — slides in from the right when a [?] button is clicked */}
+      {debugTicker && (
+        <DebugDrawer
+          ticker={debugTicker}
+          data={debugData}
+          loading={debugLoading}
+          onClose={() => { setDebugTicker(null); setDebugData(null) }}
+        />
+      )}
     </div>
   )
 }

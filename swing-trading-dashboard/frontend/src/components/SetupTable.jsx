@@ -13,7 +13,7 @@
  *   Vol ratio shown as "×1.8" next to badge
  *   RS+  → Stock 3m RS outperforming SPY (rs_vs_spy > 0)
  */
-export default function SetupTable({ title, accentColor, setups, selectedTicker, onSelectTicker, loading }) {
+export default function SetupTable({ title, accentColor, setups, selectedTicker, onSelectTicker, loading, devMode, onDebug }) {
   const count = setups.length
 
   const color = accentColor === 'blue'
@@ -56,6 +56,7 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                 <th>Target $</th>
                 <th>R:R</th>
                 <th style={{ textAlign: 'left' }}>Signal</th>
+                {devMode && <th style={{ width: 24 }} />}
               </tr>
             </thead>
             <tbody>
@@ -303,6 +304,30 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                         </div>
                       )}
                     </td>
+
+                    {/* Dev mode debug button */}
+                    {devMode && (
+                      <td style={{ width: 24, textAlign: 'center' }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDebug?.(s.ticker) }}
+                          title={`Debug ${s.ticker}`}
+                          style={{
+                            background: 'none',
+                            border: '1px solid var(--border-light)',
+                            color: 'var(--muted)',
+                            fontSize: 8,
+                            padding: '1px 4px',
+                            cursor: 'pointer',
+                            fontFamily: 'IBM Plex Mono, monospace',
+                            letterSpacing: '0.05em',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.borderColor = 'var(--accent)' }}
+                          onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.borderColor = 'var(--border-light)' }}
+                        >
+                          ?
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
