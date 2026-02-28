@@ -231,6 +231,7 @@ def scan_resistance_breakout(
                     "breakout_pct":        breakout_pct,
                     "volume_ratio":        round(vol_ratio, 2),
                     "days_since_breakout": days_back,
+                    "zone_source":         zone.get("source", "kde"),
                     "setup_date":          str(data.index[-1].date()),
                 }
 
