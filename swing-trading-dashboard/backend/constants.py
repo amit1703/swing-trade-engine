@@ -76,6 +76,21 @@ PIVOT_MIN_SEPARATION_DAYS = 7      # minimum bars between two matching highs
 PIVOT_MIN_TOUCHES         = 2      # minimum pivots to form a valid zone
 
 # ──────────────────────────────────────────────────────────────────────────
+# Engine 7 — Options Catalyst
+# ──────────────────────────────────────────────────────────────────────────
+OPTIONS_MIN_ADV            = 1_000_000   # Min 50-day avg daily volume (liquidity gate)
+OPTIONS_MIN_PRICE          = 10.0        # Min share price (no penny stocks)
+OPTIONS_DTE_MIN            = 7           # Min days to expiry
+OPTIONS_DTE_MAX            = 45          # Max days to expiry
+OPTIONS_OTM_MAX_PCT        = 0.10        # Max OTM % for strike filter (10%)
+OPTIONS_MIN_SCORE          = 60          # Minimum OPTIONS_SCORE to flag
+OPTIONS_VOL_OI_TARGET      = 1.0         # Vol/OI ratio at which component maxes out
+OPTIONS_CALL_VOL_TARGET    = 2000        # Absolute call volume at which component maxes out
+OPTIONS_SKEW_NEUTRAL       = 0.5         # Call/Put skew at neutral (50/50)
+OPTIONS_SKEW_MAX           = 0.9         # Call/Put skew at which component maxes out
+OPTIONS_IV_SLOPE_TARGET    = 0.30        # IV term slope delta at which component maxes out
+
+# ──────────────────────────────────────────────────────────────────────────
 # Scan Settings
 # ──────────────────────────────────────────────────────────────────────────
 
