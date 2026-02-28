@@ -32,6 +32,7 @@ import TradingChart  from './components/TradingChart.jsx'
 import PortfolioTab  from './components/PortfolioTab.jsx'
 import WatchlistPanel from './components/WatchlistPanel.jsx'
 import SystemGuideModal from './components/SystemGuideModal.jsx'
+import EngineHealthPanel from './components/EngineHealthPanel.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -326,7 +327,9 @@ export default function App() {
                     scanTimestamp={scanStatus.last_completed}
                   />
                 </div>
-                {/* EngineHealthPanel injected here in Task 5 */}
+                {devMode && (
+                  <EngineHealthPanel stats={scanStatus.engine_stats} />
+                )}
               </div>
             </aside>
 
