@@ -60,6 +60,7 @@ from constants import (
     MAX_TICKERS_PER_SCAN,
     MIN_CANDLES_FOR_ANALYSIS,
     MIN_CANDLES_FOR_RS,
+    RS_BLUE_DOT_TOLERANCE_PCT,
     TRADING_DAYS_IN_YEAR,
 )
 from database import (
@@ -1233,6 +1234,26 @@ async def get_chart_data(ticker: str):
     except Exception as exc:
         log.warning("Could not fetch info for %s: %s", sym, exc)
 
+    # RS Line for chart display — compute fresh against SPY
+    rs_line_series: list = []
+    rs_52w_high_val: Optional[float] = None
+    rs_blue_dot_chart: bool = False
+    try:
+        spy_df_chart = await _fetch("SPY")
+        if spy_df_chart is not None and not spy_df_chart.empty:
+            spy_adj_col = "Adj Close" if "Adj Close" in spy_df_chart.columns else "Close"
+            spy_close_chart = spy_df_chart[spy_adj_col]
+            common_dates = close_adj.index.intersection(spy_close_chart.index)
+            if len(common_dates) >= MIN_CANDLES_FOR_RS:
+                rs_vals = (close_adj[common_dates] / spy_close_chart[common_dates]).iloc[-MIN_CANDLES_FOR_RS:]
+                rs_52w_high_val = round(float(rs_vals.max()), 4)
+                rs_blue_dot_chart = float(rs_vals.iloc[-1]) >= rs_52w_high_val * (1 - RS_BLUE_DOT_TOLERANCE_PCT)
+                for ts, v in rs_vals.items():
+                    if pd.notna(v):
+                        rs_line_series.append({"time": ts.strftime("%Y-%m-%d"), "value": round(float(v), 4)})
+    except Exception as exc:
+        log.warning("RS line chart calculation failed for %s: %s", sym, exc)
+
     return {
         "ticker": sym,
         "candles": candles,
@@ -1241,6 +1262,9 @@ async def get_chart_data(ticker: str):
         "sma50": _series(df.index, sma50),
         "sma200": _series(df.index, sma200),
         "cci": _series(df.index, cci20, dec=1),
+        "rs_line": rs_line_series,
+        "rs_52w_high": rs_52w_high_val,
+        "rs_blue_dot": rs_blue_dot_chart,
         "sr_zones": zones,
         "trendline": trendline,
         "base_setup": base_setup,
