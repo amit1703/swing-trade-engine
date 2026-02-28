@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS sr_zones (
     zone_upper     REAL NOT NULL,
     zone_lower     REAL NOT NULL,
     zone_type      TEXT NOT NULL,
+    source         TEXT DEFAULT 'kde',
     FOREIGN KEY (scan_timestamp) REFERENCES scan_runs(scan_timestamp)
 );
 """
@@ -108,6 +109,12 @@ async def init_db(db_path: str) -> None:
         # Migration: add targets_json column if it does not yet exist
         try:
             await db.execute("ALTER TABLE trades ADD COLUMN targets_json TEXT")
+            await db.commit()
+        except Exception:
+            pass  # column already exists — safe to ignore
+        # Migration: add source column to sr_zones if it does not yet exist
+        try:
+            await db.execute("ALTER TABLE sr_zones ADD COLUMN source TEXT DEFAULT 'kde'")
             await db.commit()
         except Exception:
             pass  # column already exists — safe to ignore
@@ -228,10 +235,10 @@ async def save_sr_zones(
         return
     async with aiosqlite.connect(db_path) as db:
         await db.executemany(
-            """INSERT INTO sr_zones (scan_timestamp, ticker, level, zone_upper, zone_lower, zone_type)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO sr_zones (scan_timestamp, ticker, level, zone_upper, zone_lower, zone_type, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             [
-                (scan_timestamp, ticker, z["level"], z["upper"], z["lower"], z["type"])
+                (scan_timestamp, ticker, z["level"], z["upper"], z["lower"], z["type"], z.get("source", "kde"))
                 for z in zones
             ],
         )
@@ -382,13 +389,13 @@ async def get_sr_zones_for_ticker_from_db(db_path: str, ticker: str) -> List[Dic
 
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(
-            """SELECT level, zone_upper, zone_lower, zone_type
+            """SELECT level, zone_upper, zone_lower, zone_type, source
                FROM sr_zones WHERE scan_timestamp = ? AND ticker = ?
                ORDER BY level""",
             (scan_ts, ticker),
         ) as cur:
             rows = await cur.fetchall()
             return [
-                {"level": r[0], "upper": r[1], "lower": r[2], "type": r[3]}
+                {"level": r[0], "upper": r[1], "lower": r[2], "type": r[3], "source": r[4] or "kde"}
                 for r in rows
             ]
