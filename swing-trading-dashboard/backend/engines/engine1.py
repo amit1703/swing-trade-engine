@@ -24,6 +24,12 @@ from scipy.stats import gaussian_kde
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import atr as _atr
+from constants import (
+    PIVOT_LOOKBACK_DAYS,
+    PIVOT_MIN_SEPARATION_DAYS,
+    PIVOT_MIN_TOUCHES,
+    PIVOT_TOUCH_MARGIN_PCT,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +194,9 @@ def calculate_sr_zones(
             )
 
         zones.sort(key=lambda z: z["level"])
+        pivot_zones = _find_pivot_resistance(data, daily_atr, current_price)
+        zones.extend(pivot_zones)
+        zones.sort(key=lambda z: z["level"])
         return zones
 
     except Exception as exc:  # noqa: BLE001
@@ -224,3 +233,81 @@ def _load(ticker: str, df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
 
 def _adj_col(df: pd.DataFrame) -> str:
     return "Adj Close" if "Adj Close" in df.columns else "Close"
+
+
+def _find_pivot_resistance(
+    df: pd.DataFrame, daily_atr: float, current_price: float
+) -> List[Dict]:
+    """
+    Find pivot-high resistance zones from the last PIVOT_LOOKBACK_DAYS trading days.
+
+    Uses argrelextrema on daily High prices (order=3) to find local wick maxima,
+    then clusters matching pivots — within PIVOT_TOUCH_MARGIN_PCT of each other AND
+    at least PIVOT_MIN_SEPARATION_DAYS bars apart — via Union-Find.  Clusters with
+    >= PIVOT_MIN_TOUCHES members become zones.
+    """
+    lookback = df.tail(PIVOT_LOOKBACK_DAYS)
+    if len(lookback) < 10:
+        return []
+
+    highs = lookback["High"].values.astype(float)
+    pivot_idx_arr = argrelextrema(highs, np.greater, order=3)[0]
+
+    if len(pivot_idx_arr) < PIVOT_MIN_TOUCHES:
+        return []
+
+    pivot_highs = highs[pivot_idx_arr]
+    n = len(pivot_idx_arr)
+
+    # ── Union-Find ──────────────────────────────────────────────────────────
+    parent = list(range(n))
+
+    def _find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def _union(a: int, b: int) -> None:
+        parent[_find(a)] = _find(b)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            sep = int(pivot_idx_arr[j]) - int(pivot_idx_arr[i])
+            if sep < PIVOT_MIN_SEPARATION_DAYS:
+                continue
+            h_max = max(pivot_highs[i], pivot_highs[j])
+            if h_max == 0:
+                continue
+            if abs(pivot_highs[i] - pivot_highs[j]) / h_max <= PIVOT_TOUCH_MARGIN_PCT:
+                _union(i, j)
+
+    # ── Group by root ───────────────────────────────────────────────────────
+    clusters: dict = {}
+    for i in range(n):
+        root = _find(i)
+        clusters.setdefault(root, []).append(i)
+
+    zones: List[Dict] = []
+    for members in clusters.values():
+        if len(members) < PIVOT_MIN_TOUCHES:
+            continue
+        cluster_highs = [float(pivot_highs[m]) for m in members]
+        level = float(np.mean(cluster_highs))
+        upper = float(max(cluster_highs)) + 0.1 * daily_atr
+        lower = float(min(cluster_highs)) - 0.1 * daily_atr
+        zone_type = "RESISTANCE" if level > current_price else "SUPPORT"
+        pct_diff = abs(level - current_price) / current_price if current_price > 0 else 1.0
+        zones.append(
+            {
+                "level": round(level, 2),
+                "upper": round(upper, 2),
+                "lower": round(lower, 2),
+                "type": zone_type,
+                "atr": round(daily_atr, 2),
+                "is_primary": pct_diff <= 0.03,
+                "source": "pivot",
+            }
+        )
+
+    return zones
