@@ -147,6 +147,7 @@ export default function App() {
 
         if (!status.in_progress) {
           clearInterval(pollTimerRef.current)
+          // dry run: populate tables from in-memory results, not DB
           if (status.engine_stats?.dry_run && status.dry_run_setups) {
             const dr = status.dry_run_setups
             setVcpSetups(dr.vcp ?? [])
@@ -154,6 +155,15 @@ export default function App() {
             setBaseSetups(dr.base ?? [])
             setResBreakoutSetups(dr.res_breakout ?? [])
             setWatchlistItems(dr.watchlist ?? [])
+            const e0 = status.engine_stats.e0
+            if (e0 && e0.is_bullish != null) {
+              setRegime({
+                spy_close:  e0.spy_close,
+                spy_20ema:  e0.spy_ema20,
+                is_bullish: e0.is_bullish,
+                regime:     e0.is_bullish ? 'GO' : 'HALT',
+              })
+            }
           } else {
             loadAllData()
           }
