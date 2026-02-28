@@ -137,7 +137,7 @@ _scan_state: Dict = {
         "e1": {"zones_saved": 0},
         "e2": {"vcp": 0, "watchlist": 0},
         "e3": {"pullback": 0, "relaxed": 0},
-        "e5": {"base": 0, "cup_handle": 0, "flat_base": 0},
+        "e5": {"cup_handle": 0, "flat_base": 0},
         "e6": {"res_breakout": 0},
         "total_tickers": 0,
         "total_duration_s": 0.0,
@@ -282,7 +282,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
             "e1": {"zones_saved": 0},
             "e2": {"vcp": 0, "watchlist": 0},
             "e3": {"pullback": 0, "relaxed": 0},
-            "e5": {"base": 0, "cup_handle": 0, "flat_base": 0},
+            "e5": {"cup_handle": 0, "flat_base": 0},
             "e6": {"res_breakout": 0},
             "total_tickers": 0,
             "total_duration_s": 0.0,
@@ -292,7 +292,8 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
     )
 
     try:
-        await save_scan_run(DB_PATH, scan_ts)
+        if not dry_run:
+            await save_scan_run(DB_PATH, scan_ts)
 
         # ── Engine 0: Market regime ───────────────────────────────────────
         loop = asyncio.get_event_loop()
@@ -317,9 +318,15 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
 
         if not regime["is_bullish"] and not force:
             log.info("Market is BEARISH — RS calculations + Engines 2 & 3 disabled (0s saved)")
-            await complete_scan_run(DB_PATH, scan_ts, 0)
+            _scan_state["engine_stats"]["total_tickers"] = 0
+            _scan_state["engine_stats"]["total_duration_s"] = round(time.time() - scan_start_time, 1)
+            if not dry_run:
+                await complete_scan_run(DB_PATH, scan_ts, 0)
             _scan_state["last_completed"] = scan_ts
             return
+
+        if not regime["is_bullish"] and force:
+            log.info("Market is BEARISH — force=True, overriding halt gate")
 
         # ── SPY data (consolidated single fetch for 3m return + RS Line) ──
         # Only fetched when market is bullish; conditional RS calculation optimizes cycles
@@ -561,7 +568,6 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                             base["sector"] = SECTORS.get(ticker, "Unknown")
                             collected_setups.append(base)
                             base_count += 1
-                            _scan_state["engine_stats"]["e5"]["base"] += 1
                             if base.get("base_type") == "CUP_HANDLE":
                                 _scan_state["engine_stats"]["e5"]["cup_handle"] += 1
                             else:
@@ -658,7 +664,8 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
 
         _scan_state["engine_stats"]["total_tickers"] = len(tickers)
         _scan_state["engine_stats"]["total_duration_s"] = round(time.time() - scan_start_time, 1)
-        await complete_scan_run(DB_PATH, scan_ts, len(tickers))
+        if not dry_run:
+            await complete_scan_run(DB_PATH, scan_ts, len(tickers))
         _scan_state["last_completed"] = scan_ts
 
         # ── Data Quality Report ───────────────────────────────────────────
@@ -732,7 +739,7 @@ async def health():
 @app.post("/api/run-scan")
 async def trigger_scan(
     background_tasks: BackgroundTasks,
-    force: bool = Query(False, description="Bypass bearish halt gate"),
+    force: bool = Query(True, description="Bypass bearish halt gate"),
     dry_run: bool = Query(False, description="Run pipeline without saving to DB"),
 ):
     """
@@ -771,7 +778,7 @@ async def scan_status():
         "started_at": _scan_state["started_at"],
         "last_completed": _scan_state["last_completed"],
         "last_error": _scan_state["last_error"],
-        "engine_stats": _scan_state.get("engine_stats", {}),
+        "engine_stats": _scan_state["engine_stats"],
     }
 
 
