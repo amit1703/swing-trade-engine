@@ -159,6 +159,7 @@ export default function App() {
             setBaseSetups(dr.base ?? [])
             setResBreakoutSetups(dr.res_breakout ?? [])
             setWatchlistItems(dr.watchlist ?? [])
+            setOptionsSetups(dr.options_catalyst ?? [])
             const e0 = status.engine_stats.e0
             if (e0 && e0.is_bullish != null) {
               setRegime({

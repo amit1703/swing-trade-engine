@@ -84,23 +84,27 @@ def _fetch_options_data(ticker: str, current_close: float) -> Optional[Dict]:
         min_strike = current_close * 1.00
         max_strike = current_close * (1.0 + OPTIONS_OTM_MAX_PCT)
 
-        otm_calls_list: List[pd.DataFrame] = []
+        calls_list: List[pd.DataFrame] = []
         put_vol_total = 0
 
         for expiry in near_expiries:
             chain = t.option_chain(expiry)
-            calls = chain.calls
+            calls_df = chain.calls
             puts = chain.puts
 
             # 0–10% OTM calls with real volume and open interest
             mask = (
-                (calls["strike"] >= min_strike)
-                & (calls["strike"] <= max_strike)
-                & (calls["volume"].fillna(0) > 0)
-                & (calls["openInterest"].fillna(0) > 0)
+                (calls_df["strike"] >= min_strike)
+                & (calls_df["strike"] <= max_strike)
+                & (calls_df["volume"].fillna(0) > 0)
+                & (calls_df["openInterest"].fillna(0) > 0)
             )
-            otm_calls_list.append(calls[mask])
+            filtered = calls_df[mask].copy()
+            filtered["expiry"] = expiry  # track which expiry each row came from
+            calls_list.append(filtered)
             put_vol_total += float(puts["volume"].fillna(0).sum())
+
+        otm_calls_list = calls_list  # alias kept for concat below
 
         if not otm_calls_list:
             return None
@@ -115,6 +119,7 @@ def _fetch_options_data(ticker: str, current_close: float) -> Optional[Dict]:
 
         # Vol/OI ratio (new positioning signal)
         valid = combined[combined["openInterest"] > 0].copy()
+        valid["volume"] = valid["volume"].fillna(0)  # treat sparse yfinance volume as 0
         if valid.empty:
             return None
         avg_vol_oi = float((valid["volume"] / valid["openInterest"]).mean())
@@ -127,31 +132,30 @@ def _fetch_options_data(ticker: str, current_close: float) -> Optional[Dict]:
         iv_vals = combined[combined["impliedVolatility"] > 0]["impliedVolatility"]
         iv_near = float(iv_vals.mean()) if not iv_vals.empty else 0.0
 
-        # IV term structure (front vs next expiry)
-        iv_next = iv_near
+        # IV term structure (front month vs second expiry only — clean 2-point slope)
+        iv_next = iv_near  # default: flat term structure
         iv_term_slope = 1.0
-        if len(near_expiries) >= 2:
-            next_calls_list = []
-            for expiry in near_expiries[1:]:
-                chain = t.option_chain(expiry)
-                mask = (
-                    (chain.calls["strike"] >= min_strike)
-                    & (chain.calls["strike"] <= max_strike)
-                    & (chain.calls["impliedVolatility"].fillna(0) > 0)
+        if len(near_expiries) > 1:
+            try:
+                chain2 = t.option_chain(near_expiries[1])
+                mask2 = (
+                    (chain2.calls["strike"] >= min_strike)
+                    & (chain2.calls["strike"] <= max_strike)
+                    & (chain2.calls["impliedVolatility"].fillna(0) > 0)
                 )
-                next_calls_list.append(chain.calls[mask])
-            if next_calls_list:
-                next_combined = pd.concat(next_calls_list, ignore_index=True)
-                if not next_combined.empty:
-                    iv_next_vals = next_combined["impliedVolatility"]
-                    iv_next = float(iv_next_vals.mean())
+                next_calls = chain2.calls[mask2]
+                if not next_calls.empty:
+                    iv_next = float(next_calls["impliedVolatility"].mean())
                     if iv_next > 0:
                         iv_term_slope = iv_near / iv_next
+            except Exception:
+                pass  # keep iv_next = iv_near (flat term structure)
 
-        # Dominant strike (highest volume)
+        # Dominant strike (highest volume) — expiry reflects that strike's actual expiry
         dominant_idx = combined["volume"].idxmax()
         dominant_strike = float(combined.loc[dominant_idx, "strike"])
-        dte = _days_to_expiry(near_expiries[0])
+        dominant_expiry = combined.loc[dominant_idx, "expiry"]  # actual expiry of dominant row
+        dte = _days_to_expiry(dominant_expiry)                  # recalculate from dominant
 
         return {
             "total_call_volume": int(total_call_vol),
@@ -161,7 +165,7 @@ def _fetch_options_data(ticker: str, current_close: float) -> Optional[Dict]:
             "iv_next":           round(iv_next, 3),
             "iv_term_slope":     round(iv_term_slope, 3),
             "dominant_strike":   dominant_strike,
-            "dominant_expiry":   near_expiries[0],
+            "dominant_expiry":   dominant_expiry,
             "dte":               dte,
         }
 
