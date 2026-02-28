@@ -18,7 +18,7 @@ class BandPaneRenderer {
     const series = this._getSeries()
     if (!series) return
 
-    const { upper, lower, type } = this._zone
+    const { upper, lower, type, source } = this._zone
 
     target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
       const y1 = series.priceToCoordinate(upper)
@@ -34,9 +34,21 @@ class BandPaneRenderer {
 
       const w = mediaSize.width
 
-      const isRes = type === 'RESISTANCE'
-      const fillColor   = isRes ? 'rgba(255, 45, 85, 0.10)' : 'rgba(0, 200, 122, 0.09)'
-      const strokeColor = isRes ? 'rgba(255, 45, 85, 0.55)' : 'rgba(0, 200, 122, 0.55)'
+      const isPivot = source === 'pivot'
+      const isRes   = type === 'RESISTANCE'
+
+      let fillColor, strokeColor, lineWidth, dashPattern
+      if (isPivot) {
+        fillColor   = isRes ? 'rgba(255, 140, 0, 0.13)' : 'rgba(0, 229, 255, 0.10)'
+        strokeColor = isRes ? 'rgba(255, 140, 0, 0.90)' : 'rgba(0, 229, 255, 0.85)'
+        lineWidth   = 1.8
+        dashPattern = []
+      } else {
+        fillColor   = isRes ? 'rgba(255, 45, 85, 0.18)' : 'rgba(0, 200, 122, 0.16)'
+        strokeColor = isRes ? 'rgba(255, 45, 85, 0.75)' : 'rgba(0, 200, 122, 0.75)'
+        lineWidth   = 1.2
+        dashPattern = [5, 4]
+      }
 
       ctx.save()
 
@@ -44,10 +56,10 @@ class BandPaneRenderer {
       ctx.fillStyle = fillColor
       ctx.fillRect(0, minY, w, bandH)
 
-      // Dashed border lines
+      // Border lines
       ctx.strokeStyle = strokeColor
-      ctx.lineWidth = 0.8
-      ctx.setLineDash([5, 4])
+      ctx.lineWidth = lineWidth
+      ctx.setLineDash(dashPattern)
 
       ctx.beginPath()
       ctx.moveTo(0, minY + 0.5)

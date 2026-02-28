@@ -137,7 +137,10 @@ export default function TradingChart({ ticker, chartData, loading }) {
           candleSeries.attachPrimitive(new SRBandPrimitive(zone))
         } catch (e) {
           // Fallback: draw two price lines if primitive API unavailable
-          const c = zone.type === 'RESISTANCE' ? COLORS.halt : COLORS.go
+          const isPivot = zone.source === 'pivot'
+          const c = isPivot
+            ? (zone.type === 'RESISTANCE' ? '#FF8C00' : '#00E5FF')
+            : (zone.type === 'RESISTANCE' ? COLORS.halt : COLORS.go)
           candleSeries.createPriceLine({ price: zone.upper, color: c, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false, title: '' })
           candleSeries.createPriceLine({ price: zone.lower, color: c, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false, title: `${zone.type[0]} ${zone.level}` })
         }
