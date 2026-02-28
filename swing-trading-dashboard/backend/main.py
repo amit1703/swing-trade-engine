@@ -84,6 +84,7 @@ from engines.engine3 import scan_pullback, scan_relaxed_pullback
 from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats, calculate_rs_score
 from engines.engine5 import scan_base_pattern
 from engines.engine6 import scan_resistance_breakout
+from engines.engine7 import scan_options_catalyst
 from tickers import SCAN_UNIVERSE
 from validation import is_price_vital
 from universe_builder import load_universe, UNIVERSE_FILE
@@ -143,6 +144,7 @@ _scan_state: Dict = {
         "e3": {"pullback": 0, "relaxed": 0},
         "e5": {"cup_handle": 0, "flat_base": 0},
         "e6": {"res_breakout": 0},
+        "e7": {"options_catalyst": 0},
         "total_tickers": 0,
         "total_duration_s": 0.0,
         "forced": False,
@@ -309,6 +311,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
             "e3": {"pullback": 0, "relaxed": 0},
             "e5": {"cup_handle": 0, "flat_base": 0},
             "e6": {"res_breakout": 0},
+            "e7": {"options_catalyst": 0},
             "total_tickers": 0,
             "total_duration_s": 0.0,
             "forced": force,
@@ -631,6 +634,31 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                     except Exception as res_exc:
                         log.warning("ResBreakout check failed for %s: %s", ticker, res_exc)
 
+                # Engine 7: Options Catalyst (not gated by market regime)
+                try:
+                    opt = await loop.run_in_executor(
+                        None, scan_options_catalyst, ticker, df
+                    )
+                    if opt:
+                        try:
+                            opt["entry"]      = float(opt.get("entry", 0.0))
+                            opt["stop_loss"]  = float(opt.get("stop_loss", 0.0))
+                            opt["take_profit"]= float(opt.get("take_profit", 0.0))
+                            opt["rr"]         = float(opt.get("rr", 2.0))
+                        except (ValueError, TypeError) as conv_err:
+                            log.warning("Options conversion failed for %s: %s", ticker, conv_err)
+                        else:
+                            opt["sector"] = SECTORS.get(ticker, "Unknown")
+                            collected_setups.append(opt)
+                            _scan_state["engine_stats"]["e7"]["options_catalyst"] += 1
+                            log.info("  OPTIONS  %-6s  score=%.0f  vol=%d  C/P=%.2f  DTE=%d",
+                                     ticker, opt.get("options_score", 0),
+                                     opt.get("total_call_volume", 0),
+                                     opt.get("call_put_ratio", 0),
+                                     opt.get("dte", 0))
+                except Exception as opt_exc:
+                    log.warning("Options check failed for %s: %s", ticker, opt_exc)
+
             except Exception as exc:
                 log.error("Error processing %s: %s", ticker, exc)
                 import traceback
@@ -871,6 +899,14 @@ async def get_res_breakout_setups():
     """Resistance breakout setups (fresh break above KDE zone, last 3 days)."""
     setups = await get_latest_setups(DB_PATH, setup_type="RES_BREAKOUT")
     setups.sort(key=lambda x: x.get("days_since_breakout", 99))
+    return {"setups": setups, "count": len(setups)}
+
+
+@app.get("/api/setups/options-catalyst")
+async def get_options_catalyst_setups():
+    """Options Catalyst setups — unusual near-term call activity (Engine 7)."""
+    setups = await get_latest_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
+    setups.sort(key=lambda x: x.get("options_score", 0), reverse=True)
     return {"setups": setups, "count": len(setups)}
 
 
