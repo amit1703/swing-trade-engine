@@ -947,17 +947,45 @@ async def debug_ticker(ticker: str):
     ) if zones else None
 
     def _eng(result, extra_keys=()):
+        """Build a per-engine debug block.
+
+        Keys:
+          triggered  – bool: whether the engine fired
+          result     – string setup_type/base_type or None when skipped
+          rejection  – always None (engines don't surface rejection strings)
+          + any extra_keys extracted from the result dict
+        """
         if result is None:
-            return {"triggered": False, "signal": None}
-        out = {"triggered": True, "signal": result.get("setup_type") or result.get("signal")}
+            return {"triggered": False, "result": None, "rejection": None}
+        out = {
+            "triggered": True,
+            "result":    result.get("setup_type") or result.get("signal"),
+            "rejection": None,
+        }
         for k in extra_keys:
             if k in result:
                 out[k] = result[k]
         return out
 
-    e3_out = _eng(e3, ("is_relaxed",))
+    # Engine 2 block: derive path (A=DRY, B=BRK) from is_breakout; normalise vol_surge
+    e2_out = _eng(e2, ("is_breakout", "is_vol_surge", "is_rs_lead"))
+    if e2 is not None:
+        e2_out["path"]      = "B" if e2.get("is_breakout") else "A"
+        e2_out["vol_surge"] = e2.get("is_vol_surge", False)
+        e2_out.pop("is_vol_surge", None)  # remove raw key; exposed as vol_surge
+
+    # Engine 3 block: flag relaxed variant
+    e3_out = _eng(e3, ())
     if e3 is not None and e3_relaxed:
         e3_out["is_relaxed"] = True
+
+    # Engine 5 block: use base_type as the result value (more specific than "BASE")
+    e5_out = _eng(e5, ("base_type", "quality_score"))
+    if e5 is not None and e5.get("base_type"):
+        e5_out["result"] = e5["base_type"]
+
+    # Engine 6 block
+    e6_out = _eng(e6, ("days_since_breakout", "volume_ratio"))
 
     return {
         "ticker": sym,
@@ -965,6 +993,11 @@ async def debug_ticker(ticker: str):
             "is_bullish": regime_row.get("is_bullish"),
             "spy_close":  regime_row.get("spy_close"),
             "spy_20ema":  regime_row.get("spy_20ema"),
+        },
+        "rs": {
+            "ratio":    rs_ratio,
+            "blue_dot": rs_blue_dot,
+            "rs_score": rs_score,
         },
         "indicators": {
             "close":       round(lc, 2),
@@ -975,15 +1008,12 @@ async def debug_ticker(ticker: str):
             "above_ema8":  bool(l8  is not None and lc > l8),
             "above_ema20": bool(l20 is not None and lc > l20),
             "above_sma50": bool(l50 is not None and lc > l50),
-            "rs_ratio":    rs_ratio,
-            "rs_blue_dot": rs_blue_dot,
-            "rs_score":    rs_score,
         },
         "zones":   zones,
-        "engine2": _eng(e2, ("is_breakout", "is_vol_surge", "path", "is_rs_lead")),
+        "engine2": e2_out,
         "engine3": e3_out,
-        "engine5": _eng(e5, ("base_type", "quality_score")),
-        "engine6": _eng(e6, ("days_since_breakout", "volume_ratio")),
+        "engine5": e5_out,
+        "engine6": e6_out,
     }
 
 

@@ -119,7 +119,7 @@ def test_dry_run_skips_save_scan_run(monkeypatch):
 
 
 def test_debug_endpoint_returns_structure(monkeypatch):
-    """GET /api/debug/{ticker} must return required top-level keys."""
+    """GET /api/debug/{ticker} must return required top-level keys including rs."""
     df = _make_df()
 
     async def mock_fetch(ticker, retry_count=0):
@@ -130,15 +130,21 @@ def test_debug_endpoint_returns_structure(monkeypatch):
     resp = client.get("/api/debug/FAKE")
     assert resp.status_code == 200
     data = resp.json()
-    for key in ("ticker", "regime", "indicators", "zones", "engine2", "engine3", "engine5", "engine6"):
+    for key in ("ticker", "regime", "rs", "indicators", "zones", "engine2", "engine3", "engine5", "engine6"):
         assert key in data, f"Missing key: {key}"
+    # rs block must have ratio, blue_dot, rs_score
+    rs = data["rs"]
+    assert "ratio"    in rs, "rs.ratio missing"
+    assert "blue_dot" in rs, "rs.blue_dot missing"
+    assert "rs_score" in rs, "rs.rs_score missing"
+    # indicators must have close and ema20
     ind = data["indicators"]
     assert "close" in ind
     assert "ema20" in ind
 
 
 def test_debug_endpoint_engine_keys(monkeypatch):
-    """Each engine block must have 'triggered' boolean."""
+    """Each engine block must have 'triggered', 'result', and 'rejection' keys."""
     df = _make_df()
 
     async def mock_fetch(ticker, retry_count=0):
@@ -150,4 +156,17 @@ def test_debug_endpoint_engine_keys(monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     for eng in ("engine2", "engine3", "engine5", "engine6"):
-        assert "triggered" in data[eng], f"{eng} missing 'triggered'"
+        assert "triggered"  in data[eng], f"{eng} missing 'triggered'"
+        assert "result"     in data[eng], f"{eng} missing 'result'"
+        assert "rejection"  in data[eng], f"{eng} missing 'rejection'"
+
+
+def test_debug_endpoint_404_on_no_data(monkeypatch):
+    """GET /api/debug/{ticker} must return 404 when _fetch returns None."""
+    async def mock_fetch(ticker, retry_count=0):
+        return None
+
+    monkeypatch.setattr(m, "_fetch", mock_fetch)
+
+    resp = client.get("/api/debug/NOTICKER")
+    assert resp.status_code == 404
