@@ -170,3 +170,31 @@ def test_debug_endpoint_404_on_no_data(monkeypatch):
 
     resp = client.get("/api/debug/NOTICKER")
     assert resp.status_code == 404
+
+
+def test_scan_status_includes_dry_run_setups_key():
+    """GET /api/scan-status must always return a dry_run_setups field."""
+    resp = client.get("/api/scan-status")
+    assert resp.status_code == 200
+    assert "dry_run_setups" in resp.json()
+
+
+def test_dry_run_setups_is_none_by_default():
+    """dry_run_setups must be None when no dry run has completed."""
+    m._scan_state["dry_run_setups"] = None   # explicit reset
+    resp = client.get("/api/scan-status")
+    assert resp.json()["dry_run_setups"] is None
+
+
+def test_dry_run_setups_returned_when_populated():
+    """When _scan_state has dry_run_setups, scan_status returns them verbatim."""
+    m._scan_state["dry_run_setups"] = {
+        "vcp": [{"ticker": "TEST", "setup_type": "VCP"}],
+        "pullback": [],
+        "base": [],
+        "res_breakout": [],
+        "watchlist": [],
+    }
+    resp = client.get("/api/scan-status")
+    data = resp.json()
+    assert data["dry_run_setups"]["vcp"][0]["ticker"] == "TEST"

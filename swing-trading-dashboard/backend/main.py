@@ -146,6 +146,7 @@ _scan_state: Dict = {
         "forced": False,
         "dry_run": False,
     },
+    "dry_run_setups": None,
 }
 _semaphore: Optional[asyncio.Semaphore] = None
 
@@ -291,6 +292,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
             "forced": force,
             "dry_run": dry_run,
         },
+        dry_run_setups=None,
     )
 
     try:
@@ -641,6 +643,16 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
             db_save_time = time.time() - db_save_start
             log.info("Batch saved %d setups to database  [%.1fs]", len(collected_setups), db_save_time)
 
+        if collected_setups and dry_run:
+            _scan_state["dry_run_setups"] = {
+                "vcp":          [s for s in collected_setups if s.get("setup_type") == "VCP"],
+                "pullback":     [s for s in collected_setups if s.get("setup_type") == "PULLBACK"],
+                "base":         [s for s in collected_setups if s.get("setup_type") == "BASE"],
+                "res_breakout": [s for s in collected_setups if s.get("setup_type") == "RES_BREAKOUT"],
+                "watchlist":    [s for s in collected_setups if s.get("setup_type") == "WATCHLIST"],
+            }
+            log.info("DRY RUN: stored %d setups in memory (no DB write)", len(collected_setups))
+
         # ── Sector Summary with Bold Highlighting ───────────────────────────
         try:
             sector_counts: Dict[str, int] = {}
@@ -784,6 +796,7 @@ async def scan_status():
         "last_completed": _scan_state["last_completed"],
         "last_error": _scan_state["last_error"],
         "engine_stats": _scan_state["engine_stats"],
+        "dry_run_setups": _scan_state.get("dry_run_setups"),
     }
 
 
