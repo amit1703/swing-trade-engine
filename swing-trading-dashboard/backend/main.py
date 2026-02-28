@@ -739,7 +739,7 @@ async def health():
 @app.post("/api/run-scan")
 async def trigger_scan(
     background_tasks: BackgroundTasks,
-    force: bool = Query(True, description="Bypass bearish halt gate"),
+    force: bool = Query(False, description="Bypass bearish halt gate"),
     dry_run: bool = Query(False, description="Run pipeline without saving to DB"),
 ):
     """
