@@ -756,11 +756,12 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
 
         total_scan_time = time.time() - scan_start_time
         log.info(
-            "✔ Scan complete  VCP=%d  Pullbacks=%d  Base=%d  ResBreakout=%d  Processed=%d/%d  Total=%.1fs  (Regime=%.1fs, SPY=%.1fs, Process=%.1fs)",
+            "✔ Scan complete  VCP=%d  Pullbacks=%d  Base=%d  ResBreakout=%d  Options=%d  Processed=%d/%d  Total=%.1fs  (Regime=%.1fs, SPY=%.1fs, Process=%.1fs)",
             vcp_count,
             pb_count,
             base_count,
             res_count,
+            opt_count,
             processed_tickers,
             len(tickers),
             total_scan_time,
