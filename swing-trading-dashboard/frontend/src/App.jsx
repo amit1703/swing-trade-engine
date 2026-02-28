@@ -23,6 +23,7 @@ import {
   triggerScan,
   fetchScanStatus,
   fetchWatchlist,
+  fetchDebugTicker,
 } from './api.js'
 
 import Header        from './components/Header.jsx'
@@ -58,6 +59,11 @@ export default function App() {
   const [loadingChart,   setLoadingChart  ] = useState(false)
   const [scanStatus,     setScanStatus    ] = useState(DEFAULT_SCAN_STATUS)
   const [showGuide,      setShowGuide     ] = useState(false)
+  const [devMode,        setDevMode       ] = useState(false)
+  const [dryRun,         setDryRun        ] = useState(false)
+  const [debugTicker,    setDebugTicker   ] = useState(null)
+  const [debugData,      setDebugData     ] = useState(null)
+  const [debugLoading,   setDebugLoading  ] = useState(false)
 
   const pollTimerRef = useRef(null)
 
@@ -106,10 +112,25 @@ export default function App() {
   // ── Run scan ──────────────────────────────────────────────────────────────
   const handleRunScan = useCallback(async () => {
     try {
-      await triggerScan()
+      await triggerScan(devMode, dryRun)
       setScanStatus((s) => ({ ...s, in_progress: true, progress: 0 }))
     } catch (err) {
       console.error('[App] triggerScan:', err)
+    }
+  }, [devMode, dryRun])
+
+  // ── Debug drill-down ──────────────────────────────────────────────────────
+  const handleDebug = useCallback(async (ticker) => {
+    setDebugTicker(ticker)
+    setDebugData(null)
+    setDebugLoading(true)
+    try {
+      const data = await fetchDebugTicker(ticker)
+      setDebugData(data)
+    } catch (err) {
+      console.error('[App] fetchDebugTicker:', err)
+    } finally {
+      setDebugLoading(false)
     }
   }, [])
 
@@ -171,6 +192,10 @@ export default function App() {
         onRunScan={handleRunScan}
         onSearchTicker={handleTickerClick}
         onOpenGuide={() => setShowGuide(true)}
+        devMode={devMode}
+        dryRun={dryRun}
+        onToggleDev={() => { setDevMode(v => !v); if (devMode) setDryRun(false) }}
+        onToggleDryRun={() => setDryRun(v => !v)}
       />
 
       {/* ── Tab bar ────────────────────────────────────────────────────── */}
@@ -254,6 +279,8 @@ export default function App() {
                 selectedTicker={selectedTicker}
                 onSelectTicker={handleTickerClick}
                 loading={loadingSetups}
+                devMode={devMode}
+                onDebug={handleDebug}
               />
 
               <SetupTable
@@ -263,6 +290,8 @@ export default function App() {
                 selectedTicker={selectedTicker}
                 onSelectTicker={handleTickerClick}
                 loading={loadingSetups}
+                devMode={devMode}
+                onDebug={handleDebug}
               />
 
               <SetupTable
@@ -272,6 +301,8 @@ export default function App() {
                 selectedTicker={selectedTicker}
                 onSelectTicker={handleTickerClick}
                 loading={loadingSetups}
+                devMode={devMode}
+                onDebug={handleDebug}
               />
 
               <SetupTable
@@ -281,16 +312,21 @@ export default function App() {
                 selectedTicker={selectedTicker}
                 onSelectTicker={handleTickerClick}
                 loading={loadingSetups}
+                devMode={devMode}
+                onDebug={handleDebug}
               />
 
-              <div className="mt-auto px-3 py-3 border-t border-t-border">
-                <ScanFooter
-                  vcpCount={vcpSetups.length}
-                  pbCount={pullbackSetups.length}
-                  baseCount={baseSetups.length}
-                  resCount={resBreakoutSetups.length}
-                  scanTimestamp={scanStatus.last_completed}
-                />
+              <div className="mt-auto border-t border-t-border">
+                <div className="px-3 py-3">
+                  <ScanFooter
+                    vcpCount={vcpSetups.length}
+                    pbCount={pullbackSetups.length}
+                    baseCount={baseSetups.length}
+                    resCount={resBreakoutSetups.length}
+                    scanTimestamp={scanStatus.last_completed}
+                  />
+                </div>
+                {/* EngineHealthPanel injected here in Task 5 */}
               </div>
             </aside>
 
@@ -314,6 +350,8 @@ export default function App() {
 
       {/* System Guide modal */}
       <SystemGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
+
+      {/* DebugDrawer — rendered in Task 6 */}
     </div>
   )
 }
