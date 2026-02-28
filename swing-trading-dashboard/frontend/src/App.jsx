@@ -196,7 +196,7 @@ export default function App() {
         onOpenGuide={() => setShowGuide(true)}
         devMode={devMode}
         dryRun={dryRun}
-        onToggleDev={() => { setDevMode(v => !v); if (devMode) setDryRun(false) }}
+        onToggleDev={() => { const next = !devMode; setDevMode(next); if (!next) setDryRun(false) }}
         onToggleDryRun={() => setDryRun(v => !v)}
       />
 

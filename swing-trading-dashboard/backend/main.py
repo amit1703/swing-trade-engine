@@ -12,6 +12,8 @@ Endpoints
   GET  /api/setups/base       Cup & Handle + Flat Base setups only
   GET  /api/sr-zones/{ticker} S/R zones for one ticker (from last scan)
   GET  /api/chart/{ticker}    OHLCV + EMA8/20 + SMA50 + CCI20 (fresh fetch)
+  GET  /api/watchlist         WATCHLIST setups from last scan
+  GET  /api/debug/{ticker}    Dev mode: per-engine pass/fail for one ticker (fresh fetch)
   GET  /api/health            Health-check
 
 Architecture
@@ -446,6 +448,9 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                 if zones:
                     if not dry_run:
                         await save_sr_zones(DB_PATH, scan_ts, ticker, zones)
+                    # engine_stats increments below are safe: _process() is an asyncio
+                    # coroutine and never yields (no await) between the read and write
+                    # of += 1, so there is no interleaving with other ticker coroutines.
                     _scan_state["engine_stats"]["e1"]["zones_saved"] += 1
 
                 # Composite RS score (O'Neil formula)
