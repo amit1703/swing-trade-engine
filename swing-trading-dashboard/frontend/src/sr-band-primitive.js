@@ -37,41 +37,46 @@ class BandPaneRenderer {
       const isPivot = source === 'pivot'
       const isRes   = type === 'RESISTANCE'
 
-      let fillColor, strokeColor, lineWidth, dashPattern
-      if (isPivot) {
-        fillColor   = isRes ? 'rgba(255, 140, 0, 0.13)' : 'rgba(0, 229, 255, 0.10)'
-        strokeColor = isRes ? 'rgba(255, 140, 0, 0.90)' : 'rgba(0, 229, 255, 0.85)'
-        lineWidth   = 1.8
-        dashPattern = []
-      } else {
-        fillColor   = isRes ? 'rgba(255, 45, 85, 0.18)' : 'rgba(0, 200, 122, 0.16)'
-        strokeColor = isRes ? 'rgba(255, 45, 85, 0.75)' : 'rgba(0, 200, 122, 0.75)'
-        lineWidth   = 1.2
-        dashPattern = [5, 4]
-      }
-
       ctx.save()
 
-      // Filled band
-      ctx.fillStyle = fillColor
-      ctx.fillRect(0, minY, w, bandH)
+      if (isPivot) {
+        // Pivot resistance: single sharp horizontal line at the level price.
+        // No fill — avoids stacked rectangles cluttering the chart.
+        const yLevel = series.priceToCoordinate(this._zone.level)
+        if (yLevel !== null) {
+          ctx.strokeStyle = isRes ? 'rgba(255, 140, 0, 0.90)' : 'rgba(0, 229, 255, 0.85)'
+          ctx.lineWidth   = 1.5
+          ctx.setLineDash([])
+          ctx.beginPath()
+          ctx.moveTo(0, Math.round(yLevel) + 0.5)
+          ctx.lineTo(w, Math.round(yLevel) + 0.5)
+          ctx.stroke()
+        }
+      } else {
+        // KDE band: filled rectangle with dashed border lines
+        const fillColor   = isRes ? 'rgba(255, 45, 85, 0.18)' : 'rgba(0, 200, 122, 0.16)'
+        const strokeColor = isRes ? 'rgba(255, 45, 85, 0.75)' : 'rgba(0, 200, 122, 0.75)'
 
-      // Border lines
-      ctx.strokeStyle = strokeColor
-      ctx.lineWidth = lineWidth
-      ctx.setLineDash(dashPattern)
+        ctx.fillStyle = fillColor
+        ctx.fillRect(0, minY, w, bandH)
 
-      ctx.beginPath()
-      ctx.moveTo(0, minY + 0.5)
-      ctx.lineTo(w, minY + 0.5)
-      ctx.stroke()
+        ctx.strokeStyle = strokeColor
+        ctx.lineWidth   = 1.2
+        ctx.setLineDash([5, 4])
 
-      ctx.beginPath()
-      ctx.moveTo(0, maxY + 0.5)
-      ctx.lineTo(w, maxY + 0.5)
-      ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(0, minY + 0.5)
+        ctx.lineTo(w, minY + 0.5)
+        ctx.stroke()
 
-      ctx.setLineDash([])
+        ctx.beginPath()
+        ctx.moveTo(0, maxY + 0.5)
+        ctx.lineTo(w, maxY + 0.5)
+        ctx.stroke()
+
+        ctx.setLineDash([])
+      }
+
       ctx.restore()
     })
   }

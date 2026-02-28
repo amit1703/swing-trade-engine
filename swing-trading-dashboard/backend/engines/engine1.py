@@ -251,7 +251,9 @@ def _find_pivot_resistance(
         return []
 
     highs = lookback["High"].values.astype(float)
-    pivot_idx_arr = argrelextrema(highs, np.greater, order=3)[0]
+    # order=15: pivot must be the highest bar in a 30-bar window (~6 weeks).
+    # This suppresses micro-fluctuations and surfaces only major swing highs.
+    pivot_idx_arr = argrelextrema(highs, np.greater, order=15)[0]
 
     if len(pivot_idx_arr) < PIVOT_MIN_TOUCHES:
         return []
@@ -294,20 +296,29 @@ def _find_pivot_resistance(
             continue
         cluster_highs = [float(pivot_highs[m]) for m in members]
         level = float(np.mean(cluster_highs))
-        upper = float(max(cluster_highs)) + 0.1 * daily_atr
-        lower = float(min(cluster_highs)) - 0.1 * daily_atr
-        zone_type = "RESISTANCE" if level > current_price else "SUPPORT"
+
+        # Only emit OVERHEAD resistance — pivot zones below current price
+        # would contaminate Engine 2/6 resistance checks.
+        if level <= current_price:
+            continue
+
+        # Narrow band (±0.1 ATR) so engines see a tight zone, not a wide band.
+        upper = level + 0.1 * daily_atr
+        lower = level - 0.1 * daily_atr
         pct_diff = abs(level - current_price) / current_price if current_price > 0 else 1.0
         zones.append(
             {
                 "level": round(level, 2),
                 "upper": round(upper, 2),
                 "lower": round(lower, 2),
-                "type": zone_type,
+                "type": "RESISTANCE",
                 "atr": round(daily_atr, 2),
                 "is_primary": pct_diff <= 0.03,
                 "source": "pivot",
             }
         )
 
-    return zones
+    # Sort by nearest overhead first; keep at most 2 — the most immediately
+    # relevant resistance levels above the current price.
+    zones.sort(key=lambda z: z["level"] - current_price)
+    return zones[:2]

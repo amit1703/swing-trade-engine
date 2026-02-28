@@ -106,27 +106,28 @@ def test_zone_above_current_price_is_resistance():
     assert zones[0]["type"] == "RESISTANCE"
 
 
-def test_zone_below_current_price_is_support():
-    """Cluster level < current_price → zone type is 'SUPPORT'."""
-    highs = np.ones(150) * 100.0
+def test_zone_below_current_price_is_not_returned():
+    """Pivot resistance only emits overhead zones — clusters below current price are dropped."""
+    # Background at 90, spikes at 95 (above background, below current_price=100)
+    highs = np.ones(150) * 90.0
     highs = _spike_at(highs, 40, 95.0)
     highs = _spike_at(highs, 80, 95.3)
     df = _make_df(highs=highs, current_close=100.0)
     zones = _find_pivot_resistance(df, daily_atr=2.0, current_price=100.0)
-    assert len(zones) == 1
-    assert zones[0]["type"] == "SUPPORT"
+    assert zones == []
 
 
 def test_zone_bounds_use_atr_padding():
-    """upper = max_cluster_high + 0.1*ATR  ;  lower = min_cluster_high - 0.1*ATR."""
+    """upper = level + 0.1*ATR  ;  lower = level - 0.1*ATR  (tight band around mean level)."""
     highs = np.ones(150) * 100.0
     highs = _spike_at(highs, 40, 105.0)
     highs = _spike_at(highs, 80, 104.5)
     df = _make_df(highs=highs)
     zones = _find_pivot_resistance(df, daily_atr=2.0, current_price=95.0)
     assert len(zones) == 1
-    assert zones[0]["upper"] == pytest.approx(105.0 + 0.1 * 2.0, abs=0.01)
-    assert zones[0]["lower"] == pytest.approx(104.5 - 0.1 * 2.0, abs=0.01)
+    level = (105.0 + 104.5) / 2  # mean of cluster highs = 104.75
+    assert zones[0]["upper"] == pytest.approx(level + 0.1 * 2.0, abs=0.01)
+    assert zones[0]["lower"] == pytest.approx(level - 0.1 * 2.0, abs=0.01)
 
 
 def test_source_field_is_always_pivot():
