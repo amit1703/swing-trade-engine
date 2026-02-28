@@ -12,9 +12,10 @@ Endpoints
   GET  /api/setups/base       Cup & Handle + Flat Base setups only
   GET  /api/sr-zones/{ticker} S/R zones for one ticker (from last scan)
   GET  /api/chart/{ticker}    OHLCV + EMA8/20 + SMA50 + CCI20 (fresh fetch)
-  GET  /api/watchlist         WATCHLIST setups from last scan
-  GET  /api/debug/{ticker}    Dev mode: per-engine pass/fail for one ticker (fresh fetch)
-  GET  /api/health            Health-check
+  GET  /api/watchlist                 WATCHLIST setups from last scan
+  GET  /api/setups/options-catalyst  OPTIONS_CATALYST setups from last scan
+  GET  /api/debug/{ticker}           Dev mode: per-engine pass/fail for one ticker (fresh fetch)
+  GET  /api/health                   Health-check
 
 Architecture
 ────────────
@@ -388,10 +389,11 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
         pb_count = 0
         base_count = 0
         res_count  = 0
+        opt_count  = 0
         process_start_time = time.time()
 
         async def _process(ticker: str, idx: int) -> None:
-            nonlocal vcp_count, pb_count, base_count, res_count, dropped_tickers
+            nonlocal vcp_count, pb_count, base_count, res_count, opt_count, dropped_tickers
 
             try:
                 # ── Data Integrity Check ────────────────────────────────────
@@ -650,6 +652,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                         else:
                             opt["sector"] = SECTORS.get(ticker, "Unknown")
                             collected_setups.append(opt)
+                            opt_count += 1
                             _scan_state["engine_stats"]["e7"]["options_catalyst"] += 1
                             log.info("  OPTIONS  %-6s  score=%.0f  vol=%d  C/P=%.2f  DTE=%d",
                                      ticker, opt.get("options_score", 0),
@@ -671,12 +674,13 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
 
         process_time = time.time() - process_start_time
         log.info(
-            "Per-ticker processing completed  [%.1fs]  vcp=%d  pb=%d  base=%d  res=%d  total_setups=%d",
+            "Per-ticker processing completed  [%.1fs]  vcp=%d  pb=%d  base=%d  res=%d  opt=%d  total_setups=%d",
             process_time,
             vcp_count,
             pb_count,
             base_count,
             res_count,
+            opt_count,
             len(collected_setups),
         )
 
@@ -695,11 +699,12 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
 
         if dry_run:
             _scan_state["dry_run_setups"] = {
-                "vcp":          [s for s in collected_setups if s.get("setup_type") == "VCP"],
-                "pullback":     [s for s in collected_setups if s.get("setup_type") == "PULLBACK"],
-                "base":         [s for s in collected_setups if s.get("setup_type") == "BASE"],
-                "res_breakout": [s for s in collected_setups if s.get("setup_type") == "RES_BREAKOUT"],
-                "watchlist":    [s for s in collected_setups if s.get("setup_type") == "WATCHLIST"],
+                "vcp":               [s for s in collected_setups if s.get("setup_type") == "VCP"],
+                "pullback":          [s for s in collected_setups if s.get("setup_type") == "PULLBACK"],
+                "base":              [s for s in collected_setups if s.get("setup_type") == "BASE"],
+                "res_breakout":      [s for s in collected_setups if s.get("setup_type") == "RES_BREAKOUT"],
+                "watchlist":         [s for s in collected_setups if s.get("setup_type") == "WATCHLIST"],
+                "options_catalyst":  [s for s in collected_setups if s.get("setup_type") == "OPTIONS_CATALYST"],
             }
             log.info("DRY RUN: stored %d setups in memory (no DB write)", len(collected_setups))
 
