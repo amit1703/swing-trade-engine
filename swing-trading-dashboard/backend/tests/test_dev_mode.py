@@ -29,10 +29,12 @@ def _make_df(n=300):
 
 @pytest.fixture(autouse=True)
 def reset_scan_state():
-    """Ensure each test starts with scan not in progress."""
+    """Ensure each test starts with a clean scan state."""
     m._scan_state["in_progress"] = False
+    m._scan_state["dry_run_setups"] = None
     yield
     m._scan_state["in_progress"] = False
+    m._scan_state["dry_run_setups"] = None
 
 
 def test_scan_status_has_engine_stats():
@@ -181,7 +183,6 @@ def test_scan_status_includes_dry_run_setups_key():
 
 def test_dry_run_setups_is_none_by_default():
     """dry_run_setups must be None when no dry run has completed."""
-    m._scan_state["dry_run_setups"] = None   # explicit reset
     resp = client.get("/api/scan-status")
     assert resp.json()["dry_run_setups"] is None
 
@@ -198,3 +199,26 @@ def test_dry_run_setups_returned_when_populated():
     resp = client.get("/api/scan-status")
     data = resp.json()
     assert data["dry_run_setups"]["vcp"][0]["ticker"] == "TEST"
+
+
+def test_dry_run_setups_empty_result_produces_structured_dict():
+    """A dry run that finds no setups must still store a structured dict, not None.
+    This distinguishes 'ran but found nothing' from 'never ran'."""
+    # Simulate what _run_scan does when dry_run=True but collected_setups is empty
+    collected_setups = []
+    m._scan_state["dry_run_setups"] = {
+        "vcp":          [s for s in collected_setups if s.get("setup_type") == "VCP"],
+        "pullback":     [s for s in collected_setups if s.get("setup_type") == "PULLBACK"],
+        "base":         [s for s in collected_setups if s.get("setup_type") == "BASE"],
+        "res_breakout": [s for s in collected_setups if s.get("setup_type") == "RES_BREAKOUT"],
+        "watchlist":    [s for s in collected_setups if s.get("setup_type") == "WATCHLIST"],
+    }
+    resp = client.get("/api/scan-status")
+    data = resp.json()
+    dr = data["dry_run_setups"]
+    assert dr is not None, "dry_run_setups must be a dict, not None, even for empty results"
+    assert dr["vcp"] == []
+    assert dr["pullback"] == []
+    assert dr["base"] == []
+    assert dr["res_breakout"] == []
+    assert dr["watchlist"] == []

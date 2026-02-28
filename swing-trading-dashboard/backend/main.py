@@ -643,7 +643,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
             db_save_time = time.time() - db_save_start
             log.info("Batch saved %d setups to database  [%.1fs]", len(collected_setups), db_save_time)
 
-        if collected_setups and dry_run:
+        if dry_run:
             _scan_state["dry_run_setups"] = {
                 "vcp":          [s for s in collected_setups if s.get("setup_type") == "VCP"],
                 "pullback":     [s for s in collected_setups if s.get("setup_type") == "PULLBACK"],
