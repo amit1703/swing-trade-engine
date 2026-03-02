@@ -112,3 +112,9 @@ DB_TIMEOUT = 10.0  # SQLite timeout in seconds
 
 VITALITY_LOOKBACK_DAYS = 10   # Trading days used for H-L range check
 VITALITY_MIN_RANGE_PCT = 0.02  # Minimum H-L range (2%) to pass vitality
+
+# ──────────────────────────────────────────────────────────────────────────
+# Universe Pre-Filter
+# ──────────────────────────────────────────────────────────────────────────
+
+MIN_ATR_PCT = 2.0           # ATR(14)/Close×100 minimum — filters low-vol stocks

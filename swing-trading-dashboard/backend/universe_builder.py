@@ -29,8 +29,8 @@ SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 SEC_USER_AGENT = "SwingTradingDashboard admin@example.com"
 DEFAULT_MIN_PRICE = 10.0
 DEFAULT_MIN_AVG_VOLUME = 500_000
-BATCH_SIZE = 100
-BATCH_DELAY = 2.0
+BATCH_SIZE = 250        # larger batches → fewer sleeps → ~2min vs ~8min for 5000 tickers
+BATCH_DELAY = 1.0       # reduced from 2.0s
 SECTOR_BATCH_SIZE = 50
 SECTOR_BATCH_DELAY = 3.0
 
