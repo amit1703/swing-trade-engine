@@ -665,8 +665,31 @@ export default function TradingChart({ ticker, chartData, loading }) {
     return (
       <div className="terminal-placeholder">
         <div className="flex flex-col items-center gap-3">
-          {/* ASCII chart placeholder */}
-          <pre className="text-t-border text-[10px] leading-tight select-none">
+          {ticker ? (
+            <>
+              <pre className="text-t-border text-[10px] leading-tight select-none">
+{`  ┌──────────────────────────┐
+  │  no data                 │
+  │                          │
+  │  ticker not found or     │
+  │  insufficient history    │
+  │                          │
+  └──────────────────────────┘`}
+              </pre>
+              <span className="text-[11px] text-t-accent font-mono tracking-widest uppercase">
+                {ticker}
+              </span>
+              <span className="text-[9px] text-t-muted tracking-widest uppercase">
+                Not in universe — try adding via Run Scan,
+              </span>
+              <span className="text-[9px] text-t-muted tracking-widest uppercase">
+                or check the ticker symbol is correct
+              </span>
+            </>
+          ) : (
+            <>
+              {/* ASCII chart placeholder */}
+              <pre className="text-t-border text-[10px] leading-tight select-none">
 {`  ┌──────────────────────────┐
   │  no ticker selected      │
   │                          │
@@ -674,10 +697,12 @@ export default function TradingChart({ ticker, chartData, loading }) {
   │  a chart                 │
   │                          │
   └──────────────────────────┘`}
-          </pre>
-          <span className="text-[10px] text-t-muted tracking-widest uppercase">
-            Select a ticker from the tables
-          </span>
+              </pre>
+              <span className="text-[10px] text-t-muted tracking-widest uppercase">
+                Select a ticker from the tables
+              </span>
+            </>
+          )}
         </div>
       </div>
     )

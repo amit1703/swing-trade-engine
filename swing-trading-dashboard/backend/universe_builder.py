@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import ssl
 import sys
 import time
 import urllib.request
@@ -53,12 +54,18 @@ def _fetch_sec_json() -> dict:
     """Fetch company tickers JSON from the SEC EDGAR API.
 
     Returns a dict with ``fields`` and ``data`` arrays as provided by the SEC.
+    Uses certifi CA bundle when available to fix macOS Python SSL issues.
     """
     req = urllib.request.Request(
         SEC_TICKERS_URL,
         headers={"User-Agent": SEC_USER_AGENT},
     )
-    with urllib.request.urlopen(req) as resp:
+    try:
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        ctx = ssl.create_default_context()
+    with urllib.request.urlopen(req, context=ctx) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
