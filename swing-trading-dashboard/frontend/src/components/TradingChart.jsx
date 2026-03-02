@@ -86,6 +86,7 @@ export default function TradingChart({ ticker, chartData, loading }) {
   const rsRef      = useRef(null)
   const wrapRef    = useRef(null)
   const seriesRef  = useRef({})   // holds series + primitives for visibility toggles
+  const chartsRef  = useRef({})   // holds mainChart / cciChart / rsChart for AUTO button
 
   // Legend state — updated on crosshair move
   const [legend, setLegend] = useState(null)
@@ -556,6 +557,9 @@ export default function TradingChart({ ticker, chartData, loading }) {
       volSmaSeries,
     }
 
+    // ── Store chart instance refs for AUTO button ──────────────────────────
+    chartsRef.current = { mainChart, cciChart, rsChart }
+
     // ── Resize observer ────────────────────────────────────────────────────
     const wrap = wrapRef.current
     const observer = new ResizeObserver(() => {
@@ -569,6 +573,7 @@ export default function TradingChart({ ticker, chartData, loading }) {
 
     // ── Cleanup ────────────────────────────────────────────────────────────
     return () => {
+      chartsRef.current = {}        // clear chart refs on cleanup
       seriesRef.current = {}
       observer.disconnect()
       try { mainChart.remove() } catch (_) {}
