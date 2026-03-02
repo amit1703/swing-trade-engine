@@ -158,21 +158,18 @@ export default function TradingChart({ ticker, chartData, loading }) {
     })
 
     // ── Ctrl/Cmd+scroll = zoom, plain scroll = pan ─────────────────────────
-    const makeWheelHandler = (chart) => (e) => {
-      const wantZoom = e.ctrlKey || e.metaKey
-      chart.applyOptions({
-        handleScale: { mouseWheel: wantZoom },
-        handleScroll: { mouseWheel: !wantZoom },
-      })
+    const applyScrollMode = (wantZoom) => {
+      const zoomOpts = { handleScale: { mouseWheel: wantZoom }, handleScroll: { mouseWheel: !wantZoom } }
+      mainChart.applyOptions(zoomOpts)
+      cciChart.applyOptions(zoomOpts)
+      rsChart.applyOptions(zoomOpts)
     }
 
-    const mainWheelHandler = makeWheelHandler(mainChart)
-    const cciWheelHandler  = makeWheelHandler(cciChart)
-    const rsWheelHandler   = makeWheelHandler(rsChart)
+    const onKeyDown = (e) => { if ((e.ctrlKey || e.metaKey) && !e.repeat) applyScrollMode(true) }
+    const onKeyUp   = (e) => { if (e.key === 'Control' || e.key === 'Meta') applyScrollMode(false) }
 
-    mainEl.addEventListener('wheel', mainWheelHandler, { passive: true })
-    cciEl.addEventListener('wheel', cciWheelHandler,   { passive: true })
-    rsEl.addEventListener('wheel', rsWheelHandler,     { passive: true })
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup',   onKeyUp)
 
     // ── Candlestick series ─────────────────────────────────────────────────
     const candleSeries = mainChart.addCandlestickSeries({
@@ -600,9 +597,8 @@ export default function TradingChart({ ticker, chartData, loading }) {
 
     // ── Cleanup ────────────────────────────────────────────────────────────
     return () => {
-      mainEl.removeEventListener('wheel', mainWheelHandler)
-      cciEl.removeEventListener('wheel', cciWheelHandler)
-      rsEl.removeEventListener('wheel', rsWheelHandler)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup',   onKeyUp)
       chartsRef.current = {}        // clear chart refs on cleanup
       seriesRef.current = {}
       observer.disconnect()
@@ -647,11 +643,9 @@ export default function TradingChart({ ticker, chartData, loading }) {
   const handleAutoReset = () => {
     const { mainChart, cciChart, rsChart } = chartsRef.current
     if (!mainChart) return
-    mainChart.timeScale().fitContent()
+    mainChart.timeScale().fitContent()  // propagates to cci/rs via sync subscription
     mainChart.priceScale('right').applyOptions({ autoScale: true })
-    cciChart?.timeScale().fitContent()
     cciChart?.priceScale('right').applyOptions({ autoScale: true })
-    rsChart?.timeScale().fitContent()
     rsChart?.priceScale('right').applyOptions({ autoScale: true })
   }
 
