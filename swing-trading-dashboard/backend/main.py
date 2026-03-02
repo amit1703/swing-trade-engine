@@ -324,13 +324,21 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
         dry_run_setups=None,
     )
 
-    # ── Rebuild universe on each scan (SEC EDGAR → pre-filters → save) ────
-    # Skip if specific tickers were passed via ?tickers= debug override.
-    # The ?tickers= path passes a freshly constructed list (not ACTIVE_UNIVERSE
-    # itself), so `tickers is ACTIVE_UNIVERSE` is False for debug calls.
+    # ── Rebuild universe at most once per 24 h (SEC EDGAR → pre-filters → save) ──
+    # Skip when:
+    #   • specific tickers passed via ?tickers= debug override
+    #   • active_universe.json is less than 24 h old (use cached list)
+    import os as _os, time as _time
+    _universe_age_h = (
+        (_time.time() - _os.path.getmtime(UNIVERSE_FILE)) / 3600
+        if _os.path.exists(UNIVERSE_FILE) else 999
+    )
+    _universe_stale = _universe_age_h >= 24
     global ACTIVE_UNIVERSE, SECTORS
-    if tickers is ACTIVE_UNIVERSE:
-        log.info("Rebuilding universe via SEC EDGAR + yfinance pre-filters…")
+    if tickers is ACTIVE_UNIVERSE and _universe_stale:
+        log.info("Universe is %.1fh old — rebuilding via SEC EDGAR + yfinance pre-filters…", _universe_age_h)
+    elif tickers is ACTIVE_UNIVERSE:
+        log.info("Universe is %.1fh old — using cached list (%d tickers)", _universe_age_h, len(tickers))
         loop = asyncio.get_running_loop()
         try:
             universe_dict = await loop.run_in_executor(
