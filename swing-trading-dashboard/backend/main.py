@@ -58,6 +58,7 @@ from constants import (
     FETCH_BACKOFF_BASE,
     FETCH_MAX_RETRIES,
     MAX_TICKERS_PER_SCAN,
+    MIN_ATR_PCT,
     MIN_CANDLES_FOR_ANALYSIS,
     MIN_CANDLES_FOR_RS,
     RS_BLUE_DOT_TOLERANCE_PCT,
@@ -90,7 +91,7 @@ from engines.engine6 import scan_resistance_breakout
 from engines.engine7 import scan_options_catalyst
 from tickers import SCAN_UNIVERSE
 from validation import is_price_vital
-from universe_builder import load_universe, UNIVERSE_FILE
+from universe_builder import build_universe, load_universe, save_universe, UNIVERSE_FILE
 
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration (imported from constants.py for centralized management)
@@ -322,6 +323,36 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
         },
         dry_run_setups=None,
     )
+
+    # ── Rebuild universe on each scan (SEC EDGAR → pre-filters → save) ────
+    # Skip if specific tickers were passed via ?tickers= debug override.
+    # The ?tickers= path passes a freshly constructed list (not ACTIVE_UNIVERSE
+    # itself), so `tickers is ACTIVE_UNIVERSE` is False for debug calls.
+    global ACTIVE_UNIVERSE, SECTORS
+    if tickers is ACTIVE_UNIVERSE:
+        log.info("Rebuilding universe via SEC EDGAR + yfinance pre-filters…")
+        loop = asyncio.get_event_loop()
+        try:
+            universe_dict = await loop.run_in_executor(
+                None,
+                lambda: build_universe(
+                    min_atr_pct=MIN_ATR_PCT,
+                ),
+            )
+            if universe_dict["tickers"]:
+                save_universe(universe_dict, UNIVERSE_FILE)
+                ACTIVE_UNIVERSE = universe_dict["tickers"]
+                SECTORS = universe_dict["sectors"]
+                tickers = ACTIVE_UNIVERSE
+                log.info(
+                    "Universe rebuilt: %d tickers (price≥$10, vol≥500K, ATR%%≥%.1f%%)",
+                    len(tickers),
+                    MIN_ATR_PCT,
+                )
+            else:
+                log.warning("Universe rebuild returned 0 tickers — keeping existing universe")
+        except Exception:
+            log.exception("Universe rebuild failed — proceeding with existing universe")
 
     try:
         if not dry_run:
