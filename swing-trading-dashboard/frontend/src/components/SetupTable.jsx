@@ -106,6 +106,28 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                       {s.hot_sector && (
                         <span title={`Hot sector: ${s.sector ?? ''} (3+ setups)`} style={{ marginLeft: 3, fontSize: 10 }}>🔥</span>
                       )}
+                      <a
+                        href={`https://www.tradingview.com/chart/?symbol=${s.ticker}&interval=D`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        title="Open in TradingView"
+                        style={{
+                          marginLeft: 5,
+                          fontSize: 8,
+                          padding: '1px 4px',
+                          border: '1px solid rgba(245,166,35,0.3)',
+                          color: 'rgba(245,166,35,0.55)',
+                          borderRadius: 2,
+                          fontFamily: '"IBM Plex Mono", monospace',
+                          fontWeight: 700,
+                          letterSpacing: '0.05em',
+                          textDecoration: 'none',
+                          userSelect: 'none',
+                        }}
+                      >
+                        TV
+                      </a>
                     </td>
 
                     {/* Entry */}

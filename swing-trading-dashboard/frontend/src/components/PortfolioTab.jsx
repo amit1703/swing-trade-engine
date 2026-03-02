@@ -177,7 +177,7 @@ export default function PortfolioTab({ onTickerClick }) {
                       style={isExit ? { background: 'rgba(255,45,85,0.04)' } : undefined}
                     >
                       {/* Ticker — clickable to load chart */}
-                      <td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
                         <button
                           className="font-600 tracking-wide text-left"
                           style={{ color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}
@@ -186,6 +186,28 @@ export default function PortfolioTab({ onTickerClick }) {
                         >
                           {t.ticker}
                         </button>
+                        <a
+                          href={`https://www.tradingview.com/chart/?symbol=${t.ticker}&interval=D`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          title="Open in TradingView"
+                          style={{
+                            marginLeft: 5,
+                            fontSize: 8,
+                            padding: '1px 4px',
+                            border: '1px solid rgba(245,166,35,0.3)',
+                            color: 'rgba(245,166,35,0.55)',
+                            borderRadius: 2,
+                            fontFamily: '"IBM Plex Mono", monospace',
+                            fontWeight: 700,
+                            letterSpacing: '0.05em',
+                            textDecoration: 'none',
+                            userSelect: 'none',
+                          }}
+                        >
+                          TV
+                        </a>
                       </td>
 
                       {/* Qty */}
@@ -338,7 +360,7 @@ export default function PortfolioTab({ onTickerClick }) {
                   const plPos = (t.pl_dollar ?? 0) >= 0
                   return (
                     <tr key={t.id}>
-                      <td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
                         <button
                           className="font-600 tracking-wide text-left"
                           style={{ color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}
@@ -346,6 +368,28 @@ export default function PortfolioTab({ onTickerClick }) {
                         >
                           {t.ticker}
                         </button>
+                        <a
+                          href={`https://www.tradingview.com/chart/?symbol=${t.ticker}&interval=D`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          title="Open in TradingView"
+                          style={{
+                            marginLeft: 5,
+                            fontSize: 8,
+                            padding: '1px 4px',
+                            border: '1px solid rgba(245,166,35,0.3)',
+                            color: 'rgba(245,166,35,0.55)',
+                            borderRadius: 2,
+                            fontFamily: '"IBM Plex Mono", monospace',
+                            fontWeight: 700,
+                            letterSpacing: '0.05em',
+                            textDecoration: 'none',
+                            userSelect: 'none',
+                          }}
+                        >
+                          TV
+                        </a>
                       </td>
                       <td className="text-t-muted">{fmt2(t.entry_price)}</td>
                       <td className="text-t-text">{t.exit_price != null ? fmt2(t.exit_price) : <Dash />}</td>

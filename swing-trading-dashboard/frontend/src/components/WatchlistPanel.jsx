@@ -65,6 +65,28 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
             <span style={{ color: 'var(--purple)', fontSize: '8px' }}
                   aria-label="RS Blue Dot">⭐</span>
           )}
+          <a
+            href={`https://www.tradingview.com/chart/?symbol=${item.ticker}&interval=D`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            title="Open in TradingView"
+            style={{
+              fontSize: 7,
+              padding: '1px 3px',
+              border: '1px solid rgba(245,166,35,0.3)',
+              color: 'rgba(245,166,35,0.55)',
+              borderRadius: 2,
+              fontFamily: '"IBM Plex Mono", monospace',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+              textDecoration: 'none',
+              userSelect: 'none',
+              flexShrink: 0,
+            }}
+          >
+            TV
+          </a>
         </div>
 
         <div className="flex items-center gap-1">
