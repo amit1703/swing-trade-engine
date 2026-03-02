@@ -644,6 +644,17 @@ export default function TradingChart({ ticker, chartData, loading }) {
     seriesRef.current.volSmaSeries?.applyOptions({ visible: vis.vol })
   }, [vis.vol, chartData])
 
+  const handleAutoReset = () => {
+    const { mainChart, cciChart, rsChart } = chartsRef.current
+    if (!mainChart) return
+    mainChart.timeScale().fitContent()
+    mainChart.priceScale('right').applyOptions({ autoScale: true })
+    cciChart?.timeScale().fitContent()
+    cciChart?.priceScale('right').applyOptions({ autoScale: true })
+    rsChart?.timeScale().fitContent()
+    rsChart?.priceScale('right').applyOptions({ autoScale: true })
+  }
+
   // ── Empty states ──────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -826,6 +837,29 @@ export default function TradingChart({ ticker, chartData, loading }) {
           <VisToggle label="VOL" active={vis.vol} activeColor="rgba(0,200,122,0.6)"
             onClick={() => setVis(v => ({ ...v, vol: !v.vol }))} />
         </div>
+
+        {/* AUTO reset button — bottom-right of main chart */}
+        {chartData && (
+          <button
+            onClick={handleAutoReset}
+            style={{
+              position: 'absolute', bottom: 8, right: 10, zIndex: 10,
+              fontFamily: '"IBM Plex Mono", monospace',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              padding: '3px 8px',
+              background: 'rgba(0,0,0,0.75)',
+              border: '1px solid rgba(245,166,35,0.45)',
+              color: 'rgba(245,166,35,0.85)',
+              cursor: 'pointer',
+              backdropFilter: 'blur(4px)',
+              userSelect: 'none',
+            }}
+          >
+            AUTO
+          </button>
+        )}
 
         <div
           ref={mainRef}
