@@ -341,7 +341,14 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
             )
             if universe_dict["tickers"]:
                 save_universe(universe_dict, UNIVERSE_FILE)
-                ACTIVE_UNIVERSE = universe_dict["tickers"]
+                new_tickers = universe_dict["tickers"]
+                if len(new_tickers) > MAX_TICKERS_PER_SCAN:
+                    log.warning(
+                        "Rebuilt universe has %d tickers, capping to %d",
+                        len(new_tickers), MAX_TICKERS_PER_SCAN,
+                    )
+                    new_tickers = new_tickers[:MAX_TICKERS_PER_SCAN]
+                ACTIVE_UNIVERSE = new_tickers
                 SECTORS = universe_dict["sectors"]
                 tickers = ACTIVE_UNIVERSE
                 log.info(
