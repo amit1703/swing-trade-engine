@@ -65,6 +65,7 @@ const SHARED_CHART_OPTS = {
     borderColor: COLORS.border,
     textColor: COLORS.muted,
     scaleMargins: { top: 0.08, bottom: 0.05 },
+    autoScale: true,
   },
   timeScale: {
     borderColor: COLORS.border,
