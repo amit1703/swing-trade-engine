@@ -358,9 +358,9 @@ export default function App() {
               {/* ── Derive VCP sub-categories ─────────────────────────── */}
               {(() => {
                 const rsLeads      = vcpSetups.filter(s => s.is_rs_lead)
-                const confirmedBrk = vcpSetups.filter(s => s.signal === 'BRK' && !s.is_rs_lead && !s.is_trendline_breakout)
+                const confirmedBrk = vcpSetups.filter(s => s.is_breakout && !s.is_rs_lead && !s.is_trendline_breakout && !s.is_kde_breakout)
                 const tdlBreaks    = vcpSetups.filter(s => s.is_trendline_breakout)
-                const drySetups    = vcpSetups.filter(s => s.signal === 'DRY')
+                const drySetups    = vcpSetups.filter(s => !s.is_breakout && !s.is_rs_lead)
 
                 const tblProps = {
                   selectedTicker,
