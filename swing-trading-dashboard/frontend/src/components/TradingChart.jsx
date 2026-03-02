@@ -70,6 +70,8 @@ const SHARED_CHART_OPTS = {
     borderColor: COLORS.border,
     timeVisible: true,
     secondsVisible: false,
+    rightOffset: 8,
+    kineticScrollEnabled: false,
   },
   handleScale: true,
   handleScroll: true,
