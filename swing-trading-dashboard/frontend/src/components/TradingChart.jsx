@@ -74,8 +74,18 @@ const SHARED_CHART_OPTS = {
     rightOffset: 8,
     kineticScrollEnabled: false,
   },
-  handleScale: true,
-  handleScroll: true,
+  handleScale: {
+    mouseWheel: false,          // wheel zooms only when Ctrl/Cmd held (see wheel listener)
+    pinch: true,
+    axisPressedMouseMove: { time: true, price: true },
+    axisDoubleClickReset: { time: true, price: true },
+  },
+  handleScroll: {
+    mouseWheel: true,           // default: wheel pans
+    pressedMouseMove: true,
+    horzTouchDrag: true,
+    vertTouchDrag: false,
+  },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,6 +156,23 @@ export default function TradingChart({ ticker, chartData, loading }) {
         fontSize: 9,
       },
     })
+
+    // ── Ctrl/Cmd+scroll = zoom, plain scroll = pan ─────────────────────────
+    const makeWheelHandler = (chart) => (e) => {
+      const wantZoom = e.ctrlKey || e.metaKey
+      chart.applyOptions({
+        handleScale: { mouseWheel: wantZoom },
+        handleScroll: { mouseWheel: !wantZoom },
+      })
+    }
+
+    const mainWheelHandler = makeWheelHandler(mainChart)
+    const cciWheelHandler  = makeWheelHandler(cciChart)
+    const rsWheelHandler   = makeWheelHandler(rsChart)
+
+    mainEl.addEventListener('wheel', mainWheelHandler, { passive: true })
+    cciEl.addEventListener('wheel', cciWheelHandler,   { passive: true })
+    rsEl.addEventListener('wheel', rsWheelHandler,     { passive: true })
 
     // ── Candlestick series ─────────────────────────────────────────────────
     const candleSeries = mainChart.addCandlestickSeries({
@@ -573,6 +600,9 @@ export default function TradingChart({ ticker, chartData, loading }) {
 
     // ── Cleanup ────────────────────────────────────────────────────────────
     return () => {
+      mainEl.removeEventListener('wheel', mainWheelHandler)
+      cciEl.removeEventListener('wheel', cciWheelHandler)
+      rsEl.removeEventListener('wheel', rsWheelHandler)
       chartsRef.current = {}        // clear chart refs on cleanup
       seriesRef.current = {}
       observer.disconnect()
