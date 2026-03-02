@@ -171,8 +171,9 @@ def filter_price_volume(
     tickers: List[str],
     min_price: float = DEFAULT_MIN_PRICE,
     min_avg_volume: int = DEFAULT_MIN_AVG_VOLUME,
+    min_atr_pct: float = 0.0,
 ) -> List[str]:
-    """Filter tickers by minimum price and average daily volume.
+    """Filter tickers by minimum price, average daily volume, and optional ATR%.
 
     Downloads 3 months of daily data from yfinance in batches of
     ``BATCH_SIZE``, then checks each ticker's last close price and
@@ -255,6 +256,27 @@ def filter_price_volume(
 
                 if avg_volume < min_avg_volume:
                     continue
+
+                # --- ATR% filter (optional — skipped when min_atr_pct == 0) ---
+                if min_atr_pct > 0:
+                    if "High" not in ticker_df.columns or "Low" not in ticker_df.columns:
+                        continue
+                    high = ticker_df["High"].dropna()
+                    low  = ticker_df["Low"].dropna()
+                    close_s = ticker_df["Close"].dropna() if "Close" in ticker_df.columns \
+                              else ticker_df["Adj Close"].dropna()
+                    prev_close = close_s.shift(1)
+                    tr = pd.concat([
+                        high - low,
+                        (high - prev_close).abs(),
+                        (low  - prev_close).abs(),
+                    ], axis=1).max(axis=1)
+                    atr14 = tr.rolling(14).mean()
+                    if atr14.empty or pd.isna(atr14.iloc[-1]):
+                        continue
+                    atr_pct = float(atr14.iloc[-1]) / last_close * 100.0
+                    if atr_pct < min_atr_pct:
+                        continue
 
                 passed.append(ticker)
 
@@ -345,6 +367,7 @@ def build_sector_map(
 def build_universe(
     min_price: float = DEFAULT_MIN_PRICE,
     min_avg_volume: int = DEFAULT_MIN_AVG_VOLUME,
+    min_atr_pct: float = 0.0,
 ) -> dict:
     """Orchestrate the full universe-building pipeline.
 
@@ -370,7 +393,7 @@ def build_universe(
     candidates = filter_ticker_patterns(sec_df["ticker"].tolist())
 
     # Step 3 — price / volume filter
-    filtered = filter_price_volume(candidates, min_price, min_avg_volume)
+    filtered = filter_price_volume(candidates, min_price, min_avg_volume, min_atr_pct)
 
     # Step 4 — sector map
     sectors = build_sector_map(filtered)
@@ -398,6 +421,7 @@ def build_universe(
             "filters": {
                 "min_price": min_price,
                 "min_avg_volume_50d": min_avg_volume,
+                "min_atr_pct": min_atr_pct,
                 "exchanges": ["NYSE", "Nasdaq"],
             },
             "counts": {
@@ -423,10 +447,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build active ticker universe")
     parser.add_argument("--min-price", type=float, default=DEFAULT_MIN_PRICE)
     parser.add_argument("--min-volume", type=int, default=DEFAULT_MIN_AVG_VOLUME)
+    parser.add_argument("--min-atr-pct", type=float, default=0.0)
     parser.add_argument("--output", type=str, default=UNIVERSE_FILE)
     args = parser.parse_args()
 
-    universe = build_universe(min_price=args.min_price, min_avg_volume=args.min_volume)
+    universe = build_universe(
+        min_price=args.min_price,
+        min_avg_volume=args.min_volume,
+        min_atr_pct=args.min_atr_pct,
+    )
     save_universe(universe, args.output)
 
     print(f"\nDone. {len(universe['tickers'])} tickers saved to {args.output}")

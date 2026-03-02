@@ -194,6 +194,28 @@ def _make_single_ticker_df(
     )
 
 
+def _make_volatile_df(
+    close: float = 150.0,
+    volume: int = 2_000_000,
+    atr_pct: float = 3.0,
+    rows: int = 60,
+) -> pd.DataFrame:
+    """Return a DataFrame with controlled High/Low spread to produce a target ATR%."""
+    idx = pd.date_range("2025-01-01", periods=rows, freq="B")
+    half_range = close * (atr_pct / 100) / 2
+    return pd.DataFrame(
+        {
+            "Open": close * 0.995,
+            "High": close + half_range,
+            "Low": close - half_range,
+            "Close": close,
+            "Adj Close": close,
+            "Volume": volume,
+        },
+        index=idx,
+    )
+
+
 # ---------------------------------------------------------------------------
 # TestFilterPriceVolume
 # ---------------------------------------------------------------------------
@@ -276,6 +298,37 @@ class TestFilterPriceVolume:
         result = filter_price_volume(["CRASH"])
 
         assert result == []
+
+    @patch("universe_builder.time.sleep")
+    @patch("universe_builder.yf.download")
+    def test_filters_below_min_atr_pct(self, mock_download, _mock_sleep):
+        """Ticker with ATR% = 0.5% should be excluded when min_atr_pct=2.0."""
+        mock_download.return_value = _make_volatile_df(
+            close=150.0, volume=2_000_000, atr_pct=0.5
+        )
+        result = filter_price_volume(["FLAT"], min_price=10.0, min_avg_volume=500_000, min_atr_pct=2.0)
+        assert "FLAT" not in result
+        assert result == []
+
+    @patch("universe_builder.time.sleep")
+    @patch("universe_builder.yf.download")
+    def test_passes_sufficient_atr_pct(self, mock_download, _mock_sleep):
+        """Ticker with ATR% = 4.0% should pass when min_atr_pct=2.0."""
+        mock_download.return_value = _make_volatile_df(
+            close=150.0, volume=2_000_000, atr_pct=4.0
+        )
+        result = filter_price_volume(["VOLATILE"], min_price=10.0, min_avg_volume=500_000, min_atr_pct=2.0)
+        assert result == ["VOLATILE"]
+
+    @patch("universe_builder.time.sleep")
+    @patch("universe_builder.yf.download")
+    def test_atr_filter_disabled_when_zero(self, mock_download, _mock_sleep):
+        """min_atr_pct=0.0 (default) should not filter out low-volatility tickers."""
+        mock_download.return_value = _make_volatile_df(
+            close=150.0, volume=2_000_000, atr_pct=0.1
+        )
+        result = filter_price_volume(["CALM"], min_price=10.0, min_avg_volume=500_000, min_atr_pct=0.0)
+        assert result == ["CALM"]
 
 
 # ---------------------------------------------------------------------------
