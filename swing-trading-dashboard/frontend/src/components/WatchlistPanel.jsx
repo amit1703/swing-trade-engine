@@ -1,17 +1,31 @@
+import { useState } from 'react'
+
 export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, loading }) {
+  const [showAll, setShowAll] = useState(false)
+
   // Filter: hide KDE-BRK items that are >1% above breakout (too extended)
   const filtered = items.filter(item =>
     !(item.pattern_type === 'KDE-BRK' && (item.distance_pct ?? 0) > 1.0)
   )
 
+  const scoreItem = (item) => {
+    const distScore = Math.max(0, 1 - (item.distance_pct ?? 5) / 5.0) * 0.5
+    const rsRaw = item.rs_score ?? 0  // rs_score is typically -1 to +1 range
+    const rsScore = Math.max(0, Math.min(1, (rsRaw + 1) / 2)) * 0.3  // normalize to 0-1
+    const blueDot = (item.rs_blue_dot ? 1 : 0) * 0.2
+    return distScore + rsScore + blueDot
+  }
+
   // Split into approaching (NEAR BRK) and confirmed breaks
   const nearItems = filtered
     .filter(item => item.pattern_type === 'KDE' || item.pattern_type === 'TDL')
-    .sort((a, b) => (a.distance_pct ?? 999) - (b.distance_pct ?? 999))
+    .sort((a, b) => scoreItem(b) - scoreItem(a))
 
   const confirmedItems = filtered
     .filter(item => item.pattern_type === 'KDE-BRK' || item.pattern_type === 'TDL-BRK')
     .sort((a, b) => (a.distance_pct ?? 999) - (b.distance_pct ?? 999))
+
+  const visibleNearItems = showAll ? nearItems : nearItems.slice(0, 15)
 
   const SectionHeader = ({ label, count }) => (
     <div className="px-2 py-1 flex items-center justify-between"
@@ -130,7 +144,27 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
           {nearItems.length > 0 && (
             <>
               <SectionHeader label="Near BRK" count={nearItems.length} />
-              {nearItems.map(item => <WatchRow key={item.ticker} item={item} />)}
+              {visibleNearItems.map(item => <WatchRow key={item.ticker} item={item} />)}
+              {nearItems.length > 15 && (
+                <button
+                  onClick={() => setShowAll(v => !v)}
+                  style={{
+                    width: '100%',
+                    padding: '4px',
+                    fontSize: 8,
+                    background: 'transparent',
+                    border: 'none',
+                    borderTop: '1px solid var(--border)',
+                    color: 'var(--muted)',
+                    cursor: 'pointer',
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    fontFamily: '"IBM Plex Mono", monospace',
+                  }}
+                >
+                  {showAll ? `▲ Show top 15` : `▼ Show all ${nearItems.length}`}
+                </button>
+              )}
             </>
           )}
 
