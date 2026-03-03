@@ -136,13 +136,13 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                       const price = livePrices[s.ticker]
                       if (!price) return <td className="text-t-muted" style={{fontSize:9}}>—</td>
                       const dist = s.entry > 0 ? ((price - s.entry) / s.entry) * 100 : null
-                      const color = dist === null ? 'var(--muted)'
+                      const priceColor = dist === null ? 'var(--muted)'
                         : price >= s.entry ? 'var(--go)'
                         : dist > -3 ? 'var(--accent)'
                         : 'var(--muted)'
                       return (
                         <td>
-                          <span className="font-mono text-[9px] tabular-nums" style={{color}}>
+                          <span className="font-mono text-[9px] tabular-nums" style={{color: priceColor}}>
                             {price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                           </span>
                         </td>

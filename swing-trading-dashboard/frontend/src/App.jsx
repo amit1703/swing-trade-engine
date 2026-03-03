@@ -180,6 +180,7 @@ export default function App() {
       ...pullbackSetups,
       ...baseSetups,
       ...resBreakoutSetups,
+      ...optionsSetups,
     ].map((s) => s.ticker)
 
     const unique = [...new Set(allTickers)]
@@ -191,7 +192,7 @@ export default function App() {
     } catch (err) {
       console.warn('[App] fetchLivePrices:', err)
     }
-  }, [vcpSetups, pullbackSetups, baseSetups, resBreakoutSetups])
+  }, [vcpSetups, pullbackSetups, baseSetups, resBreakoutSetups, optionsSetups])
 
   useEffect(() => {
     fetchLivePrices()
