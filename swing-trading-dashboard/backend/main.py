@@ -14,6 +14,7 @@ Endpoints
   GET  /api/chart/{ticker}    OHLCV + EMA8/20 + SMA50 + CCI20 (fresh fetch)
   GET  /api/watchlist                 WATCHLIST setups from last scan
   GET  /api/setups/options-catalyst  OPTIONS_CATALYST setups from last scan
+  GET  /api/prices                   Live prices for comma-separated tickers (60s cache)
   GET  /api/debug/{ticker}           Dev mode: per-engine pass/fail for one ticker (fresh fetch)
   GET  /api/health                   Health-check
 
@@ -133,6 +134,10 @@ else:
 # ────────────────────────────────────────────────────────────────────────────
 # Shared state (single-process; safe with asyncio event loop)
 # ────────────────────────────────────────────────────────────────────────────
+
+# In-memory price cache: {ticker: (timestamp, price)}
+_price_cache: dict = {}
+PRICE_CACHE_TTL = 60  # seconds
 
 _scan_state: Dict = {
     "in_progress": False,
@@ -1005,6 +1010,80 @@ async def get_watchlist():
     # Sort by distance_pct ascending (closest first)
     items.sort(key=lambda x: x.get("distance_pct", 99))
     return {"items": items, "count": len(items)}
+
+
+@app.get("/api/prices")
+async def get_prices(tickers: str):
+    """
+    Returns latest price for a comma-separated list of tickers.
+    Caches results for 60 seconds to avoid hammering yfinance.
+    Query: /api/prices?tickers=AAPL,MSFT,NVDA
+    Returns: {"AAPL": 182.50, "MSFT": 415.20, ...}
+    """
+    # Parse, deduplicate, uppercase, cap at 50
+    raw = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    seen: set = set()
+    ticker_list = []
+    for t in raw:
+        if t not in seen:
+            seen.add(t)
+            ticker_list.append(t)
+    ticker_list = ticker_list[:50]
+
+    now = time.time()
+    result: dict = {}
+    uncached: list = []
+
+    # Check cache first
+    for t in ticker_list:
+        entry = _price_cache.get(t)
+        if entry is not None:
+            ts, price = entry
+            if now - ts < PRICE_CACHE_TTL:
+                result[t] = price
+                continue
+        uncached.append(t)
+
+    # Fetch uncached tickers in one batch
+    if uncached:
+        try:
+            loop = asyncio.get_event_loop()
+
+            def _batch_download(tks=uncached):
+                return yf.download(
+                    tks,
+                    period="1d",
+                    interval="1m",
+                    progress=False,
+                    group_by="ticker" if len(tks) > 1 else None,
+                )
+
+            df = await loop.run_in_executor(None, _batch_download)
+
+            if df is not None and not df.empty:
+                fetch_ts = time.time()
+                if len(uncached) == 1:
+                    # Single ticker: df has simple column index
+                    t = uncached[0]
+                    try:
+                        price = float(df["Close"].dropna().iloc[-1])
+                        _price_cache[t] = (fetch_ts, price)
+                        result[t] = price
+                    except Exception:
+                        pass
+                else:
+                    # Multiple tickers: df is MultiIndex (ticker, field)
+                    for t in uncached:
+                        try:
+                            price = float(df["Close"][t].dropna().iloc[-1])
+                            _price_cache[t] = (fetch_ts, price)
+                            result[t] = price
+                        except Exception:
+                            pass
+        except Exception as exc:
+            log.warning("[prices] batch fetch error: %s", exc)
+
+    return result
 
 
 @app.get("/api/sr-zones/{ticker}")

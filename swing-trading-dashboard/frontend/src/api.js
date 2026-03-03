@@ -67,3 +67,6 @@ export const fetchClosedTrades = () =>
 
 export const fetchOptionsSetups = () =>
   fetch('/api/setups/options-catalyst').then(handleResponse)
+
+export const fetchPrices = (tickers) =>
+  fetch(`/api/prices?tickers=${tickers.join(',')}`).then(handleResponse)

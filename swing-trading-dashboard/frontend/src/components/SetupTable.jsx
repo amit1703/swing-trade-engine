@@ -13,7 +13,7 @@
  *   Vol ratio shown as "×1.8" next to badge
  *   RS+  → Stock 3m RS outperforming SPY (rs_vs_spy > 0)
  */
-export default function SetupTable({ title, accentColor, setups, selectedTicker, onSelectTicker, loading, devMode, onDebug }) {
+export default function SetupTable({ title, accentColor, setups, selectedTicker, onSelectTicker, loading, devMode, onDebug, livePrices = {} }) {
   const count = setups.length
 
   const color = accentColor === 'blue'
@@ -53,6 +53,7 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>Ticker</th>
+                <th>Now $</th>
                 <th>Entry $</th>
                 <th>Stop $</th>
                 <th>Target $</th>
@@ -129,6 +130,24 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                         TV
                       </a>
                     </td>
+
+                    {/* Now $ — live price */}
+                    {(() => {
+                      const price = livePrices[s.ticker]
+                      if (!price) return <td className="text-t-muted" style={{fontSize:9}}>—</td>
+                      const dist = s.entry > 0 ? ((price - s.entry) / s.entry) * 100 : null
+                      const color = dist === null ? 'var(--muted)'
+                        : price >= s.entry ? 'var(--go)'
+                        : dist > -3 ? 'var(--accent)'
+                        : 'var(--muted)'
+                      return (
+                        <td>
+                          <span className="font-mono text-[9px] tabular-nums" style={{color}}>
+                            {price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          </span>
+                        </td>
+                      )
+                    })()}
 
                     {/* Entry */}
                     <td className="text-t-text">{fmt(s.entry)}</td>

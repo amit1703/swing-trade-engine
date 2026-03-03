@@ -25,6 +25,7 @@ import {
   fetchWatchlist,
   fetchDebugTicker,
   fetchOptionsSetups,
+  fetchPrices,
 } from './api.js'
 
 import Header        from './components/Header.jsx'
@@ -70,6 +71,7 @@ export default function App() {
   const [debugLoading,   setDebugLoading  ] = useState(false)
   const [sortBy,         setSortBy        ] = useState('default')
   const [hotOnly,        setHotOnly       ] = useState(false)
+  const [livePrices,     setLivePrices    ] = useState({})
 
   const pollTimerRef = useRef(null)
 
@@ -170,6 +172,32 @@ export default function App() {
       setDebugLoading(false)
     }
   }, [])
+
+  // ── Live price polling ────────────────────────────────────────────────────
+  const fetchLivePrices = useCallback(async () => {
+    const allTickers = [
+      ...vcpSetups,
+      ...pullbackSetups,
+      ...baseSetups,
+      ...resBreakoutSetups,
+    ].map((s) => s.ticker)
+
+    const unique = [...new Set(allTickers)]
+    if (unique.length === 0) return
+
+    try {
+      const prices = await fetchPrices(unique)
+      setLivePrices(prices)
+    } catch (err) {
+      console.warn('[App] fetchLivePrices:', err)
+    }
+  }, [vcpSetups, pullbackSetups, baseSetups, resBreakoutSetups])
+
+  useEffect(() => {
+    fetchLivePrices()
+    const id = setInterval(fetchLivePrices, 60_000)
+    return () => clearInterval(id)
+  }, [fetchLivePrices])
 
   // ── Poll scan status while running ────────────────────────────────────────
   useEffect(() => {
@@ -368,6 +396,7 @@ export default function App() {
                   loading: loadingSetups,
                   devMode,
                   onDebug: handleDebug,
+                  livePrices,
                 }
 
                 return (
@@ -466,6 +495,7 @@ export default function App() {
                 onSelectTicker={(t) => handleTickerClick(t, false)}
                 selectedTicker={selectedTicker}
                 loading={loadingSetups}
+                livePrices={livePrices}
               />
             </aside>
             <main className="flex-1 min-w-0 overflow-hidden" style={{ background: 'var(--bg)' }}>
