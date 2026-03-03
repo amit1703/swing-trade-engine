@@ -35,6 +35,7 @@ Run
 import asyncio
 import json
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -43,6 +44,11 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from dotenv import load_dotenv
+
+load_dotenv()  # load .env file (EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO, etc.)
+
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from indicators import ema as _ema, sma as _sma, cci as _cci, atr as _atr
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
@@ -93,6 +99,7 @@ from engines.engine7 import scan_options_catalyst
 from tickers import SCAN_UNIVERSE
 from validation import is_price_vital
 from universe_builder import build_universe, load_universe, save_universe, UNIVERSE_FILE
+from email_digest import send_digest
 
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration (imported from constants.py for centralized management)
@@ -164,6 +171,107 @@ _scan_state: Dict = {
 _semaphore: Optional[asyncio.Semaphore] = None
 _ticker_cache: dict = {}  # ticker → (timestamp: float, df: Optional[pd.DataFrame])
 
+# ── Email digest cache ────────────────────────────────────────────────────────
+# Populated by the 7:30 AM scheduler job; consumed by the 8:00 AM email job.
+_digest_cache: dict = {}
+
+# ── APScheduler instance ──────────────────────────────────────────────────────
+_scheduler: Optional[BackgroundScheduler] = None
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Scheduler jobs (run at 7:30 AM and 8:00 AM ET daily)
+# ────────────────────────────────────────────────────────────────────────────
+
+def run_morning_scan() -> None:
+    """
+    7:30 AM ET job — run all scan engines and store results in _digest_cache.
+
+    APScheduler calls this in a background thread, not in the asyncio event loop,
+    so we use asyncio.run() to create a fresh event loop for the async scan pipeline.
+    The semaphore is re-created inside that loop so it is bound to the correct loop.
+    """
+    global _digest_cache
+    log.info("[scheduler] 7:30 AM scan job starting…")
+    try:
+        import asyncio as _asyncio
+
+        async def _scan_and_cache() -> None:
+            global _semaphore, _digest_cache
+
+            # Create a fresh semaphore bound to this loop
+            _semaphore = _asyncio.Semaphore(CONCURRENCY_LIMIT)
+
+            scan_ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+
+            # Initialise DB (idempotent) in case the server was restarted
+            await init_db(DB_PATH)
+
+            # Run full scan pipeline (saves to DB and updates _scan_state)
+            await _run_scan(scan_ts, ACTIVE_UNIVERSE, force=False, dry_run=False)
+
+            # Pull results from DB to build the digest cache
+            from database import get_latest_regime as _get_regime, get_latest_setups as _get_setups
+
+            regime = await _get_regime(DB_PATH) or {}
+            vcp_setups     = await _get_setups(DB_PATH, setup_type="VCP")
+            watchlist      = await _get_setups(DB_PATH, setup_type="WATCHLIST")
+            res_setups     = await _get_setups(DB_PATH, setup_type="RES_BREAKOUT")
+            pb_setups      = await _get_setups(DB_PATH, setup_type="PULLBACK")
+            opt_setups     = await _get_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
+
+            # Enrich regime with SPY SMA50 for BULL/BEAR/NEUTRAL badge
+            spy_sma50: Optional[float] = None
+            try:
+                spy_df_sched = await _fetch("SPY")
+                if spy_df_sched is not None and len(spy_df_sched) >= 50:
+                    from indicators import sma as _sma_fn
+                    adj_col = "Adj Close" if "Adj Close" in spy_df_sched.columns else "Close"
+                    sma50_series = _sma_fn(spy_df_sched[adj_col], 50)
+                    spy_sma50 = float(sma50_series.iloc[-1])
+            except Exception as sma_exc:
+                log.warning("[scheduler] Could not compute SPY SMA50: %s", sma_exc)
+
+            if isinstance(regime, dict):
+                regime["spy_sma50"] = spy_sma50
+
+            _digest_cache = {
+                "regime":           regime,
+                "vcp":              vcp_setups,
+                "vcp_dry":          watchlist,
+                "res_breakout":     res_setups,
+                "pullback":         pb_setups,
+                "options_catalyst": opt_setups,
+            }
+            log.info(
+                "[scheduler] Digest cache built: vcp=%d  dry=%d  res=%d  pb=%d  opt=%d",
+                len(vcp_setups), len(watchlist), len(res_setups), len(pb_setups), len(opt_setups),
+            )
+
+        _asyncio.run(_scan_and_cache())
+
+    except Exception as exc:
+        log.error("[scheduler] Morning scan job failed: %s", exc)
+
+
+def send_morning_email() -> None:
+    """
+    8:00 AM ET job — send the email digest from _digest_cache.
+
+    If the cache is empty (e.g., scan failed), the email is skipped with a warning.
+    """
+    log.info("[scheduler] 8:00 AM email job starting…")
+    if not _digest_cache:
+        log.warning(
+            "[scheduler] Email digest skipped: _digest_cache is empty. "
+            "The 7:30 AM scan may not have completed."
+        )
+        return
+    try:
+        send_digest(_digest_cache)
+    except Exception as exc:
+        log.error("[scheduler] Email send job failed: %s", exc)
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # App lifecycle
@@ -171,11 +279,42 @@ _ticker_cache: dict = {}  # ticker → (timestamp: float, df: Optional[pd.DataFr
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _semaphore
+    global _semaphore, _scheduler
     _semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     await init_db(DB_PATH)
     log.info("SQLite DB initialised at %s", DB_PATH)
+
+    # ── APScheduler: scan at 7:30 AM ET, email at 8:00 AM ET ────────────────
+    _scheduler = BackgroundScheduler(timezone="America/New_York")
+    _scheduler.add_job(
+        run_morning_scan,
+        trigger="cron",
+        hour=7,
+        minute=30,
+        id="morning_scan",
+        replace_existing=True,
+        misfire_grace_time=600,  # allow up to 10 min late if server was temporarily down
+    )
+    _scheduler.add_job(
+        send_morning_email,
+        trigger="cron",
+        hour=8,
+        minute=0,
+        id="morning_email",
+        replace_existing=True,
+        misfire_grace_time=600,
+    )
+    _scheduler.start()
+    log.info(
+        "[scheduler] Started — scan at 07:30 ET, email at 08:00 ET"
+    )
+
     yield
+
+    # ── Shutdown ─────────────────────────────────────────────────────────────
+    if _scheduler and _scheduler.running:
+        _scheduler.shutdown(wait=False)
+        log.info("[scheduler] Stopped")
 
 
 app = FastAPI(
