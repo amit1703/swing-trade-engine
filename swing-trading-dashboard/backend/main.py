@@ -145,7 +145,7 @@ _scan_state: Dict = {
         "e0": {},
         "e1": {"zones_saved": 0},
         "e2": {"vcp": 0, "watchlist": 0},
-        "e3": {"pullback": 0, "relaxed": 0},
+        "e3": {"pullback": 0, "relaxed": 0, "ema": 0},
         "e5": {"cup_handle": 0, "flat_base": 0},
         "e6": {"res_breakout": 0},
         "e7": {"options_catalyst": 0},
@@ -312,7 +312,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
             "e0": {},
             "e1": {"zones_saved": 0},
             "e2": {"vcp": 0, "watchlist": 0},
-            "e3": {"pullback": 0, "relaxed": 0},
+            "e3": {"pullback": 0, "relaxed": 0, "ema": 0},
             "e5": {"cup_handle": 0, "flat_base": 0},
             "e6": {"res_breakout": 0},
             "e7": {"options_catalyst": 0},
@@ -651,7 +651,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                                     pb_ema["sector"] = SECTORS.get(ticker, "Unknown")
                                     collected_setups.append(pb_ema)
                                     pb_count += 1
-                                    _scan_state["engine_stats"]["e3"]["pullback"] += 1
+                                    _scan_state["engine_stats"]["e3"]["ema"] += 1
                                     log.info("  PULLBACK %-6s  entry=%.2f (ema-path)", ticker, pb_ema["entry"])
                             except Exception as pb_ema_exc:
                                 log.warning("EMA pullback check failed for %s: %s", ticker, pb_ema_exc)
