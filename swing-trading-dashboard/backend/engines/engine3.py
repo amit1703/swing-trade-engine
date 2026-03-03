@@ -152,8 +152,8 @@ def scan_pullback(
         nearest_sup = None
 
         for z in support_zones:
-            # Low dips into the zone (with a tiny 0.5 % tolerance)
-            low_in_zone = z["lower"] * 0.995 <= ll <= z["upper"] * 1.005
+            # Low dips into the zone (with a 2.0% tolerance — widened from 0.5%)
+            low_in_zone = z["lower"] * 0.980 <= ll <= z["upper"] * 1.020
             close_in_zone = z["lower"] <= lc <= z["upper"]
             if low_in_zone or close_in_zone:
                 nearest_sup = z
@@ -369,7 +369,8 @@ def scan_relaxed_pullback(
         support_zones = [z for z in sr_zones if z["type"] == "SUPPORT"]
         nearest_sup = None
         for z in support_zones:
-            low_in_zone = z["lower"] * 0.995 <= ll <= z["upper"] * 1.005
+            # 2.0% tolerance — widened from 0.5%
+            low_in_zone = z["lower"] * 0.980 <= ll <= z["upper"] * 1.020
             close_in_zone = z["lower"] <= lc <= z["upper"]
             if low_in_zone or close_in_zone:
                 nearest_sup = z
@@ -428,6 +429,168 @@ def scan_relaxed_pullback(
 
     except Exception as exc:  # noqa: BLE001
         print(f"[scan_relaxed_pullback] {ticker}: {exc}")
+        return None
+
+
+def scan_ema_pullback(
+    ticker: str,
+    df: pd.DataFrame,
+    sr_zones: List[Dict],
+    trendline: Optional[Dict] = None,
+    rs_score: float = 0.0,
+    debug: bool = False,
+) -> Optional[Dict]:
+    """
+    Pure EMA pullback path — no KDE zone required.
+
+    Criteria (all must pass):
+    1. Trend       : EMA8 > EMA20 > SMA50 (clean uptrend, stricter than strict path)
+    2. EMA20 touch : Low <= EMA20 * 1.005  (came within 0.5% of EMA20)
+    3. Rejection   : Close >= EMA20         (pin bar — closed back above EMA20)
+    4. CCI hook    : CCI[yesterday] < -30 AND CCI[today] > CCI[yesterday]
+    5. Volume dry  : volume_today < avg_vol_50d  (light volume pullback)
+
+    Risk Math:
+      Entry     = High * 1.001
+      Stop Loss = Low - 0.2 * ATR
+      Risk must be <= 15% of entry
+    """
+    try:
+        data = _prep(df)
+        if data is None or len(data) < 60:
+            return None
+
+        adj = _adj_col(data)
+        close = data[adj]
+        high = data["High"]
+        low = data["Low"]
+        volume = data["Volume"]
+
+        if close.dropna().shape[0] < 55:
+            return None
+
+        # ── Indicators ───────────────────────────────────────────────────
+        ema8 = _ema(close, 8)
+        ema20 = _ema(close, 20)
+        sma50 = _sma(close, 50)
+        cci20 = _cci(high, low, close, 20)
+        atr14 = _atr(high, low, close, 14)
+
+        cci_clean = cci20.dropna()
+        if len(cci_clean) < 2:
+            return None
+
+        lc = float(close.iloc[-1].item() if hasattr(close.iloc[-1], 'item') else close.iloc[-1])
+        lh = float(high.iloc[-1].item() if hasattr(high.iloc[-1], 'item') else high.iloc[-1])
+        ll = float(low.iloc[-1].item() if hasattr(low.iloc[-1], 'item') else low.iloc[-1])
+        l8 = float(ema8.iloc[-1].item() if hasattr(ema8.iloc[-1], 'item') else ema8.iloc[-1])
+        l20 = float(ema20.iloc[-1].item() if hasattr(ema20.iloc[-1], 'item') else ema20.iloc[-1])
+        l50 = float(sma50.iloc[-1].item() if hasattr(sma50.iloc[-1], 'item') else sma50.iloc[-1])
+        latr = float(atr14.iloc[-1].item() if hasattr(atr14.iloc[-1], 'item') else atr14.iloc[-1])
+        cci_today = float(cci20.iloc[-1].item() if hasattr(cci20.iloc[-1], 'item') else cci20.iloc[-1])
+        cci_prev = float(cci20.iloc[-2].item() if hasattr(cci20.iloc[-2], 'item') else cci20.iloc[-2])
+
+        if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, latr, cci_today, cci_prev]):
+            return None
+
+        # ── 0. RS quality gate ────────────────────────────────────────────
+        if rs_score < -0.05:
+            if debug:
+                print(
+                    f"Engine 3 EMA Pullback: REJECTED - RS score too weak "
+                    f"({rs_score:.3f} < -0.05)"
+                )
+            return None
+
+        # ── 1. Trend filter: EMA8 > EMA20 > SMA50 ────────────────────────
+        if not (l8 > l20 and l20 > l50):
+            if debug:
+                print(
+                    f"Engine 3 EMA Pullback: REJECTED - Trend filter failed "
+                    f"(EMA8 {l8:.2f}, EMA20 {l20:.2f}, SMA50 {l50:.2f})"
+                )
+            return None
+
+        # ── 2. EMA20 touch: Low <= EMA20 * 1.005 ─────────────────────────
+        if not (ll <= l20 * 1.005):
+            if debug:
+                print(
+                    f"Engine 3 EMA Pullback: REJECTED - Low {ll:.2f} did not touch EMA20 "
+                    f"(EMA20 {l20:.2f}, threshold {l20 * 1.005:.2f})"
+                )
+            return None
+
+        # ── 3. Rejection pin bar: Close >= EMA20 ─────────────────────────
+        if lc < l20:
+            if debug:
+                print(
+                    f"Engine 3 EMA Pullback: REJECTED - No pin bar "
+                    f"(Close {lc:.2f} < EMA20 {l20:.2f})"
+                )
+            return None
+
+        # ── 4. CCI hook: yesterday < -30 and today turning up ────────────
+        if not (cci_prev < CCI_RLX_FLOOR and cci_today > cci_prev):
+            if debug:
+                print(
+                    f"Engine 3 EMA Pullback: REJECTED - CCI hook failed "
+                    f"(yesterday: {cci_prev:.1f}, today: {cci_today:.1f}, "
+                    f"required: < {CCI_RLX_FLOOR:.0f} then rising)"
+                )
+            return None
+
+        # ── 5. Volume dry-up: today's volume < 50-day avg vol ────────────
+        vol_sma50 = volume.rolling(50).mean()
+        vsm_val = vol_sma50.iloc[-1]
+        avg_vol_50d = float(vsm_val.item() if hasattr(vsm_val, 'item') else vsm_val)
+        if pd.isna(avg_vol_50d) or avg_vol_50d <= 0:
+            return None
+
+        vol_today_val = volume.iloc[-1]
+        vol_today = float(vol_today_val.item() if hasattr(vol_today_val, 'item') else vol_today_val)
+        if vol_today >= avg_vol_50d:
+            if debug:
+                print(
+                    f"Engine 3 EMA Pullback: REJECTED - Volume not dry "
+                    f"(today {vol_today:.0f} >= 50d avg {avg_vol_50d:.0f})"
+                )
+            return None
+
+        # ── Risk math ────────────────────────────────────────────────────
+        entry = round(lh * 1.001, 2)
+        stop_loss = round(ll - 0.2 * latr, 2)
+        risk = entry - stop_loss
+
+        if risk <= 0 or risk > entry * 0.15:
+            if debug:
+                print(
+                    f"Engine 3 EMA Pullback: REJECTED - Risk out of bounds "
+                    f"(risk={risk:.2f}, entry={entry:.2f}, max={entry * 0.15:.2f})"
+                )
+            return None
+
+        take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
+
+        return {
+            "ticker": ticker,
+            "setup_type": "PULLBACK",
+            "entry": entry,
+            "stop_loss": stop_loss,
+            "take_profit": take_profit,
+            "rr": actual_rr,
+            "setup_date": str(data.index[-1].date()),
+            "cci_today": round(cci_today, 2),
+            "cci_yesterday": round(cci_prev, 2),
+            "support_level": round(l20, 2),
+            "ema8": round(l8, 2),
+            "ema20": round(l20, 2),
+            "is_relaxed": False,
+            "is_ema_path": True,
+            "is_ascending_tdl": False,
+        }
+
+    except Exception as exc:  # noqa: BLE001
+        print(f"[scan_ema_pullback] {ticker}: {exc}")
         return None
 
 
