@@ -8,6 +8,7 @@ Technical confirmation is intentionally relaxed (close > SMA50, not a
 falling knife) because the options flow itself is the primary signal.
 """
 
+import logging
 import os
 import sys
 from datetime import date, datetime
@@ -16,6 +17,8 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 import yfinance as yf
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from constants import (
@@ -169,7 +172,8 @@ def _fetch_options_data(ticker: str, current_close: float) -> Optional[Dict]:
             "dte":               dte,
         }
 
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.debug("Options fetch failed for %s: %s", ticker, e)
         return None
 
 
