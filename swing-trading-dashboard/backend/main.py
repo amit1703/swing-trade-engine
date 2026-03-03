@@ -337,8 +337,6 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
     global ACTIVE_UNIVERSE, SECTORS
     if tickers is ACTIVE_UNIVERSE and _universe_stale:
         log.info("Universe is %.1fh old — rebuilding via SEC EDGAR + yfinance pre-filters…", _universe_age_h)
-    elif tickers is ACTIVE_UNIVERSE:
-        log.info("Universe is %.1fh old — using cached list (%d tickers)", _universe_age_h, len(tickers))
         loop = asyncio.get_running_loop()
         try:
             universe_dict = await loop.run_in_executor(
@@ -368,6 +366,8 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                 log.warning("Universe rebuild returned 0 tickers — keeping existing universe")
         except Exception:
             log.exception("Universe rebuild failed — proceeding with existing universe")
+    elif tickers is ACTIVE_UNIVERSE:
+        log.info("Universe is %.1fh old — using cached list (%d tickers)", _universe_age_h, len(tickers))
 
     # Update total now that tickers may have been replaced by the fresh universe
     _scan_state["total"] = len(tickers)
