@@ -4,7 +4,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from engines.engine3 import scan_ema_pullback
 
@@ -156,3 +155,10 @@ def test_ema_pullback_rejects_high_volume():
 
     result = scan_ema_pullback("TEST", df, sr_zones=[])
     assert result is None, "High volume today: must be rejected by volume-dry gate"
+
+
+def test_ema_pullback_rejects_bad_rs():
+    """RS score below -0.05 → RS gate must reject."""
+    df = make_ema_pullback_df()
+    result = scan_ema_pullback("TEST", df, sr_zones=[], rs_score=-0.10)
+    assert result is None, "Weak RS score (-0.10): must be rejected by RS quality gate"

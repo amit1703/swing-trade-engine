@@ -1144,6 +1144,8 @@ async def debug_ticker(ticker: str):
     e3_out = _eng(e3, ())
     if e3 is not None and e3_relaxed:
         e3_out["is_relaxed"] = True
+    if e3 is not None and e3.get("is_ema_path"):
+        e3_out["is_ema_path"] = True
 
     # Engine 5 block: use base_type as the result value (more specific than "BASE")
     e5_out = _eng(e5, ("base_type", "quality_score"))

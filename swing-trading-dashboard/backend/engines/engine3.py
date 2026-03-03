@@ -21,6 +21,7 @@ Risk Math:
 
 import os
 import sys
+from types import SimpleNamespace
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -81,41 +82,16 @@ def scan_pullback(
     Checks both horizontal support zones AND ascending trendlines.
     """
     try:
-        data = _prep(df)
-        if data is None or len(data) < 60:
+        ind = _prepare_indicators(ticker, df)
+        if ind is None:
             return None
 
-        adj = _adj_col(data)
-        close = data[adj]
-        high = data["High"]
-        low = data["Low"]
-
-        if close.dropna().shape[0] < 55:
-            return None
-
-        # ── Indicators ───────────────────────────────────────────────────
-        ema8 = _ema(close, 8)
-        ema20 = _ema(close, 20)
-        sma50 = _sma(close, 50)
-        cci20 = _cci(high, low, close, 20)
-        atr14 = _atr(high, low, close, 14)
-
-        cci_clean = cci20.dropna()
-        if len(cci_clean) < 2:
-            return None
-
-        lc = float(close.iloc[-1].item() if hasattr(close.iloc[-1], 'item') else close.iloc[-1])
-        lh = float(high.iloc[-1].item() if hasattr(high.iloc[-1], 'item') else high.iloc[-1])
-        ll = float(low.iloc[-1].item() if hasattr(low.iloc[-1], 'item') else low.iloc[-1])
-        l8 = float(ema8.iloc[-1].item() if hasattr(ema8.iloc[-1], 'item') else ema8.iloc[-1])
-        l20 = float(ema20.iloc[-1].item() if hasattr(ema20.iloc[-1], 'item') else ema20.iloc[-1])
-        l50 = float(sma50.iloc[-1].item() if hasattr(sma50.iloc[-1], 'item') else sma50.iloc[-1])
-        latr = float(atr14.iloc[-1].item() if hasattr(atr14.iloc[-1], 'item') else atr14.iloc[-1])
-        cci_today = float(cci20.iloc[-1].item() if hasattr(cci20.iloc[-1], 'item') else cci20.iloc[-1])
-        cci_prev = float(cci20.iloc[-2].item() if hasattr(cci20.iloc[-2], 'item') else cci20.iloc[-2])
-
-        if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, latr, cci_today, cci_prev]):
-            return None
+        data = ind.data
+        lc, lh, ll   = ind.lc, ind.lh, ind.ll
+        l8, l20, l50 = ind.l8, ind.l20, ind.l50
+        latr         = ind.latr
+        cci_today    = ind.cci_today
+        cci_prev     = ind.cci_prev
 
         # ── 0. RS quality gate ────────────────────────────────────────────
         # Require stock not to be a persistent underperformer vs SPY.
@@ -263,42 +239,17 @@ def scan_relaxed_pullback(
     Flags ascending trendline touches as is_ascending_tdl for display purposes.
     """
     try:
-        data = _prep(df)
-        if data is None or len(data) < 60:
+        ind = _prepare_indicators(ticker, df)
+        if ind is None:
             return None
 
-        adj = _adj_col(data)
-        close = data[adj]
-        high = data["High"]
-        low = data["Low"]
-        volume = data["Volume"]
-
-        if close.dropna().shape[0] < 55:
-            return None
-
-        # ── Indicators ───────────────────────────────────────────────────
-        ema8 = _ema(close, 8)
-        ema20 = _ema(close, 20)
-        sma50 = _sma(close, 50)
-        cci20 = _cci(high, low, close, 20)
-        atr14 = _atr(high, low, close, 14)
-
-        cci_clean = cci20.dropna()
-        if len(cci_clean) < 2:
-            return None
-
-        lc = float(close.iloc[-1].item() if hasattr(close.iloc[-1], 'item') else close.iloc[-1])
-        lh = float(high.iloc[-1].item() if hasattr(high.iloc[-1], 'item') else high.iloc[-1])
-        ll = float(low.iloc[-1].item() if hasattr(low.iloc[-1], 'item') else low.iloc[-1])
-        l8 = float(ema8.iloc[-1].item() if hasattr(ema8.iloc[-1], 'item') else ema8.iloc[-1])
-        l20 = float(ema20.iloc[-1].item() if hasattr(ema20.iloc[-1], 'item') else ema20.iloc[-1])
-        l50 = float(sma50.iloc[-1].item() if hasattr(sma50.iloc[-1], 'item') else sma50.iloc[-1])
-        latr = float(atr14.iloc[-1].item() if hasattr(atr14.iloc[-1], 'item') else atr14.iloc[-1])
-        cci_today = float(cci20.iloc[-1].item() if hasattr(cci20.iloc[-1], 'item') else cci20.iloc[-1])
-        cci_prev = float(cci20.iloc[-2].item() if hasattr(cci20.iloc[-2], 'item') else cci20.iloc[-2])
-
-        if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, latr, cci_today, cci_prev]):
-            return None
+        data   = ind.data
+        volume = ind.volume
+        lc, lh, ll   = ind.lc, ind.lh, ind.ll
+        l8, l20, l50 = ind.l8, ind.l20, ind.l50
+        latr         = ind.latr
+        cci_today    = ind.cci_today
+        cci_prev     = ind.cci_prev
 
         # ── 0. RS quality gate ────────────────────────────────────────────
         if rs_score < -0.05:
@@ -456,42 +407,17 @@ def scan_ema_pullback(
       Risk must be <= 15% of entry
     """
     try:
-        data = _prep(df)
-        if data is None or len(data) < 60:
+        ind = _prepare_indicators(ticker, df)
+        if ind is None:
             return None
 
-        adj = _adj_col(data)
-        close = data[adj]
-        high = data["High"]
-        low = data["Low"]
-        volume = data["Volume"]
-
-        if close.dropna().shape[0] < 55:
-            return None
-
-        # ── Indicators ───────────────────────────────────────────────────
-        ema8 = _ema(close, 8)
-        ema20 = _ema(close, 20)
-        sma50 = _sma(close, 50)
-        cci20 = _cci(high, low, close, 20)
-        atr14 = _atr(high, low, close, 14)
-
-        cci_clean = cci20.dropna()
-        if len(cci_clean) < 2:
-            return None
-
-        lc = float(close.iloc[-1].item() if hasattr(close.iloc[-1], 'item') else close.iloc[-1])
-        lh = float(high.iloc[-1].item() if hasattr(high.iloc[-1], 'item') else high.iloc[-1])
-        ll = float(low.iloc[-1].item() if hasattr(low.iloc[-1], 'item') else low.iloc[-1])
-        l8 = float(ema8.iloc[-1].item() if hasattr(ema8.iloc[-1], 'item') else ema8.iloc[-1])
-        l20 = float(ema20.iloc[-1].item() if hasattr(ema20.iloc[-1], 'item') else ema20.iloc[-1])
-        l50 = float(sma50.iloc[-1].item() if hasattr(sma50.iloc[-1], 'item') else sma50.iloc[-1])
-        latr = float(atr14.iloc[-1].item() if hasattr(atr14.iloc[-1], 'item') else atr14.iloc[-1])
-        cci_today = float(cci20.iloc[-1].item() if hasattr(cci20.iloc[-1], 'item') else cci20.iloc[-1])
-        cci_prev = float(cci20.iloc[-2].item() if hasattr(cci20.iloc[-2], 'item') else cci20.iloc[-2])
-
-        if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, latr, cci_today, cci_prev]):
-            return None
+        data   = ind.data
+        volume = ind.volume
+        lc, lh, ll   = ind.lc, ind.lh, ind.ll
+        l8, l20, l50 = ind.l8, ind.l20, ind.l50
+        latr         = ind.latr
+        cci_today    = ind.cci_today
+        cci_prev     = ind.cci_prev
 
         # ── 0. RS quality gate ────────────────────────────────────────────
         if rs_score < -0.05:
@@ -612,3 +538,75 @@ def _prep(df: pd.DataFrame) -> Optional[pd.DataFrame]:
 
 def _adj_col(df: pd.DataFrame) -> str:
     return "Adj Close" if "Adj Close" in df.columns else "Close"
+
+
+def _prepare_indicators(
+    ticker: str,
+    df: pd.DataFrame,
+) -> Optional[SimpleNamespace]:
+    """
+    Shared indicator preparation used by all three scan functions.
+
+    Runs _prep(), computes EMA8/EMA20/SMA50/ATR/CCI, extracts the 9 scalar
+    floats for the last bar, and guards for NaN.
+
+    Returns a SimpleNamespace with fields:
+        data       – cleaned DataFrame (output of _prep)
+        close, high, low, volume – raw Series
+        lc, lh, ll, lvol         – last-bar scalars
+        l8, l20, l50, latr       – indicator scalars
+        cci_today, cci_prev      – CCI scalars
+        ema8, ema20, sma50, atr14, cci20  – full indicator Series
+
+    Returns None if data is insufficient or any key scalar is NaN.
+    """
+    data = _prep(df)
+    if data is None or len(data) < 60:
+        return None
+
+    adj = _adj_col(data)
+    close = data[adj]
+    high = data["High"]
+    low = data["Low"]
+    volume = data["Volume"] if "Volume" in data.columns else pd.Series(
+        np.zeros(len(data)), index=data.index
+    )
+
+    if close.dropna().shape[0] < 55:
+        return None
+
+    ema8 = _ema(close, 8)
+    ema20 = _ema(close, 20)
+    sma50 = _sma(close, 50)
+    cci20 = _cci(high, low, close, 20)
+    atr14 = _atr(high, low, close, 14)
+
+    cci_clean = cci20.dropna()
+    if len(cci_clean) < 2:
+        return None
+
+    def _s(v):
+        return float(v.item() if hasattr(v, 'item') else v)
+
+    lc    = _s(close.iloc[-1])
+    lh    = _s(high.iloc[-1])
+    ll    = _s(low.iloc[-1])
+    lvol  = _s(volume.iloc[-1])
+    l8    = _s(ema8.iloc[-1])
+    l20   = _s(ema20.iloc[-1])
+    l50   = _s(sma50.iloc[-1])
+    latr  = _s(atr14.iloc[-1])
+    cci_today = _s(cci20.iloc[-1])
+    cci_prev  = _s(cci20.iloc[-2])
+
+    if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, latr, cci_today, cci_prev]):
+        return None
+
+    return SimpleNamespace(
+        data=data,
+        close=close, high=high, low=low, volume=volume,
+        lc=lc, lh=lh, ll=ll, lvol=lvol,
+        l8=l8, l20=l20, l50=l50, latr=latr,
+        cci_today=cci_today, cci_prev=cci_prev,
+        ema8=ema8, ema20=ema20, sma50=sma50, atr14=atr14, cci20=cci20,
+    )
