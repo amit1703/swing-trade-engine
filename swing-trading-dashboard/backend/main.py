@@ -52,24 +52,32 @@ load_dotenv()  # load .env file (EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO, etc.)
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from indicators import ema as _ema, sma as _sma, cci as _cci, atr as _atr
+from indicators.indicator_engine import compute_indicators, TickerIndicators
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from constants import (
+    BULK_DOWNLOAD_BATCH_SIZE,
     CACHE_TTL_FAILURE,
     CACHE_TTL_SUCCESS,
     CONCURRENCY_LIMIT,
     DATA_FETCH_PERIOD,
-    DB_PATH,
     DAYS_3_MONTHS,
+    DB_PATH,
+    EARNINGS_BLACKOUT_DAYS,
+    EARNINGS_CACHE_FILE,
+    EARNINGS_CACHE_TTL_HOURS,
     FETCH_BACKOFF_BASE,
     FETCH_MAX_RETRIES,
+    LIQUIDITY_MIN_AVG_VOLUME,
+    LIQUIDITY_MIN_DOLLAR_VOLUME,
     MAX_TICKERS_PER_SCAN,
     MIN_ATR_PCT,
     MIN_CANDLES_FOR_ANALYSIS,
     MIN_CANDLES_FOR_RS,
     RS_BLUE_DOT_TOLERANCE_PCT,
+    REGIME_SELECTIVE_THRESHOLD,
     TRADING_DAYS_IN_YEAR,
 )
 from database import (
@@ -147,6 +155,10 @@ else:
 _price_cache: dict = {}
 PRICE_CACHE_TTL = 60  # seconds
 
+# In-memory earnings blackout cache: {ticker: {"blackout": bool, "cached_at": ISO str}}
+_earnings_cache: dict = {}
+_earnings_cache_lock = threading.Lock()
+
 _scan_state: Dict = {
     "in_progress": False,
     "progress": 0,
@@ -166,6 +178,18 @@ _scan_state: Dict = {
         "total_duration_s": 0.0,
         "forced": False,
         "dry_run": False,
+        "timing": {
+            "regime_s": 0.0,
+            "spy_fetch_s": 0.0,
+            "prefetch_s": 0.0,
+            "process_s": 0.0,
+            "db_s": 0.0,
+            "total_s": 0.0,
+        },
+        "filtered": {
+            "liquidity": 0,
+            "earnings": 0,
+        },
     },
     "dry_run_setups": None,
 }
@@ -179,6 +203,91 @@ _digest_cache_lock = threading.Lock()
 
 # ── APScheduler instance ──────────────────────────────────────────────────────
 _scheduler: Optional[BackgroundScheduler] = None
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Earnings blackout helpers (Task 1)
+# ────────────────────────────────────────────────────────────────────────────
+
+def _load_earnings_cache() -> dict:
+    """Load earnings cache from disk; return empty dict on any error."""
+    try:
+        if os.path.exists(EARNINGS_CACHE_FILE):
+            with open(EARNINGS_CACHE_FILE, "r") as f:
+                return json.load(f)
+    except Exception as exc:
+        log.warning("Could not load earnings cache: %s", exc)
+    return {}
+
+
+def _save_earnings_cache(cache: dict) -> None:
+    """Persist earnings cache to disk."""
+    try:
+        os.makedirs(os.path.dirname(EARNINGS_CACHE_FILE), exist_ok=True)
+        with open(EARNINGS_CACHE_FILE, "w") as f:
+            json.dump(cache, f)
+    except Exception as exc:
+        log.warning("Could not save earnings cache: %s", exc)
+
+
+def _check_earnings_blackout_sync(ticker: str) -> bool:
+    """
+    Return True if ``ticker`` has an earnings event within
+    EARNINGS_BLACKOUT_DAYS calendar days.
+
+    Thread-safe: reads/writes global ``_earnings_cache`` under
+    ``_earnings_cache_lock``.  Calls yfinance only for stale / missing entries.
+    Fails *open* on any error (returns False) so individual fetch issues
+    never block a ticker from being analysed.
+    """
+    now = datetime.utcnow()
+
+    # ── Read from cache ───────────────────────────────────────────────────────
+    with _earnings_cache_lock:
+        entry = _earnings_cache.get(ticker)
+
+    if entry is not None:
+        try:
+            cached_at = datetime.fromisoformat(entry["cached_at"])
+            if (now - cached_at).total_seconds() < EARNINGS_CACHE_TTL_HOURS * 3600:
+                return entry["blackout"]
+        except Exception:
+            pass
+
+    # ── Fetch earnings calendar from yfinance ─────────────────────────────────
+    blackout = False
+    try:
+        cal = yf.Ticker(ticker).calendar
+        if cal is not None:
+            # yfinance may return a dict or a DataFrame depending on version
+            dates = []
+            if isinstance(cal, dict):
+                raw = cal.get("Earnings Date", [])
+                dates = list(raw) if hasattr(raw, "__iter__") and not isinstance(raw, str) else ([raw] if raw else [])
+            elif hasattr(cal, "to_dict"):
+                cal_dict = cal.to_dict("list")
+                dates = cal_dict.get("Earnings Date", [])
+
+            for d in dates:
+                try:
+                    if hasattr(d, "to_pydatetime"):
+                        d = d.to_pydatetime().replace(tzinfo=None)
+                    elif isinstance(d, str):
+                        d = datetime.fromisoformat(d)
+                    days_until = (d - now).days
+                    if -1 <= days_until <= EARNINGS_BLACKOUT_DAYS:
+                        blackout = True
+                        break
+                except Exception:
+                    pass
+    except Exception:
+        pass  # Fail open — don't block tickers we can't check
+
+    # ── Write result to cache ─────────────────────────────────────────────────
+    with _earnings_cache_lock:
+        _earnings_cache[ticker] = {"blackout": blackout, "cached_at": now.isoformat()}
+
+    return blackout
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -343,9 +452,6 @@ app.add_middleware(
 # ────────────────────────────────────────────────────────────────────────────
 # Data helpers
 # ────────────────────────────────────────────────────────────────────────────
-
-PREFETCH_BATCH_SIZE = 200  # tickers per yf.download() call
-
 
 def _batch_download_sync(tickers_batch: List[str]) -> Dict[str, pd.DataFrame]:
     """
@@ -537,6 +643,18 @@ async def _run_scan(
             "total_duration_s": 0.0,
             "forced": force,
             "dry_run": dry_run,
+            "timing": {
+                "regime_s": 0.0,
+                "spy_fetch_s": 0.0,
+                "prefetch_s": 0.0,
+                "process_s": 0.0,
+                "db_s": 0.0,
+                "total_s": 0.0,
+            },
+            "filtered": {
+                "liquidity": 0,
+                "earnings": 0,
+            },
         },
         dry_run_setups=None,
     )
@@ -596,41 +714,10 @@ async def _run_scan(
         if not dry_run:
             await save_scan_run(DB_PATH, scan_ts)
 
-        # ── Engine 0: Market regime ───────────────────────────────────────
         loop = asyncio.get_event_loop()
-        regime_start = time.time()
-        regime = await loop.run_in_executor(None, check_market_regime)
-        regime_time = time.time() - regime_start
-        if not dry_run:
-            await save_regime(DB_PATH, scan_ts, regime)
-        log.info(
-            "Engine 0: %s  (SPY=%.2f  EMA20=%.2f)  [%.1fs]",
-            regime["regime"],
-            regime["spy_close"],
-            regime["spy_20ema"],
-            regime_time,
-        )
-        _scan_state["engine_stats"]["e0"] = {
-            "spy_close": round(regime["spy_close"], 2),
-            "spy_ema20": round(regime["spy_20ema"], 2),
-            "is_bullish": regime["is_bullish"],
-            "duration_s": round(regime_time, 1),
-        }
-
-        if not regime["is_bullish"] and not force:
-            log.info("Market is BEARISH — RS calculations + Engines 2 & 3 disabled (0s saved)")
-            _scan_state["engine_stats"]["total_tickers"] = 0
-            _scan_state["engine_stats"]["total_duration_s"] = round(time.time() - scan_start_time, 1)
-            if not dry_run:
-                await complete_scan_run(DB_PATH, scan_ts, 0)
-            _scan_state["last_completed"] = scan_ts
-            return
-
-        if not regime["is_bullish"] and force:
-            log.info("Market is BEARISH — force=True, overriding halt gate")
 
         # ── SPY data (consolidated single fetch for 3m return + RS Line) ──
-        # Only fetched when market is bullish; conditional RS calculation optimizes cycles
+        # Fetched before per-ticker processing; used for RS Line calculations.
         spy_3m_return = 0.0
         spy_df_full = None
         spy_fetch_start = time.time()
@@ -651,6 +738,7 @@ async def _run_scan(
 
         spy_fetch_time = time.time() - spy_fetch_start
         log.info("SPY fetch completed  [%.1fs]", spy_fetch_time)
+        _scan_state["engine_stats"]["timing"]["spy_fetch_s"] = round(spy_fetch_time, 2)
 
         # ── Bulk pre-fetch all ticker data (single HTTP request per batch) ──
         # yf.download(200 tickers) is ~10× faster than 200 individual calls.
@@ -660,10 +748,11 @@ async def _run_scan(
             if t not in _ticker_cache
             or time.time() - _ticker_cache[t][0] >= CACHE_TTL_SUCCESS
         ]
+        prefetch_start = time.time()
         if uncached:
             prefetch_batches = [
-                uncached[i: i + PREFETCH_BATCH_SIZE]
-                for i in range(0, len(uncached), PREFETCH_BATCH_SIZE)
+                uncached[i: i + BULK_DOWNLOAD_BATCH_SIZE]
+                for i in range(0, len(uncached), BULK_DOWNLOAD_BATCH_SIZE)
             ]
             _scan_state["prefetching"] = True
             log.info(
@@ -687,6 +776,69 @@ async def _run_scan(
             log.info("Pre-fetch complete — %d tickers in cache", len(_ticker_cache))
         else:
             log.info("Pre-fetch skipped — all %d tickers already cached", len(tickers))
+        prefetch_time = time.time() - prefetch_start
+        _scan_state["engine_stats"]["timing"]["prefetch_s"] = round(prefetch_time, 2)
+        log.info("Bulk prefetch phase  [%.1fs]", prefetch_time)
+
+        # ── Compute universe breadth from prefetch cache ──────────────────
+        breadth_pct, hl_ratio = compute_universe_breadth(_ticker_cache, tickers)
+        log.info(
+            "Breadth: %.1f%% above SMA50  H/L ratio: %.2f",
+            breadth_pct * 100, hl_ratio,
+        )
+
+        # ── Engine 0: Multi-factor regime (computed after prefetch for breadth) ──
+        regime_start = time.time()
+        regime = await loop.run_in_executor(
+            None, check_market_regime, breadth_pct, hl_ratio
+        )
+        regime_time = time.time() - regime_start
+        if not dry_run:
+            await save_regime(DB_PATH, scan_ts, regime)
+        log.info(
+            "Engine 0: %s  score=%d  (SPY=%.2f  EMA20=%.2f  SMA50=%.2f)  "
+            "breadth=%.1f%%  VIX=%.1f  [%.1fs]",
+            regime["regime"],
+            regime["regime_score"],
+            regime["spy_close"],
+            regime["spy_20ema"],
+            regime.get("spy_sma50", 0.0),
+            breadth_pct * 100,
+            regime.get("vix", 0.0),
+            regime_time,
+        )
+        _scan_state["engine_stats"]["e0"] = {
+            "spy_close":    round(regime["spy_close"], 2),
+            "spy_ema20":    round(regime["spy_20ema"], 2),
+            "regime_score": regime["regime_score"],
+            "is_bullish":   regime["is_bullish"],
+            "duration_s":   round(regime_time, 1),
+            "factors":      regime.get("factors", {}),
+        }
+        _scan_state["engine_stats"]["timing"]["regime_s"] = round(regime_time, 2)
+
+        if not regime["is_bullish"] and not force:
+            log.info(
+                "Regime DEFENSIVE (score=%d < %d) — Engines 2 & 3 disabled",
+                regime["regime_score"], REGIME_SELECTIVE_THRESHOLD,
+            )
+            _scan_state["engine_stats"]["total_tickers"] = 0
+            _scan_state["engine_stats"]["total_duration_s"] = round(time.time() - scan_start_time, 1)
+            if not dry_run:
+                await complete_scan_run(DB_PATH, scan_ts, 0)
+            _scan_state["last_completed"] = scan_ts
+            return
+
+        if not regime["is_bullish"] and force:
+            log.info(
+                "Regime DEFENSIVE (score=%d) — force=True, overriding halt gate",
+                regime["regime_score"],
+            )
+
+        # ── Load earnings cache from disk (Task 1) ────────────────────────────
+        global _earnings_cache
+        _earnings_cache = _load_earnings_cache()
+        log.info("Earnings cache loaded: %d entries", len(_earnings_cache))
 
         # ── Per-ticker processing ─────────────────────────────────────────
         # Collect setups instead of saving individually for batch optimization
@@ -697,10 +849,12 @@ async def _run_scan(
         base_count = 0
         res_count  = 0
         opt_count  = 0
+        liquidity_filtered = 0
+        earnings_filtered  = 0
         process_start_time = time.time()
 
         async def _process(ticker: str, idx: int) -> None:
-            nonlocal vcp_count, pb_count, base_count, res_count, opt_count, dropped_tickers
+            nonlocal vcp_count, pb_count, base_count, res_count, opt_count, dropped_tickers, liquidity_filtered, earnings_filtered
 
             try:
                 # ── Data Integrity Check ────────────────────────────────────
@@ -737,63 +891,56 @@ async def _run_scan(
                     )
                     return
 
-                # ── Parallelize RS + S/R zone calculations (independent operations) ──
-                rs_line = None
-                rs_ratio = 0.0
-                rs_52w_high = 0.0
-                rs_blue_dot = False
-                rs_score = 0.0
+                # ── Centralized Indicator Engine (Task 6) ────────────────────────
+                ind: Optional[TickerIndicators] = await loop.run_in_executor(
+                    None, compute_indicators, df, spy_df_full
+                )
+                if ind is None:
+                    log.debug("Skipped %s: insufficient data for indicators", ticker)
+                    return
+
+                # ── Liquidity Gate (Task 7) ───────────────────────────────────────
+                if (
+                    ind.avg_volume_50d < LIQUIDITY_MIN_AVG_VOLUME
+                    or ind.dollar_volume < LIQUIDITY_MIN_DOLLAR_VOLUME
+                ):
+                    liquidity_filtered += 1
+                    _scan_state["engine_stats"]["filtered"]["liquidity"] += 1
+                    log.debug(
+                        "Skipped %s: illiquid (vol50d=%.0f  $vol=%.1fM)",
+                        ticker, ind.avg_volume_50d, ind.dollar_volume / 1_000_000,
+                    )
+                    return
+
+                # ── Earnings Blackout (Task 1) ────────────────────────────────────
+                blackout = await loop.run_in_executor(
+                    None, _check_earnings_blackout_sync, ticker
+                )
+                if blackout:
+                    earnings_filtered += 1
+                    _scan_state["engine_stats"]["filtered"]["earnings"] += 1
+                    log.debug("Skipped %s: earnings within %d days", ticker, EARNINGS_BLACKOUT_DAYS)
+                    return
+
+                # ── Use pre-computed RS values from indicator engine ───────────────
+                rs_ratio    = ind.rs_ratio
+                rs_52w_high = ind.rs_52w_high
+                rs_blue_dot = ind.rs_blue_dot
+                rs_score    = ind.rs_score
+
+                # ── S/R Zone calculation (uses full weekly resample, stays separate) ──
                 zones: List[Dict] = []
+                try:
+                    zones = await loop.run_in_executor(None, calculate_sr_zones, ticker, df)
+                except Exception as exc:
+                    log.warning("S/R zone calculation failed for %s: %s", ticker, exc)
 
-                # Run RS and S/R zone calculations in parallel
-                rs_task = None
-                if spy_df_full is not None:
-                    rs_task = loop.run_in_executor(None, calculate_rs_line, df, spy_df_full)
-
-                sr_task = loop.run_in_executor(None, calculate_sr_zones, ticker, df)
-
-                # Await both in parallel
-                if rs_task:
-                    try:
-                        rs_line, zones = await asyncio.gather(rs_task, sr_task)
-                    except Exception as exc:
-                        log.warning("Parallel RS/SR calculation failed for %s: %s", ticker, exc)
-                        rs_line = None
-                        zones = await sr_task  # Fall back to SR-only
-                else:
-                    zones = await sr_task
-
-                # Process RS results if available
-                if rs_line and len(rs_line) >= MIN_CANDLES_FOR_RS:
-                    try:
-                        # Use .item() to safely convert numpy scalars to Python floats
-                        rs_today = rs_line[-1]
-                        rs_ratio = float(rs_today.item() if hasattr(rs_today, 'item') else rs_today)
-
-                        rs_max = max(rs_line)
-                        rs_52w_high = float(rs_max.item() if hasattr(rs_max, 'item') else rs_max)
-
-                        rs_blue_dot = await loop.run_in_executor(
-                            None, detect_rs_blue_dot, rs_line
-                        )
-                    except Exception as rs_exc:
-                        log.warning("RS processing failed for %s: %s", ticker, rs_exc)
-                        rs_ratio = 0.0
-                        rs_52w_high = 0.0
-                        rs_blue_dot = False
                 if zones:
                     if not dry_run:
                         await save_sr_zones(DB_PATH, scan_ts, ticker, zones)
-                    # engine_stats increments below are safe: _process() is an asyncio
-                    # coroutine and never yields (no await) between the read and write
-                    # of += 1, so there is no interleaving with other ticker coroutines.
+                    # engine_stats increments are safe: asyncio coroutine — no await
+                    # between read and write, so no interleaving with other tickers.
                     _scan_state["engine_stats"]["e1"]["zones_saved"] += 1
-
-                # Composite RS score (O'Neil formula)
-                if spy_df_full is not None:
-                    rs_score = await loop.run_in_executor(
-                        None, calculate_rs_score, df, spy_df_full
-                    )
 
                 # Detect trendline early (used by VCP follow-up, near-breakout, and pullback)
                 tl = await loop.run_in_executor(None, detect_trendline, ticker, df)
@@ -1003,15 +1150,14 @@ async def _run_scan(
         await asyncio.gather(*[_process(t, i) for i, t in enumerate(tickers)])
 
         process_time = time.time() - process_start_time
+        _scan_state["engine_stats"]["timing"]["process_s"] = round(process_time, 2)
         log.info(
-            "Per-ticker processing completed  [%.1fs]  vcp=%d  pb=%d  base=%d  res=%d  opt=%d  total_setups=%d",
+            "Per-ticker processing completed  [%.1fs]  vcp=%d  pb=%d  base=%d  res=%d  opt=%d  "
+            "total_setups=%d  filtered(liq=%d  earn=%d)",
             process_time,
-            vcp_count,
-            pb_count,
-            base_count,
-            res_count,
-            opt_count,
+            vcp_count, pb_count, base_count, res_count, opt_count,
             len(collected_setups),
+            liquidity_filtered, earnings_filtered,
         )
 
         # ── Sector Clustering — inject hot_sector flag before saving ─────────
@@ -1021,11 +1167,18 @@ async def _run_scan(
             log.warning("Sector clustering failed: %s", exc)
 
         # ── Batch Save All Setups (5-10x faster than individual saves) ──────
+        db_save_time = 0.0
         if collected_setups and not dry_run:
             db_save_start = time.time()
             await batch_save_setups(DB_PATH, scan_ts, collected_setups)
             db_save_time = time.time() - db_save_start
             log.info("Batch saved %d setups to database  [%.1fs]", len(collected_setups), db_save_time)
+        _scan_state["engine_stats"]["timing"]["db_s"] = round(db_save_time, 2)
+
+        # ── Persist earnings cache to disk (Task 1) ───────────────────────────
+        with _earnings_cache_lock:
+            _save_earnings_cache(dict(_earnings_cache))
+        log.info("Earnings cache saved: %d entries", len(_earnings_cache))
 
         if dry_run:
             _scan_state["dry_run_setups"] = {
@@ -1064,8 +1217,12 @@ async def _run_scan(
         except Exception as exc:
             log.warning("Sector summary failed: %s", exc)
 
+        total_scan_elapsed = time.time() - scan_start_time
         _scan_state["engine_stats"]["total_tickers"] = len(tickers)
-        _scan_state["engine_stats"]["total_duration_s"] = round(time.time() - scan_start_time, 1)
+        _scan_state["engine_stats"]["total_duration_s"] = round(total_scan_elapsed, 1)
+        _scan_state["engine_stats"]["timing"]["total_s"] = round(total_scan_elapsed, 2)
+        _scan_state["engine_stats"]["filtered"]["liquidity"] = liquidity_filtered
+        _scan_state["engine_stats"]["filtered"]["earnings"] = earnings_filtered
         if not dry_run:
             await complete_scan_run(DB_PATH, scan_ts, len(tickers))
         _scan_state["last_completed"] = scan_ts
@@ -1084,20 +1241,15 @@ async def _run_scan(
         else:
             log.info("✓ DATA QUALITY: All %d tickers processed successfully (0 dropped)", len(tickers))
 
-        total_scan_time = time.time() - scan_start_time
         log.info(
-            "✔ Scan complete  VCP=%d  Pullbacks=%d  Base=%d  ResBreakout=%d  Options=%d  Processed=%d/%d  Total=%.1fs  (Regime=%.1fs, SPY=%.1fs, Process=%.1fs)",
-            vcp_count,
-            pb_count,
-            base_count,
-            res_count,
-            opt_count,
-            processed_tickers,
-            len(tickers),
-            total_scan_time,
-            regime_time,
-            spy_fetch_time,
-            process_time,
+            "✔ Scan complete  VCP=%d  Pullbacks=%d  Base=%d  ResBreakout=%d  Options=%d  "
+            "Processed=%d/%d  filtered(liq=%d  earn=%d)  "
+            "Total=%.1fs  [regime=%.1fs  spy=%.1fs  prefetch=%.1fs  process=%.1fs  db=%.1fs]",
+            vcp_count, pb_count, base_count, res_count, opt_count,
+            processed_tickers, len(tickers),
+            liquidity_filtered, earnings_filtered,
+            total_scan_elapsed,
+            regime_time, spy_fetch_time, prefetch_time, process_time, db_save_time,
         )
 
     except Exception as exc:
@@ -1110,6 +1262,59 @@ async def _run_scan(
 # ────────────────────────────────────────────────────────────────────────────
 # Scan helpers
 # ────────────────────────────────────────────────────────────────────────────
+
+def compute_universe_breadth(
+    ticker_cache: dict,
+    tickers: List[str],
+    sample_size: int = 200,
+) -> tuple:
+    """
+    Compute two breadth metrics from the bulk-prefetch cache.
+
+    Returns
+    -------
+    (breadth_pct, hl_ratio) : tuple[float, float]
+        breadth_pct : fraction of sampled tickers where close > SMA50 (0.0–1.0)
+        hl_ratio    : new_highs / (new_highs + new_lows + 1)   (0.0–1.0)
+    """
+    candidates = [t for t in tickers if t in ticker_cache and ticker_cache[t][1] is not None]
+    sample = candidates[:sample_size]
+    if not sample:
+        return 0.5, 0.5
+
+    above_50 = new_highs = new_lows = total = 0
+
+    for t in sample:
+        _, df = ticker_cache[t]
+        if df is None or len(df) < 52:
+            continue
+        try:
+            adj = "Adj Close" if "Adj Close" in df.columns else "Close"
+            close = df[adj].dropna()
+            if len(close) < 52:
+                continue
+            lc = float(close.iloc[-1])
+            sma50_val = close.rolling(50).mean().iloc[-1]
+            if not pd.isna(sma50_val) and lc > float(sma50_val):
+                above_50 += 1
+            lookback = min(252, len(close))
+            h52 = float(close.iloc[-lookback:].max())
+            l52 = float(close.iloc[-lookback:].min())
+            if lc >= h52 * 0.97:
+                new_highs += 1
+            elif lc <= l52 * 1.03:
+                new_lows += 1
+            total += 1
+        except Exception:
+            pass
+
+    if total == 0:
+        return 0.5, 0.5
+
+    breadth_pct = above_50 / total
+    hl_ratio    = new_highs / (new_highs + new_lows + 1)
+    return round(breadth_pct, 3), round(hl_ratio, 3)
+
 
 def _inject_hot_sector(setups: List[Dict], threshold: int = 3) -> None:
     """
