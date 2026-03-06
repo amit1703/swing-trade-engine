@@ -793,7 +793,7 @@ async def _run_scan(
 
         # ── Task 8 & 10: RS rank map + top sectors (pre-computed for all tickers) ──
         rs_rank_start = time.time()
-        _rs_rank_map = compute_rs_rank_map(_ticker_cache, tickers, spy_df_full)
+        _rs_rank_map = compute_rs_rank_map(_ticker_cache, tickers, spy_df_full, sample_size=len(tickers))
         _top_sectors = compute_top_sectors(
             _ticker_cache, tickers, SECTORS, spy_df_full, top_n=TOP_SECTORS_N
         )
@@ -907,6 +907,17 @@ async def _run_scan(
                     )
                     return
 
+                # ── Task 8: RS Rank gate ──────────────────────────────────────────
+                _ticker_rs_rank = _rs_rank_map.get(ticker)
+                if _ticker_rs_rank is None or _ticker_rs_rank < RS_RANK_MIN_PERCENTILE:
+                    log.debug(
+                        "Skipped %s: RS rank %.1f < %.0f (threshold)",
+                        ticker,
+                        _ticker_rs_rank if _ticker_rs_rank is not None else 0.0,
+                        RS_RANK_MIN_PERCENTILE,
+                    )
+                    return
+
                 # ── Centralized Indicator Engine (Task 6) ────────────────────────
                 ind: Optional[TickerIndicators] = await loop.run_in_executor(
                     None, compute_indicators, df, spy_df_full
@@ -936,17 +947,6 @@ async def _run_scan(
                     earnings_filtered += 1
                     _scan_state["engine_stats"]["filtered"]["earnings"] += 1
                     log.debug("Skipped %s: earnings within %d days", ticker, EARNINGS_BLACKOUT_DAYS)
-                    return
-
-                # ── Task 8: RS Rank gate ──────────────────────────────────────────
-                _ticker_rs_rank = _rs_rank_map.get(ticker)
-                if _ticker_rs_rank is None or _ticker_rs_rank < RS_RANK_MIN_PERCENTILE:
-                    log.debug(
-                        "Skipped %s: RS rank %.1f < %.0f (threshold)",
-                        ticker,
-                        _ticker_rs_rank if _ticker_rs_rank is not None else 0.0,
-                        RS_RANK_MIN_PERCENTILE,
-                    )
                     return
 
                 # ── Use pre-computed RS values from indicator engine ───────────────
