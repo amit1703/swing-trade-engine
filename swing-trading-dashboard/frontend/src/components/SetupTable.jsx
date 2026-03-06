@@ -13,8 +13,12 @@
  *   Vol ratio shown as "×1.8" next to badge
  *   RS+  → Stock 3m RS outperforming SPY (rs_vs_spy > 0)
  */
+import React, { useState } from 'react'
+
 export default function SetupTable({ title, accentColor, setups, selectedTicker, onSelectTicker, loading, devMode, onDebug, livePrices = {} }) {
   const count = setups.length
+  const [expandedTicker, setExpandedTicker] = useState(null)
+  const toggleNarrative = (ticker) => setExpandedTicker(v => v === ticker ? null : ticker)
 
   const color = accentColor === 'blue'
     ? { badge: 'bg-t-blueDim text-t-blue border border-t-blue/30', dot: '#00C8FF', sectionDot: 'bg-t-blue' }
@@ -90,8 +94,8 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                   : {}
 
                 return (
+                  <React.Fragment key={`${s.ticker}-${s.setup_type}`}>
                   <tr
-                    key={`${s.ticker}-${s.setup_type}`}
                     className={isSelected ? 'selected' : ''}
                     style={rowStyle}
                     onClick={() => onSelectTicker(s.ticker)}
@@ -403,6 +407,30 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                           {daysOld}d
                         </span>
                       )}
+
+                      {/* Narrative toggle — shown when narrative is available */}
+                      {s.narrative && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleNarrative(s.ticker) }}
+                          title="Toggle trade plan"
+                          style={{
+                            marginLeft: 4,
+                            background: expandedTicker === s.ticker ? 'rgba(0,200,255,0.15)' : 'none',
+                            border: `1px solid ${expandedTicker === s.ticker ? 'rgba(0,200,255,0.4)' : 'var(--border)'}`,
+                            color: expandedTicker === s.ticker ? '#00C8FF' : 'var(--muted)',
+                            fontSize: 7,
+                            padding: '1px 5px',
+                            cursor: 'pointer',
+                            fontFamily: '"Barlow Condensed", sans-serif',
+                            fontWeight: 700,
+                            letterSpacing: '0.1em',
+                            textTransform: 'uppercase',
+                            flexShrink: 0,
+                          }}
+                        >
+                          PLAN
+                        </button>
+                      )}
                       </div>
                     </td>
 
@@ -430,6 +458,25 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                       </td>
                     )}
                   </tr>
+                  {expandedTicker === s.ticker && s.narrative && (
+                    <tr key={`${s.ticker}-narrative`} style={{ background: 'rgba(0,200,255,0.03)' }}>
+                      <td
+                        colSpan={devMode ? 8 : 7}
+                        style={{
+                          padding: '8px 12px 10px 16px',
+                          fontFamily: '"IBM Plex Mono", monospace',
+                          fontSize: 9,
+                          color: 'var(--muted)',
+                          lineHeight: 1.6,
+                          letterSpacing: '0.02em',
+                          borderLeft: '2px solid rgba(0,200,255,0.25)',
+                        }}
+                      >
+                        {s.narrative}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 )
               })}
             </tbody>

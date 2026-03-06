@@ -117,6 +117,7 @@ from universe_builder import build_universe, load_universe, save_universe, UNIVE
 from scoring import compute_rs_rank_map, compute_top_sectors, score_and_filter_setups
 from email_digest import send_digest
 from services.macro_service import get_market_overview
+from services.narrative import generate_narrative
 from backtest_engine import BacktestEngine
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -1372,6 +1373,14 @@ def _inject_hot_sector(setups: List[Dict], threshold: int = 3) -> None:
         s["hot_sector"] = s.get("sector", "Unknown") in hot
 
 
+async def _inject_narratives(setups: list) -> None:
+    """Add 'narrative' field to each setup in-place (lazy, at fetch time)."""
+    regime_row = await get_latest_regime(DB_PATH)
+    regime_str = regime_row.get("regime", "NEUTRAL") if regime_row else "NEUTRAL"
+    for s in setups:
+        s["narrative"] = generate_narrative(s, regime_str)
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Pydantic request models
 # ────────────────────────────────────────────────────────────────────────────
@@ -1514,6 +1523,7 @@ async def get_regime():
 async def get_all_setups():
     """All VCP + Pullback setups from the latest scan."""
     setups = await get_latest_setups(DB_PATH)
+    await _inject_narratives(setups)
     return {"setups": setups, "count": len(setups)}
 
 
@@ -1521,6 +1531,7 @@ async def get_all_setups():
 async def get_vcp_setups():
     """VCP breakout setups from the latest scan."""
     setups = await get_latest_setups(DB_PATH, setup_type="VCP")
+    await _inject_narratives(setups)
     return {"setups": setups, "count": len(setups)}
 
 
@@ -1528,6 +1539,7 @@ async def get_vcp_setups():
 async def get_pullback_setups():
     """Tactical pullback setups from the latest scan."""
     setups = await get_latest_setups(DB_PATH, setup_type="PULLBACK")
+    await _inject_narratives(setups)
     return {"setups": setups, "count": len(setups)}
 
 
@@ -1536,6 +1548,7 @@ async def get_base_setups():
     """Cup & Handle and Flat Base setups from the latest scan."""
     setups = await get_latest_setups(DB_PATH, setup_type="BASE")
     setups.sort(key=lambda x: x.get("quality_score", 0), reverse=True)
+    await _inject_narratives(setups)
     return {"setups": setups, "count": len(setups)}
 
 
@@ -1544,6 +1557,7 @@ async def get_res_breakout_setups():
     """Resistance breakout setups (fresh break above KDE zone, last 3 days)."""
     setups = await get_latest_setups(DB_PATH, setup_type="RES_BREAKOUT")
     setups.sort(key=lambda x: x.get("days_since_breakout", 99))
+    await _inject_narratives(setups)
     return {"setups": setups, "count": len(setups)}
 
 
@@ -1552,6 +1566,7 @@ async def get_options_catalyst_setups():
     """Options Catalyst setups — unusual near-term call activity (Engine 7)."""
     setups = await get_latest_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
     setups.sort(key=lambda x: x.get("options_score", 0), reverse=True)
+    await _inject_narratives(setups)
     return {"setups": setups, "count": len(setups)}
 
 
@@ -1561,6 +1576,7 @@ async def get_watchlist():
     items = await get_latest_setups(DB_PATH, setup_type="WATCHLIST")
     # Sort by distance_pct ascending (closest first)
     items.sort(key=lambda x: x.get("distance_pct", 99))
+    await _inject_narratives(items)
     return {"items": items, "count": len(items)}
 
 
