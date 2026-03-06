@@ -73,3 +73,13 @@ export const fetchPrices = (tickers) =>
 
 export const fetchMarketOverview = () =>
   fetch('/api/market-overview').then(handleResponse)
+
+export const runBacktest = (ticker, startDate, endDate, setupTypes = ['VCP', 'PULLBACK', 'BASE']) =>
+  fetch('/api/run-backtest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticker, start_date: startDate, end_date: endDate, setup_types: setupTypes }),
+  }).then(handleResponse)
+
+export const fetchBacktestResults = (ticker) =>
+  fetch(`/api/backtest-results/${encodeURIComponent(ticker)}`).then(handleResponse)

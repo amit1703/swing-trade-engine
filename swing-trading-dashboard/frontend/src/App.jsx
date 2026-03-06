@@ -37,6 +37,7 @@ import SystemGuideModal from './components/SystemGuideModal.jsx'
 import EngineHealthPanel from './components/EngineHealthPanel.jsx'
 import DebugDrawer      from './components/DebugDrawer.jsx'
 import MarketOverview from './components/MarketOverview.jsx'
+import BacktestPanel from './components/BacktestPanel.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -360,6 +361,27 @@ export default function App() {
         >
           OPTIONS
         </button>
+        {devMode && (
+          <button
+            onClick={() => setActiveTab('backtest')}
+            style={{
+              fontFamily: 'Barlow Condensed, sans-serif',
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase',
+              padding: '0 18px',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: activeTab === 'backtest' ? '2px solid var(--halt)' : '2px solid transparent',
+              color: activeTab === 'backtest' ? 'var(--halt)' : 'var(--muted)',
+              cursor: 'pointer',
+              transition: 'color 0.12s, border-color 0.12s',
+            }}
+          >
+            BACKTEST
+          </button>
+        )}
       </div>
 
       {/* ── Body ───────────────────────────────────────────────────────── */}
@@ -516,6 +538,12 @@ export default function App() {
           /* Portfolio tab — full width */
           <div className="flex-1 min-w-0 overflow-hidden">
             <PortfolioTab onTickerClick={handleTickerClick} />
+          </div>
+        )}
+
+        {activeTab === 'backtest' && devMode && (
+          <div className="flex-1 min-w-0 overflow-y-auto" style={{ background: 'var(--bg)', padding: 24 }}>
+            <BacktestPanel />
           </div>
         )}
 
