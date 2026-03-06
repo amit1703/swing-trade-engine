@@ -100,7 +100,7 @@ from database import (
 from engines.engine0 import check_market_regime
 from engines.engine1 import calculate_sr_zones
 from engines.engine2 import scan_vcp, detect_trendline, scan_near_breakout
-from engines.engine3 import scan_pullback, scan_relaxed_pullback, scan_ema_pullback
+from engines.engine3 import scan_pullback, scan_relaxed_pullback
 from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats, calculate_rs_score
 from engines.engine5 import scan_base_pattern
 from engines.engine6 import scan_resistance_breakout
@@ -170,7 +170,7 @@ _scan_state: Dict = {
         "e0": {},
         "e1": {"zones_saved": 0},
         "e2": {"vcp": 0, "watchlist": 0},
-        "e3": {"pullback": 0, "relaxed": 0, "ema": 0},
+        "e3": {"pullback": 0, "relaxed": 0},
         "e5": {"cup_handle": 0, "flat_base": 0},
         "e6": {"res_breakout": 0},
         "e7": {"options_catalyst": 0},
@@ -635,7 +635,7 @@ async def _run_scan(
             "e0": {},
             "e1": {"zones_saved": 0},
             "e2": {"vcp": 0, "watchlist": 0},
-            "e3": {"pullback": 0, "relaxed": 0, "ema": 0},
+            "e3": {"pullback": 0, "relaxed": 0},
             "e5": {"cup_handle": 0, "flat_base": 0},
             "e6": {"res_breakout": 0},
             "e7": {"options_catalyst": 0},
@@ -1036,29 +1036,6 @@ async def _run_scan(
                             pb_count += 1
                             _scan_state["engine_stats"]["e3"]["relaxed"] += 1
                             log.info("  PULLBACK %-6s  entry=%.2f (relaxed)", ticker, pb_relaxed["entry"])
-                        else:
-                            # Pure EMA path: no KDE zone required — clean uptrend + EMA20 rejection
-                            try:
-                                pb_ema = await loop.run_in_executor(
-                                    None, scan_ema_pullback, ticker, df, zones, tl, rs_score
-                                )
-                                if pb_ema:
-                                    try:
-                                        pb_ema["entry"] = float(pb_ema.get("entry", 0.0))
-                                        pb_ema["stop_loss"] = float(pb_ema.get("stop_loss", 0.0))
-                                        pb_ema["take_profit"] = float(pb_ema.get("take_profit", 0.0))
-                                        pb_ema["rr"] = float(pb_ema.get("rr", 2.0))
-                                    except (ValueError, TypeError) as conv_err:
-                                        log.warning("EMA pullback conversion failed for %s: %s", ticker, conv_err)
-                                        return
-
-                                    pb_ema["sector"] = SECTORS.get(ticker, "Unknown")
-                                    collected_setups.append(pb_ema)
-                                    pb_count += 1
-                                    _scan_state["engine_stats"]["e3"]["ema"] += 1
-                                    log.info("  PULLBACK %-6s  entry=%.2f (ema-path)", ticker, pb_ema["entry"])
-                            except Exception as pb_ema_exc:
-                                log.warning("EMA pullback check failed for %s: %s", ticker, pb_ema_exc)
                     except Exception as pb_rel_exc:
                         log.warning("Relaxed pullback check failed for %s: %s", ticker, pb_rel_exc)
 
@@ -1638,8 +1615,6 @@ async def debug_ticker(ticker: str):
         e3 = await loop.run_in_executor(None, _run_engine, scan_relaxed_pullback, sym, df, zones, tl, rs_score)
         if e3 is not None:
             e3_relaxed = True
-    if e3 is None:
-        e3 = await loop.run_in_executor(None, _run_engine, scan_ema_pullback, sym, df, zones, tl, rs_score)
     # Engine 5 — Base pattern
     e5 = await loop.run_in_executor(
         None, _run_engine, scan_base_pattern,
@@ -1682,8 +1657,6 @@ async def debug_ticker(ticker: str):
     e3_out = _eng(e3, ())
     if e3 is not None and e3_relaxed:
         e3_out["is_relaxed"] = True
-    if e3 is not None and e3.get("is_ema_path"):
-        e3_out["is_ema_path"] = True
 
     # Engine 5 block: use base_type as the result value (more specific than "BASE")
     e5_out = _eng(e5, ("base_type", "quality_score"))

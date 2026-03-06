@@ -29,7 +29,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
-from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT
+from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT, ATR_STOP_MULTIPLIER
 from zone_utils import nearest_resistance_target
 
 
@@ -67,6 +67,123 @@ def _check_ascending_trendline_touch(
             return True, tl_value
 
     return False, 0.0
+
+
+def _find_structural_support(
+    ll: float,
+    lc: float,
+    sr_zones: List[Dict],
+    trendline: Optional[Dict],
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    volume: pd.Series,
+    avg_vol: float,
+) -> Optional[Dict]:
+    """
+    Find the nearest structural support for a pullback.
+
+    Checks four layers in priority order:
+      1. KDE SUPPORT zone (Engine 1 horizontal zone)
+      2. Prior consolidation low (recent swing low where price bounced ≥3 bars)
+      3. High-volume demand zone (reversal bar with volume ≥150% avg)
+      4. Ascending trendline touch
+
+    Returns a dict with keys: level, lower, upper, source
+    Returns None if no structural support found.
+    """
+    ZONE_TOLERANCE = 0.025  # 2.5% zone width tolerance
+
+    # ── 1. KDE support zone ───────────────────────────────────────────────────
+    support_zones = [z for z in sr_zones if z.get("type") == "SUPPORT"]
+    for z in support_zones:
+        low_in_zone   = z["lower"] * (1 - ZONE_TOLERANCE) <= ll <= z["upper"] * (1 + ZONE_TOLERANCE)
+        close_in_zone = z["lower"] <= lc <= z["upper"]
+        if low_in_zone or close_in_zone:
+            return {
+                "level":  z["level"],
+                "lower":  z["lower"],
+                "upper":  z["upper"],
+                "source": "KDE",
+            }
+
+    # ── 2. Prior consolidation low ────────────────────────────────────────────
+    if len(low) >= 15:
+        low_vals = low.values[-60:] if len(low) >= 60 else low.values
+        for i in range(len(low_vals) - 8, 3, -1):
+            candidate = float(low_vals[i])
+            if candidate <= 0:
+                continue
+            # Must be a local minimum vs surrounding 3 bars
+            if not (candidate <= min(low_vals[max(0, i-3):i])
+                    and candidate <= min(low_vals[i+1:min(len(low_vals), i+4)])):
+                continue
+            # Price must have bounced: at least 3 of the next 5 bars closed above candidate
+            bounced = sum(
+                1 for j in range(i + 1, min(len(low_vals), i + 6))
+                if float(low_vals[j]) > candidate * 1.005
+            )
+            if bounced < 3:
+                continue
+            # Candidate must be within 3% of current bar's low
+            if abs(ll - candidate) / candidate > 0.03:
+                continue
+            return {
+                "level":  round(candidate, 4),
+                "lower":  round(candidate * 0.99, 4),
+                "upper":  round(candidate * 1.01, 4),
+                "source": "CONSOLIDATION_LOW",
+            }
+
+    # ── 3. High-volume demand zone ────────────────────────────────────────────
+    if avg_vol > 0 and len(close) >= 10 and len(low) >= 10:
+        lookback = min(30, len(close))
+        close_vals = close.values[-lookback:]
+        low_vals   = low.values[-lookback:]
+        high_vals  = high.values[-lookback:]
+        vol_vals   = volume.values[-lookback:] if len(volume) >= lookback else None
+
+        if vol_vals is not None:
+            for i in range(len(close_vals) - 2, 1, -1):  # skip last bar (current)
+                bar_vol = float(vol_vals[i])
+                if bar_vol < 1.5 * avg_vol:
+                    continue
+                bar_close = float(close_vals[i])
+                bar_low   = float(low_vals[i])
+                bar_high  = float(high_vals[i])
+                bar_open  = float(close_vals[i - 1])  # approximate open with prev close
+                if bar_close <= bar_open:
+                    continue
+                if abs(ll - bar_low) / bar_low > 0.03:
+                    continue
+                # Price must have held above this zone since
+                held = all(
+                    float(low_vals[j]) >= bar_low * 0.98
+                    for j in range(i + 1, len(low_vals))
+                )
+                if not held:
+                    continue
+                return {
+                    "level":  round(bar_low, 4),
+                    "lower":  round(bar_low * 0.99, 4),
+                    "upper":  round(bar_high, 4),
+                    "source": "DEMAND_ZONE",
+                }
+
+    # ── 4. Ascending trendline ────────────────────────────────────────────────
+    if trendline is not None:
+        ascending_tl = trendline.get("ascending")
+        if ascending_tl is not None:
+            touched, tl_value = _check_ascending_trendline_touch(ll, ascending_tl)
+            if touched and tl_value > 0:
+                return {
+                    "level":  round(tl_value, 4),
+                    "lower":  round(tl_value * 0.99, 4),
+                    "upper":  round(tl_value * 1.01, 4),
+                    "source": "ASCENDING_TDL",
+                }
+
+    return None
 
 
 def scan_pullback(
@@ -123,45 +240,24 @@ def scan_pullback(
                 )
             return None
 
-        # ── 3a. Engine 1 support zone touch (HORIZONTAL) ───────────────────
-        support_zones = [z for z in sr_zones if z["type"] == "SUPPORT"]
-        nearest_sup = None
+        # ── 3. Structural support (KDE zone / consolidation low / demand zone / TDL) ──
+        vol_sma50   = ind.volume.rolling(50).mean()
+        vsm_val     = vol_sma50.iloc[-1]
+        avg_vol_sup = float(vsm_val.item() if hasattr(vsm_val, "item") else vsm_val)
 
-        for z in support_zones:
-            # Low dips into the zone (with a 2.0% tolerance — widened from 0.5%)
-            low_in_zone = z["lower"] * 0.980 <= ll <= z["upper"] * 1.020
-            close_in_zone = z["lower"] <= lc <= z["upper"]
-            if low_in_zone or close_in_zone:
-                nearest_sup = z
-                break
-
-        # ── 3b. Ascending trendline touch ───────────────────────────────────
-        # Always check independently — flag even if a horizontal zone also matched
-        is_ascending_tdl = False
-        ascending_tl_value = 0.0
-
-        if trendline is not None:
-            ascending_tl = trendline.get("ascending")
-            if ascending_tl is not None:
-                touched, support_level = _check_ascending_trendline_touch(ll, ascending_tl)
-                if touched:
-                    is_ascending_tdl = True
-                    ascending_tl_value = support_level
-                    # Use trendline as support if no horizontal zone was found
-                    if nearest_sup is None:
-                        nearest_sup = {
-                            "level": ascending_tl_value,
-                            "lower": ascending_tl_value * 0.99,
-                            "upper": ascending_tl_value * 1.01,
-                        }
-
+        nearest_sup = _find_structural_support(
+            ll, lc, sr_zones, trendline,
+            ind.high, ind.low, ind.close, ind.volume, avg_vol_sup,
+        )
         if nearest_sup is None:
             if debug:
                 print(
-                    f"Engine 3 Pullback: REJECTED - No KDE support zone or ascending TDL touch "
-                    f"(low: {ll:.2f})"
+                    f"Engine 3 Pullback: REJECTED - No structural support "
+                    f"(no KDE zone, consolidation low, demand zone, or ascending TDL near low={ll:.2f})"
                 )
             return None
+
+        is_ascending_tdl = nearest_sup["source"] == "ASCENDING_TDL"
 
         # ── 4. Rejection (pin bar) ────────────────────────────────────────
         # Close must be at or above 20 EMA — price closed back into the trend
@@ -187,9 +283,9 @@ def scan_pullback(
         # ── Risk math ────────────────────────────────────────────────────
         entry = round(lh * 1.001, 2)
 
-        # Stop: min(candle low, zone bottom) − 0.2 × ATR
+        # Stop: min(candle low, zone bottom) − ATR_STOP_MULTIPLIER × ATR
         stop_base = min(ll, nearest_sup["lower"])
-        stop_loss = round(stop_base - 0.2 * latr, 2)
+        stop_loss = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
 
         risk = entry - stop_loss
         if risk <= 0 or risk > entry * 0.15:
@@ -208,9 +304,10 @@ def scan_pullback(
             "cci_today": round(cci_today, 2),
             "cci_yesterday": round(cci_prev, 2),
             "support_level": nearest_sup["level"],
+            "support_source": nearest_sup["source"],
             "ema8": round(l8, 2),
             "ema20": round(l20, 2),
-            "is_ascending_tdl": is_ascending_tdl,  # NEW FLAG
+            "is_ascending_tdl": is_ascending_tdl,
         }
 
     except Exception as exc:  # noqa: BLE001
@@ -315,45 +412,35 @@ def scan_relaxed_pullback(
                 )
             return None
 
-        # ── Mandatory support zone touch ─────────────────────────────────
-        # Relaxed pullback requires a nearby KDE support zone (same as strict).
-        support_zones = [z for z in sr_zones if z["type"] == "SUPPORT"]
-        nearest_sup = None
-        for z in support_zones:
-            # 2.0% tolerance — widened from 0.5%
-            low_in_zone = z["lower"] * 0.980 <= ll <= z["upper"] * 1.020
-            close_in_zone = z["lower"] <= lc <= z["upper"]
-            if low_in_zone or close_in_zone:
-                nearest_sup = z
-                break
+        # ── Structural support (KDE zone / consolidation low / demand zone / TDL) ──
+        vol_sma50_sup = ind.volume.rolling(50).mean()
+        vsm_val_sup   = vol_sma50_sup.iloc[-1]
+        avg_vol_sup   = float(vsm_val_sup.item() if hasattr(vsm_val_sup, "item") else vsm_val_sup)
+
+        nearest_sup = _find_structural_support(
+            ll, lc, sr_zones, trendline,
+            ind.high, ind.low, ind.close, ind.volume, avg_vol_sup,
+        )
         if nearest_sup is None:
             if debug:
                 print(
-                    f"Engine 3 RLX Pullback: REJECTED - No KDE support zone touch "
-                    f"(low: {ll:.2f})"
+                    f"Engine 3 RLX Pullback: REJECTED - No structural support "
+                    f"(no KDE zone, consolidation low, demand zone, or ascending TDL near low={ll:.2f})"
                 )
             return None
 
-        # ── Risk Math ─────────────────────────────────────────────────────
-        entry = round(lh * 1.001, 2)
-
+        is_ascending_tdl = nearest_sup["source"] == "ASCENDING_TDL"
         support_level = nearest_sup["level"]
 
-        # Check ascending trendline — flag for display if touched (zone already confirmed above)
-        is_ascending_tdl = False
-        if trendline is not None:
-            ascending_tl = trendline.get("ascending")
-            if ascending_tl is not None:
-                touched, tl_level = _check_ascending_trendline_touch(ll, ascending_tl)
-                if touched:
-                    is_ascending_tdl = True
+        # ── Risk Math ─────────────────────────────────────────────────────
+        entry = round(lh * 1.001, 2)
 
         # Validate support level is actually below current price
         if support_level >= lc:
             return None
 
-        stop_base = min(ll, support_level)
-        stop_loss = round(stop_base - 0.2 * latr, 2)
+        stop_base = min(ll, nearest_sup["lower"])
+        stop_loss = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
         risk = entry - stop_loss
 
         if risk <= 0 or risk > entry * 0.15:
@@ -372,6 +459,7 @@ def scan_relaxed_pullback(
             "cci_today": round(cci_today, 2),
             "cci_yesterday": round(cci_prev, 2),
             "support_level": support_level,
+            "support_source": nearest_sup["source"],
             "ema8": round(l8, 2),
             "ema20": round(l20, 2),
             "is_relaxed": True,
@@ -380,143 +468,6 @@ def scan_relaxed_pullback(
 
     except Exception as exc:  # noqa: BLE001
         print(f"[scan_relaxed_pullback] {ticker}: {exc}")
-        return None
-
-
-def scan_ema_pullback(
-    ticker: str,
-    df: pd.DataFrame,
-    sr_zones: List[Dict],
-    trendline: Optional[Dict] = None,
-    rs_score: float = 0.0,
-    debug: bool = False,
-) -> Optional[Dict]:
-    """
-    Pure EMA pullback path — no KDE zone required.
-
-    Criteria (all must pass):
-    1. Trend       : EMA8 > EMA20 > SMA50 (clean uptrend, stricter than strict path)
-    2. EMA20 touch : Low <= EMA20 * 1.005  (came within 0.5% of EMA20)
-    3. Rejection   : Close >= EMA20         (pin bar — closed back above EMA20)
-    4. CCI hook    : CCI[yesterday] < -30 AND CCI[today] > CCI[yesterday]
-    5. Volume dry  : volume_today < avg_vol_50d  (light volume pullback)
-
-    Risk Math:
-      Entry     = High * 1.001
-      Stop Loss = Low - 0.2 * ATR
-      Risk must be <= 15% of entry
-    """
-    try:
-        ind = _prepare_indicators(ticker, df)
-        if ind is None:
-            return None
-
-        data   = ind.data
-        volume = ind.volume
-        lc, lh, ll   = ind.lc, ind.lh, ind.ll
-        l8, l20, l50 = ind.l8, ind.l20, ind.l50
-        latr         = ind.latr
-        cci_today    = ind.cci_today
-        cci_prev     = ind.cci_prev
-
-        # ── 0. RS quality gate ────────────────────────────────────────────
-        if rs_score < -0.05:
-            if debug:
-                print(
-                    f"Engine 3 EMA Pullback: REJECTED - RS score too weak "
-                    f"({rs_score:.3f} < -0.05)"
-                )
-            return None
-
-        # ── 1. Trend filter: EMA8 > EMA20 > SMA50 ────────────────────────
-        if not (l8 > l20 and l20 > l50):
-            if debug:
-                print(
-                    f"Engine 3 EMA Pullback: REJECTED - Trend filter failed "
-                    f"(EMA8 {l8:.2f}, EMA20 {l20:.2f}, SMA50 {l50:.2f})"
-                )
-            return None
-
-        # ── 2. EMA20 touch: Low <= EMA20 * 1.005 ─────────────────────────
-        if not (ll <= l20 * 1.005):
-            if debug:
-                print(
-                    f"Engine 3 EMA Pullback: REJECTED - Low {ll:.2f} did not touch EMA20 "
-                    f"(EMA20 {l20:.2f}, threshold {l20 * 1.005:.2f})"
-                )
-            return None
-
-        # ── 3. Rejection pin bar: Close >= EMA20 ─────────────────────────
-        if lc < l20:
-            if debug:
-                print(
-                    f"Engine 3 EMA Pullback: REJECTED - No pin bar "
-                    f"(Close {lc:.2f} < EMA20 {l20:.2f})"
-                )
-            return None
-
-        # ── 4. CCI hook: yesterday < -30 and today turning up ────────────
-        if not (cci_prev < CCI_RLX_FLOOR and cci_today > cci_prev):
-            if debug:
-                print(
-                    f"Engine 3 EMA Pullback: REJECTED - CCI hook failed "
-                    f"(yesterday: {cci_prev:.1f}, today: {cci_today:.1f}, "
-                    f"required: < {CCI_RLX_FLOOR:.0f} then rising)"
-                )
-            return None
-
-        # ── 5. Volume dry-up: today's volume < 50-day avg vol ────────────
-        vol_sma50 = volume.rolling(50).mean()
-        vsm_val = vol_sma50.iloc[-1]
-        avg_vol_50d = float(vsm_val.item() if hasattr(vsm_val, 'item') else vsm_val)
-        if pd.isna(avg_vol_50d) or avg_vol_50d <= 0:
-            return None
-
-        vol_today_val = volume.iloc[-1]
-        vol_today = float(vol_today_val.item() if hasattr(vol_today_val, 'item') else vol_today_val)
-        if vol_today >= avg_vol_50d:
-            if debug:
-                print(
-                    f"Engine 3 EMA Pullback: REJECTED - Volume not dry "
-                    f"(today {vol_today:.0f} >= 50d avg {avg_vol_50d:.0f})"
-                )
-            return None
-
-        # ── Risk math ────────────────────────────────────────────────────
-        entry = round(lh * 1.001, 2)
-        stop_loss = round(ll - 0.2 * latr, 2)
-        risk = entry - stop_loss
-
-        if risk <= 0 or risk > entry * 0.15:
-            if debug:
-                print(
-                    f"Engine 3 EMA Pullback: REJECTED - Risk out of bounds "
-                    f"(risk={risk:.2f}, entry={entry:.2f}, max={entry * 0.15:.2f})"
-                )
-            return None
-
-        take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
-
-        return {
-            "ticker": ticker,
-            "setup_type": "PULLBACK",
-            "entry": entry,
-            "stop_loss": stop_loss,
-            "take_profit": take_profit,
-            "rr": actual_rr,
-            "setup_date": str(data.index[-1].date()),
-            "cci_today": round(cci_today, 2),
-            "cci_yesterday": round(cci_prev, 2),
-            "support_level": round(l20, 2),
-            "ema8": round(l8, 2),
-            "ema20": round(l20, 2),
-            "is_relaxed": False,
-            "is_ema_path": True,
-            "is_ascending_tdl": False,
-        }
-
-    except Exception as exc:  # noqa: BLE001
-        print(f"[scan_ema_pullback] {ticker}: {exc}")
         return None
 
 
