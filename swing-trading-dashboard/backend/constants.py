@@ -22,6 +22,17 @@ WATCHLIST_PROXIMITY_PCT = 0.015  # 1.5% below resistance for watchlist items
 TRENDLINE_TOUCH_TOLERANCE_PCT = 0.015  # 1.5% tolerance for ascending trendline touch check
 VCP_TIGHT_RANGE_5D_PCT = 0.025         # 2.5% close range over 5 days signals price compression
 
+# ── Engine 8: High Tight Flag ──────────────────────────────────────────────
+HTF_LOOKBACK_DAYS     = 40    # Trading days to look back for the prior strong move
+HTF_MIN_RUNUP_PCT     = 0.80  # Minimum 80% gain from period low to period high
+HTF_MAX_FLAG_DEPTH_PCT= 0.25  # Flag consolidation depth ≤ 25%
+HTF_MIN_FLAG_BARS     = 5     # Minimum 5 trading days of flag consolidation
+HTF_MAX_FLAG_BARS     = 20    # Maximum 20 trading days of flag consolidation
+
+# ── Engine 9: Low Cheat Entry ──────────────────────────────────────────────
+LCE_MAX_DISTANCE_PCT      = 0.03  # Price within 3% below resistance
+LCE_VOL_CONTRACTION_RATIO = 0.80  # 5-bar avg volume ≤ 80% of 20-day avg
+
 # ──────────────────────────────────────────────────────────────────────────
 # Time Periods & Candle Counts
 # ──────────────────────────────────────────────────────────────────────────
