@@ -142,11 +142,8 @@ def test_no_breakout_rejected():
     inject_htf(df, runup=0.90, flag_depth=0.15, flag_bars=10, vol_mult=2.0)
     # Force close to stay inside flag (below the flag high)
     df.iloc[-1, df.columns.get_loc("Close")] = df["High"].iloc[-2] * 0.99
-    # Result may or may not be None — just verify it handles gracefully
     result = scan_htf("TEST", df)
-    # If no breakout, must be None
-    if result is not None:
-        assert result["entry"] > df["Close"].iloc[-1] * 0.95
+    assert result is None, "Expected None when close is below flag_high"
 
 
 def test_return_dict_has_required_fields():
