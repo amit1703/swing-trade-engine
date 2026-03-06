@@ -34,9 +34,11 @@ def setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6):
     for offset in range(1, 4):
         lp_idx = brk_idx - offset
         if lp_idx >= 0:
-            df.iloc[lp_idx, df.columns.get_loc("High")]   = zone_upper * 1.005
-            df.iloc[lp_idx, df.columns.get_loc("Low")]    = zone_upper * 0.990
-            df.iloc[lp_idx, df.columns.get_loc("Close")]  = zone_upper * 0.995
+            pre_high  = zone_upper * 0.995   # below zone (launchpad coils under resistance)
+            pre_range = 0.8                   # tight — well below 1.5 × ATR ≈ 3.0
+            df.iloc[lp_idx, df.columns.get_loc("High")]  = pre_high
+            df.iloc[lp_idx, df.columns.get_loc("Low")]   = pre_high - pre_range
+            df.iloc[lp_idx, df.columns.get_loc("Close")] = pre_high - pre_range * 0.5
 
     brk_close  = zone_upper * 1.012
     brk_high   = brk_close  * 1.003
