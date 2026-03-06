@@ -336,6 +336,7 @@ def _detect_signals(
 
             elif stype == "PULLBACK":
                 from engines.engine3 import scan_pullback, scan_relaxed_pullback
+                # trendline not computed during replay — ascending-TDL pullbacks will not fire
                 setup = scan_pullback(ticker, df_slice, sr_zones, rs_score=inds.rs_score)
                 if setup is None:
                     setup = scan_relaxed_pullback(ticker, df_slice, sr_zones, rs_score=inds.rs_score)
@@ -390,8 +391,12 @@ async def _fetch_data(ticker: str, start_date: str) -> tuple:
             logger.warning("_fetch_data: download failed for %s: %s", sym, exc)
             return None
 
-    ticker_df, spy_df = await asyncio.gather(
-        loop.run_in_executor(None, _download, ticker),
-        loop.run_in_executor(None, _download, "SPY"),
-    )
-    return ticker_df, spy_df
+    try:
+        ticker_df, spy_df = await asyncio.gather(
+            loop.run_in_executor(None, _download, ticker),
+            loop.run_in_executor(None, _download, "SPY"),
+        )
+        return ticker_df, spy_df
+    except Exception as exc:
+        logger.warning("_fetch_data: gather failed for %s: %s", ticker, exc)
+        return None, None
