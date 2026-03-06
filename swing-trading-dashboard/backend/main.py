@@ -79,6 +79,9 @@ from constants import (
     RS_BLUE_DOT_TOLERANCE_PCT,
     REGIME_SELECTIVE_THRESHOLD,
     TRADING_DAYS_IN_YEAR,
+    RS_RANK_MIN_PERCENTILE,
+    MIN_SETUP_SCORE,
+    TOP_SECTORS_N,
 )
 from database import (
     complete_scan_run,
@@ -108,6 +111,7 @@ from engines.engine7 import scan_options_catalyst
 from tickers import SCAN_UNIVERSE
 from validation import is_price_vital
 from universe_builder import build_universe, load_universe, save_universe, UNIVERSE_FILE
+from scoring import compute_rs_rank_map, compute_top_sectors, score_and_filter_setups
 from email_digest import send_digest
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -787,6 +791,17 @@ async def _run_scan(
             breadth_pct * 100, hl_ratio,
         )
 
+        # ── Task 8 & 10: RS rank map + top sectors (pre-computed for all tickers) ──
+        rs_rank_start = time.time()
+        _rs_rank_map = compute_rs_rank_map(_ticker_cache, tickers, spy_df_full)
+        _top_sectors = compute_top_sectors(
+            _ticker_cache, tickers, SECTORS, spy_df_full, top_n=TOP_SECTORS_N
+        )
+        log.info(
+            "RS rank map: %d tickers ranked  top_sectors=%s  [%.1fs]",
+            len(_rs_rank_map), _top_sectors, time.time() - rs_rank_start,
+        )
+
         # ── Engine 0: Multi-factor regime (computed after prefetch for breadth) ──
         regime_start = time.time()
         regime = await loop.run_in_executor(
@@ -921,6 +936,17 @@ async def _run_scan(
                     earnings_filtered += 1
                     _scan_state["engine_stats"]["filtered"]["earnings"] += 1
                     log.debug("Skipped %s: earnings within %d days", ticker, EARNINGS_BLACKOUT_DAYS)
+                    return
+
+                # ── Task 8: RS Rank gate ──────────────────────────────────────────
+                _ticker_rs_rank = _rs_rank_map.get(ticker)
+                if _ticker_rs_rank is None or _ticker_rs_rank < RS_RANK_MIN_PERCENTILE:
+                    log.debug(
+                        "Skipped %s: RS rank %.1f < %.0f (threshold)",
+                        ticker,
+                        _ticker_rs_rank if _ticker_rs_rank is not None else 0.0,
+                        RS_RANK_MIN_PERCENTILE,
+                    )
                     return
 
                 # ── Use pre-computed RS values from indicator engine ───────────────
@@ -1143,6 +1169,28 @@ async def _run_scan(
             _inject_hot_sector(collected_setups)
         except Exception as exc:
             log.warning("Sector clustering failed: %s", exc)
+
+        # ── Task 9: Unified scoring — score, filter (score < 70), and sort ──
+        pre_score_count = len(collected_setups)
+        try:
+            collected_setups = score_and_filter_setups(
+                collected_setups,
+                _rs_rank_map,
+                regime,
+                _top_sectors,
+                min_score=MIN_SETUP_SCORE,
+            )
+            log.info(
+                "Scoring: %d → %d setups (filtered %d below score %d)  "
+                "top_sectors=%s",
+                pre_score_count,
+                len(collected_setups),
+                pre_score_count - len(collected_setups),
+                MIN_SETUP_SCORE,
+                _top_sectors,
+            )
+        except Exception as exc:
+            log.warning("Setup scoring failed (keeping all setups): %s", exc)
 
         # ── Batch Save All Setups (5-10x faster than individual saves) ──────
         db_save_time = 0.0
