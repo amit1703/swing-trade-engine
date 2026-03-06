@@ -144,3 +144,78 @@ class BacktestSummary:
             "gross_loss":       self.gross_loss,
             "trades":           [t.to_dict() for t in self.trades],
         }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Metrics aggregation
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_metrics(
+    ticker: str,
+    setup_type: str,
+    start_date: str,
+    end_date: str,
+    trades: List[TradeRecord],
+    run_id: Optional[str] = None,
+) -> BacktestSummary:
+    """
+    Aggregate a list of TradeRecord objects into a BacktestSummary.
+
+    Parameters
+    ----------
+    trades : list of TradeRecord (may be empty)
+
+    Returns
+    -------
+    BacktestSummary with all metrics populated.
+    """
+    if run_id is None:
+        run_id = str(uuid.uuid4())
+
+    if not trades:
+        return BacktestSummary(
+            run_id=run_id, ticker=ticker, setup_type=setup_type,
+            start_date=start_date, end_date=end_date,
+            total_trades=0, win_count=0, loss_count=0,
+            win_rate=0.0, avg_rr=0.0, profit_factor=0.0,
+            max_drawdown_pct=0.0, avg_holding_days=0.0,
+            gross_profit=0.0, gross_loss=0.0, trades=[],
+        )
+
+    wins   = [t for t in trades if t.is_win]
+    losses = [t for t in trades if not t.is_win]
+
+    win_rate = round(len(wins) / len(trades) * 100, 2)
+    avg_rr   = round(float(np.mean([t.rr_achieved for t in trades])), 3)
+
+    gross_profit = sum(t.pnl_pct for t in wins)
+    gross_loss   = sum(t.pnl_pct for t in losses)  # negative number
+
+    if gross_loss == 0:
+        profit_factor = float("inf") if gross_profit > 0 else 0.0
+    else:
+        profit_factor = round(gross_profit / abs(gross_loss), 3)
+
+    avg_holding_days = round(float(np.mean([t.holding_days for t in trades])), 1)
+
+    # Peak-to-trough drawdown on cumulative pnl_pct series
+    cumulative   = np.cumsum([t.pnl_pct for t in trades])
+    running_max  = np.maximum.accumulate(cumulative)
+    drawdowns    = running_max - cumulative
+    max_drawdown_pct = round(float(drawdowns.max()), 2) if len(drawdowns) > 0 else 0.0
+
+    return BacktestSummary(
+        run_id=run_id, ticker=ticker, setup_type=setup_type,
+        start_date=start_date, end_date=end_date,
+        total_trades=len(trades),
+        win_count=len(wins),
+        loss_count=len(losses),
+        win_rate=win_rate,
+        avg_rr=avg_rr,
+        profit_factor=profit_factor,
+        max_drawdown_pct=max_drawdown_pct,
+        avg_holding_days=avg_holding_days,
+        gross_profit=round(gross_profit, 3),
+        gross_loss=round(gross_loss, 3),
+        trades=trades,
+    )

@@ -99,3 +99,62 @@ def test_trade_record_loss():
     )
     assert abs(trade.rr_achieved - (-1.0)) < 0.01
     assert trade.is_win is False
+
+
+def _make_trade(entry, exit_price, stop, days=10, setup="VCP"):
+    """Helper: create a TradeRecord from basic price levels."""
+    from backtest_engine import TradeRecord
+    return TradeRecord(
+        ticker="TEST", setup_type=setup,
+        signal_date="2024-01-01", entry_date="2024-01-02",
+        entry_price=entry, initial_stop=stop,
+        take_profit=entry + 2 * (entry - stop),
+        exit_date="2024-01-12", exit_price=exit_price,
+        exit_reason="TARGET" if exit_price > entry else "STOP",
+        holding_days=days,
+    )
+
+
+def test_compute_metrics_win_rate():
+    """win_rate = wins / total * 100."""
+    from backtest_engine import compute_metrics
+    trades = [
+        _make_trade(100, 110, 95),  # win
+        _make_trade(100, 110, 95),  # win
+        _make_trade(100, 95, 95),   # loss
+    ]
+    summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
+    assert abs(summary.win_rate - 66.67) < 0.05
+
+
+def test_compute_metrics_profit_factor():
+    """profit_factor = gross_profit / abs(gross_loss)."""
+    from backtest_engine import compute_metrics
+    trades = [
+        _make_trade(100, 110, 95),  # +10 pnl_pct
+        _make_trade(100, 95, 95),   # -5 pnl_pct
+    ]
+    summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
+    assert abs(summary.profit_factor - 2.0) < 0.05
+
+
+def test_compute_metrics_no_trades():
+    """Zero trades returns zero metrics without crashing."""
+    from backtest_engine import compute_metrics
+    summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", [])
+    assert summary.total_trades == 0
+    assert summary.win_rate == 0.0
+    assert summary.profit_factor == 0.0
+
+
+def test_compute_metrics_max_drawdown():
+    """max_drawdown_pct is peak-to-trough of cumulative pnl."""
+    from backtest_engine import compute_metrics
+    # +10%, -15%, +5% → cumulative: 10, -5, 0 → peak 10, trough -5 = drawdown 15%
+    trades = [
+        _make_trade(100, 110, 95, days=5),   # +10%
+        _make_trade(100, 85, 95, days=5),    # -15%
+        _make_trade(100, 105, 95, days=5),   # +5%
+    ]
+    summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
+    assert abs(summary.max_drawdown_pct - 15.0) < 0.5
