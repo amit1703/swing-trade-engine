@@ -48,8 +48,8 @@ async def test_get_market_overview_uses_cache_on_second_call():
 
 
 @pytest.mark.asyncio
-async def test_fear_greed_failure_yields_none_not_exception():
-    """If CNN endpoint fails, fear_greed is None but function still returns."""
+async def test_fear_greed_failure_yields_fallback_not_exception():
+    """If all fetches fail, get_market_overview returns fallback data (never raises)."""
     import services.macro_service as svc
 
     svc._cache    = None
@@ -60,6 +60,10 @@ async def test_fear_greed_failure_yields_none_not_exception():
             with patch.object(svc, "_fetch_news",     new=AsyncMock(return_value=[])):
                 result = await svc.get_market_overview()
 
-    assert result["fear_greed"] is None
-    assert result["indices"]["SPY"] is None
+    # Hardening: fallback data returned instead of None — panel always gets valid shape
+    assert result["fear_greed"] is not None
+    assert result["fear_greed"].get("is_fallback") is True
+    assert result["indices"]["SPY"] is not None
+    assert result["indices"]["SPY"].get("is_fallback") is True
     assert isinstance(result["news"], list)
+    assert len(result["news"]) > 0  # fallback news item present
