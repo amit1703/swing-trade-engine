@@ -81,6 +81,31 @@ CREATE TABLE IF NOT EXISTS trades (
 );
 """
 
+_CREATE_BACKTEST_RESULTS = """
+CREATE TABLE IF NOT EXISTS backtest_results (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id           TEXT    NOT NULL,
+    ticker           TEXT    NOT NULL,
+    setup_type       TEXT    NOT NULL,
+    start_date       TEXT    NOT NULL,
+    end_date         TEXT    NOT NULL,
+    total_trades     INTEGER NOT NULL,
+    win_count        INTEGER NOT NULL,
+    loss_count       INTEGER NOT NULL,
+    win_rate         REAL    NOT NULL,
+    avg_rr           REAL    NOT NULL,
+    profit_factor    REAL    NOT NULL,
+    max_drawdown_pct REAL    NOT NULL,
+    avg_holding_days REAL    NOT NULL,
+    gross_profit     REAL    NOT NULL,
+    gross_loss       REAL    NOT NULL,
+    trades_json      TEXT    NOT NULL,
+    created_at       TEXT    DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+_BACKTEST_INDEX = "CREATE INDEX IF NOT EXISTS idx_backtest_ticker ON backtest_results(ticker, setup_type);"
+
 _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_setups_ts         ON scan_setups(scan_timestamp);",
     "CREATE INDEX IF NOT EXISTS idx_setups_type       ON scan_setups(scan_timestamp, setup_type);",
@@ -103,6 +128,8 @@ async def init_db(db_path: str) -> None:
         await db.execute(_CREATE_SCAN_SETUPS)
         await db.execute(_CREATE_SR_ZONES)
         await db.execute(_CREATE_TRADES)
+        await db.execute(_CREATE_BACKTEST_RESULTS)
+        await db.execute(_BACKTEST_INDEX)
         for idx_sql in _INDEXES:
             await db.execute(idx_sql)
         await db.commit()
@@ -128,6 +155,13 @@ async def init_db(db_path: str) -> None:
                 await db.commit()
             except Exception:
                 pass  # column already exists — safe to ignore
+        # Migration: create backtest_results table if it does not yet exist
+        try:
+            await db.execute(_CREATE_BACKTEST_RESULTS)
+            await db.execute(_BACKTEST_INDEX)
+            await db.commit()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -468,3 +502,79 @@ async def get_sr_zones_for_ticker_from_db(db_path: str, ticker: str) -> List[Dic
                 {"level": r[0], "upper": r[1], "lower": r[2], "type": r[3], "source": r[4] or "kde"}
                 for r in rows
             ]
+
+
+# ---------------------------------------------------------------------------
+# Backtest Results CRUD
+# ---------------------------------------------------------------------------
+
+async def save_backtest_result(db_path: str, result: Dict) -> int:
+    """Insert one backtest result row. Returns new row id."""
+    import json as _json
+    async with aiosqlite.connect(db_path) as db:
+        cur = await db.execute(
+            """INSERT INTO backtest_results
+               (run_id, ticker, setup_type, start_date, end_date,
+                total_trades, win_count, loss_count, win_rate,
+                avg_rr, profit_factor, max_drawdown_pct, avg_holding_days,
+                gross_profit, gross_loss, trades_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                result["run_id"],
+                result["ticker"],
+                result["setup_type"],
+                result["start_date"],
+                result["end_date"],
+                result["total_trades"],
+                result["win_count"],
+                result["loss_count"],
+                result["win_rate"],
+                result["avg_rr"],
+                result["profit_factor"],
+                result["max_drawdown_pct"],
+                result["avg_holding_days"],
+                result["gross_profit"],
+                result["gross_loss"],
+                _json.dumps(result.get("trades", [])),
+            ),
+        )
+        await db.commit()
+        return cur.lastrowid
+
+
+async def get_backtest_results(db_path: str, ticker: str) -> List[Dict]:
+    """Return all backtest results for a ticker, newest first."""
+    import json as _json
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute(
+            """SELECT run_id, ticker, setup_type, start_date, end_date,
+                      total_trades, win_count, loss_count, win_rate,
+                      avg_rr, profit_factor, max_drawdown_pct, avg_holding_days,
+                      gross_profit, gross_loss, trades_json, created_at
+               FROM backtest_results WHERE ticker = ?
+               ORDER BY created_at DESC""",
+            (ticker.upper(),),
+        ) as cur:
+            rows = await cur.fetchall()
+            results = []
+            for r in rows:
+                results.append({
+                    "run_id":           r[0],
+                    "ticker":           r[1],
+                    "setup_type":       r[2],
+                    "start_date":       r[3],
+                    "end_date":         r[4],
+                    "total_trades":     r[5],
+                    "win_count":        r[6],
+                    "loss_count":       r[7],
+                    "win_rate":         r[8],
+                    "avg_rr":           r[9],
+                    "profit_factor":    r[10],
+                    "max_drawdown_pct": r[11],
+                    "avg_holding_days": r[12],
+                    "gross_profit":     r[13],
+                    "gross_loss":       r[14],
+                    "trades":           _json.loads(r[15]) if r[15] else [],
+                    "created_at":       r[16],
+                })
+            return results
