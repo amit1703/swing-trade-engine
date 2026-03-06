@@ -149,8 +149,8 @@ def test_pivot_zones_accepted():
         "type": "RESISTANCE", "source": "pivot",
     }
     result = scan_lce("TEST", df, zones=[pivot_zone])
-    if result is not None:
-        assert result["zone_source"] == "pivot"
+    assert result is not None, "Expected setup with pivot zone"
+    assert result["zone_source"] == "pivot"
 
 
 def test_short_df_returns_none():

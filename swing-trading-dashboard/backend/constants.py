@@ -34,6 +34,7 @@ HTF_MAX_RISK_PCT      = 0.35  # Max stop-loss as fraction of entry (wide for HTF
 # ── Engine 9: Low Cheat Entry ──────────────────────────────────────────────
 LCE_MAX_DISTANCE_PCT      = 0.03  # Price within 3% below resistance
 LCE_VOL_CONTRACTION_RATIO = 0.80  # 5-bar avg volume ≤ 80% of 20-day avg
+LCE_MAX_RISK_PCT          = 0.15  # Max stop-loss as fraction of entry for LCE setups
 
 # ──────────────────────────────────────────────────────────────────────────
 # Time Periods & Candle Counts

@@ -28,8 +28,10 @@ from indicators import atr as _atr, ema as _ema
 from constants import (
     ATR_STOP_MULTIPLIER,
     TR_WINDOW,
+    EMA_LONG,
     LCE_MAX_DISTANCE_PCT,
     LCE_VOL_CONTRACTION_RATIO,
+    LCE_MAX_RISK_PCT,
 )
 
 
@@ -115,7 +117,7 @@ def scan_lce(
             return None
 
         # ── 5. Trend: close > EMA20 ───────────────────────────────────────────
-        ema20_s   = _ema(close_s, 20)
+        ema20_s   = _ema(close_s, EMA_LONG)
         ema20_val = ema20_s.iloc[-1]
         ema20     = float(ema20_val.item() if hasattr(ema20_val, "item") else ema20_val)
         if np.isnan(ema20) or lc < ema20:
@@ -146,7 +148,7 @@ def scan_lce(
         entry       = round(lc, 2)
         stop_loss   = round(swing_low - ATR_STOP_MULTIPLIER * latr, 2)
         risk        = entry - stop_loss
-        if risk <= 0 or risk > entry * 0.15:
+        if risk <= 0 or risk > entry * LCE_MAX_RISK_PCT:
             return None
 
         take_profit = round(resistance_upper * 1.005, 2)
