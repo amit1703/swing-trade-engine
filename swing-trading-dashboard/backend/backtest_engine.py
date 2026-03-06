@@ -426,15 +426,17 @@ class BacktestEngine:
         start_date: str,
         end_date: str,
         setup_types: Optional[List[str]] = None,
+        run_id: Optional[str] = None,
     ):
         self.ticker      = ticker.upper()
         self.start_date  = start_date
         self.end_date    = end_date
         self.setup_types = setup_types or ["VCP", "PULLBACK", "BASE"]
+        self.run_id      = run_id or str(uuid.uuid4())
 
     async def run(self) -> BacktestSummary:
         """Execute the backtest. Returns a BacktestSummary with all closed trades."""
-        run_id = str(uuid.uuid4())
+        run_id = self.run_id
         logger.info(
             "Backtest [%s] %s %s→%s starting",
             run_id, self.ticker, self.start_date, self.end_date,

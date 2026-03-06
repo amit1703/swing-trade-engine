@@ -38,8 +38,9 @@ import logging
 import os
 import threading
 import time
+import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -55,7 +56,7 @@ from indicators import ema as _ema, sma as _sma, cci as _cci, atr as _atr
 from indicators.indicator_engine import compute_indicators, TickerIndicators
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from constants import (
     BULK_DOWNLOAD_BATCH_SIZE,
@@ -1377,9 +1378,15 @@ def _inject_hot_sector(setups: List[Dict], threshold: int = 3) -> None:
 
 class BacktestRequest(BaseModel):
     ticker:      str
-    start_date:  str           # "YYYY-MM-DD"
-    end_date:    str           # "YYYY-MM-DD"
-    setup_types: List[str] = Field(default=["VCP", "PULLBACK", "BASE"])
+    start_date:  date
+    end_date:    date
+    setup_types: List[str] = Field(default_factory=lambda: ["VCP", "PULLBACK", "BASE"])
+
+    @model_validator(mode="after")
+    def check_date_range(self) -> "BacktestRequest":
+        if self.start_date >= self.end_date:
+            raise ValueError("start_date must be before end_date")
+        return self
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -1399,22 +1406,21 @@ async def run_backtest(req: BacktestRequest, background_tasks: BackgroundTasks):
     Returns immediately with a run_id; poll /api/backtest-results/{ticker}
     to retrieve results once complete.
     """
-    import uuid
     run_id = str(uuid.uuid4())
 
     async def _do_backtest():
         try:
             engine = BacktestEngine(
                 ticker=req.ticker,
-                start_date=req.start_date,
-                end_date=req.end_date,
+                start_date=str(req.start_date),
+                end_date=str(req.end_date),
                 setup_types=req.setup_types,
+                run_id=run_id,
             )
             summary = await engine.run()
             result  = summary.to_dict()
-            result["run_id"] = run_id
             await save_backtest_result(DB_PATH, result)
-            log.info("Backtest %s done: %d trades", run_id, summary.total_trades)
+            log.info("Backtest %s done: %d trades", summary.run_id, summary.total_trades)
         except Exception as exc:
             log.exception("Backtest %s failed: %s", run_id, exc)
 
