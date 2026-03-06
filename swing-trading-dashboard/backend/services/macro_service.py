@@ -36,11 +36,16 @@ _cache_ts: float                    = 0.0
 
 CNN_FG_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 
+_FALLBACK_FEAR_GREED = {"score": 50.0, "label": "Neutral", "is_fallback": True}
+_FALLBACK_INDEX      = {"price": None, "change_pct": None, "is_fallback": True}
+_FALLBACK_NEWS       = [{"title": "Market data unavailable", "publisher": "—", "url": "", "age_min": None, "is_fallback": True}]
+
 
 # ── Fetch helpers ─────────────────────────────────────────────────────────────
 
 async def _fetch_fear_greed() -> Optional[Dict[str, Any]]:
     """Fetch Fear & Greed score from CNN public endpoint."""
+    log.debug("_fetch_fear_greed: starting request to %s", CNN_FG_URL)
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             resp = await client.get(
@@ -53,7 +58,15 @@ async def _fetch_fear_greed() -> Optional[Dict[str, Any]]:
         score = fg.get("score")
         if score is None:
             return None
-        return {"score": round(float(score), 1), "label": fg.get("rating", "Unknown")}
+        result = {"score": round(float(score), 1), "label": fg.get("rating", "Unknown")}
+        log.debug("_fetch_fear_greed: got score=%.1f label=%s", result["score"], result["label"])
+        return result
+    except httpx.HTTPStatusError as exc:
+        log.warning("Fear & Greed HTTP %s: %s", exc.response.status_code, exc.response.text[:200])
+        return None
+    except httpx.TimeoutException:
+        log.warning("Fear & Greed request timed out")
+        return None
     except Exception as exc:
         log.warning("Fear & Greed fetch failed: %s", exc)
         return None
@@ -61,6 +74,7 @@ async def _fetch_fear_greed() -> Optional[Dict[str, Any]]:
 
 async def _fetch_index_change(symbol: str) -> Optional[Dict[str, Any]]:
     """Today's price + % change for a symbol (blocking yfinance in executor)."""
+    log.debug("_fetch_index_change: starting %s", symbol)
     loop = asyncio.get_running_loop()
     try:
         def _get() -> Optional[Dict[str, Any]]:
@@ -71,7 +85,16 @@ async def _fetch_index_change(symbol: str) -> Optional[Dict[str, Any]]:
             today = float(hist["Close"].iloc[-1])
             chg   = (today - prev) / prev * 100
             return {"price": round(today, 2), "change_pct": round(chg, 2)}
-        return await loop.run_in_executor(None, _get)
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, _get),
+            timeout=12.0,
+        )
+        if result is not None:
+            log.debug("_fetch_index_change: %s price=%.2f chg=%.2f%%", symbol, result["price"], result["change_pct"])
+        return result
+    except asyncio.TimeoutError:
+        log.warning("Index fetch timed out for %s", symbol)
+        return None
     except Exception as exc:
         log.warning("Index fetch failed for %s: %s", symbol, exc)
         return None
@@ -79,6 +102,7 @@ async def _fetch_index_change(symbol: str) -> Optional[Dict[str, Any]]:
 
 async def _fetch_news(max_items: int = 5) -> List[Dict[str, Any]]:
     """Top market headlines from yfinance ^GSPC."""
+    log.debug("_fetch_news: starting ^GSPC news fetch")
     loop = asyncio.get_running_loop()
     try:
         def _get() -> List[Dict[str, Any]]:
@@ -95,7 +119,15 @@ async def _fetch_news(max_items: int = 5) -> List[Dict[str, Any]]:
                     "age_min":   age_min,
                 })
             return result
-        return await loop.run_in_executor(None, _get)
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, _get),
+            timeout=12.0,
+        )
+        log.debug("_fetch_news: got %d headlines", len(result))
+        return result
+    except asyncio.TimeoutError:
+        log.warning("News fetch timed out")
+        return []
     except Exception as exc:
         log.warning("News fetch failed: %s", exc)
         return []
@@ -124,9 +156,12 @@ async def get_market_overview() -> Dict[str, Any]:
     )
 
     result = {
-        "fear_greed": fg,
-        "indices":    {"SPY": spy, "QQQ": qqq},
-        "news":       news,
+        "fear_greed": fg or _FALLBACK_FEAR_GREED,
+        "indices":    {
+            "SPY": spy or _FALLBACK_INDEX,
+            "QQQ": qqq or _FALLBACK_INDEX,
+        },
+        "news":       news if news else _FALLBACK_NEWS,
         "cached_at":  datetime.now(timezone.utc).isoformat(),
         "cache_age_s": 0,
     }

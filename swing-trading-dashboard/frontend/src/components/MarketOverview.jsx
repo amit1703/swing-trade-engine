@@ -84,17 +84,20 @@ function ToggleBtn({ collapsed, onClick }) {
 export default function MarketOverview() {
   const [data,      setData     ] = useState(null)
   const [loading,   setLoading  ] = useState(true)
+  const [error,     setError    ] = useState(false)
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('macro_panel_collapsed') === 'true'
   )
   const timerRef = useRef(null)
 
   const load = async () => {
+    setError(false)
     try {
       const d = await fetchMarketOverview()
       setData(d)
     } catch (err) {
       console.warn('[MarketOverview] fetch failed:', err)
+      setError(true)
     } finally {
       setLoading(false)
     }
@@ -138,11 +141,18 @@ export default function MarketOverview() {
           </span>
         ) : (
           <>
-            {fg && (
-              <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 10, color: fgClr, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                F&G {fgScore?.toFixed(0)} <span style={{ fontWeight: 400, opacity: 0.75 }}>{fgLabel}</span>
-              </span>
+            {!loading && error && !data && (
+              <button
+                onClick={() => { setLoading(true); load() }}
+                style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'IBM Plex Mono, monospace', background: 'none', border: '1px solid var(--border)', padding: '1px 6px', cursor: 'pointer' }}
+              >
+                retry
+              </button>
             )}
+            <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 10, color: fgClr, fontWeight: 700, whiteSpace: 'nowrap' }}>
+              F&amp;G {fgScore != null ? fgScore.toFixed(0) : '—'}{' '}
+              <span style={{ fontWeight: 400, opacity: 0.75 }}>{fgLabel}</span>
+            </span>
             <span style={{ color: 'var(--border)', fontSize: 12, lineHeight: 1 }}>│</span>
             <IndexBadge sym="SPY" info={spy} />
             <IndexBadge sym="QQQ" info={qqq} />
@@ -168,6 +178,14 @@ export default function MarketOverview() {
           </div>
         ) : (
           <>
+            {!loading && error && !data && (
+              <button
+                onClick={() => { setLoading(true); load() }}
+                style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'IBM Plex Mono, monospace', background: 'none', border: '1px solid var(--border)', padding: '1px 6px', cursor: 'pointer' }}
+              >
+                retry
+              </button>
+            )}
             {/* F&G score + gauge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 8, letterSpacing: '0.15em', color: 'var(--muted)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono, monospace', whiteSpace: 'nowrap' }}>
