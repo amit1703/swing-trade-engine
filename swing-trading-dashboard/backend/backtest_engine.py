@@ -38,7 +38,7 @@ import pandas as pd
 import yfinance as yf
 
 sys.path.insert(0, os.path.dirname(__file__))
-from constants import ATR_STOP_MULTIPLIER, EMA_LONG, TARGET_RR
+from constants import EMA_LONG
 from indicators import ema as _ema
 
 logger = logging.getLogger(__name__)
