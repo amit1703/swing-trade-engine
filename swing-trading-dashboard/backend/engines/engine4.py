@@ -219,3 +219,49 @@ def get_rs_stats(rs_line: List[float]) -> dict:
     except Exception as exc:
         print(f"[get_rs_stats] Error: {exc}")
         return {"rs_today": None, "rs_52w_high": None, "rs_trend": "UNKNOWN"}
+
+
+def get_rs_signals(rs_line: List[float]) -> dict:
+    """
+    Compute RS momentum and quality signals for scoring.
+
+    Does NOT modify any existing RS logic — purely additive signals.
+    Safe defaults returned for short or empty rs_line.
+
+    Parameters
+    ----------
+    rs_line : list of floats (from calculate_rs_line)
+
+    Returns
+    -------
+    dict with keys:
+        rs_improving    bool   — RS ratio trending up over last 10 bars
+        rs_near_high    bool   — RS within 10% of 60-bar peak
+        rs_acceleration float  — (rs[-1] - rs[-10]) / abs(rs[-10])
+    """
+    _default = {"rs_improving": False, "rs_near_high": False, "rs_acceleration": 0.0}
+    try:
+        if not rs_line or len(rs_line) < 11:
+            return _default
+
+        rs_now = float(rs_line[-1])
+        rs_10  = float(rs_line[-10])
+
+        # RS Improving: trending up vs 10 bars ago
+        rs_improving = rs_now > rs_10
+
+        # RS Near High: within 90% of 60-bar (or full line) peak
+        lookback     = rs_line[-60:] if len(rs_line) >= 60 else rs_line
+        max_rs       = max(lookback)
+        rs_near_high = rs_now >= 0.90 * max_rs if max_rs > 0 else False
+
+        # RS Acceleration: normalised rate of change over 10 bars
+        rs_acceleration = round((rs_now - rs_10) / abs(rs_10), 4) if rs_10 != 0 else 0.0
+
+        return {
+            "rs_improving":    rs_improving,
+            "rs_near_high":    rs_near_high,
+            "rs_acceleration": rs_acceleration,
+        }
+    except Exception:
+        return _default
