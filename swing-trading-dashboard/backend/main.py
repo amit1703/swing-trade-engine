@@ -342,6 +342,8 @@ def run_morning_scan() -> None:
             res_setups     = await _get_setups(DB_PATH, setup_type="RES_BREAKOUT")
             pb_setups      = await _get_setups(DB_PATH, setup_type="PULLBACK")
             opt_setups     = await _get_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
+            htf_setups     = await _get_setups(DB_PATH, setup_type="HTF")
+            lce_setups     = await _get_setups(DB_PATH, setup_type="LCE")
 
             # Enrich regime with SPY SMA50 for BULL/BEAR/NEUTRAL badge
             spy_sma50: Optional[float] = None
@@ -366,10 +368,13 @@ def run_morning_scan() -> None:
                     "res_breakout":     res_setups,
                     "pullback":         pb_setups,
                     "options_catalyst": opt_setups,
+                    "htf":              htf_setups,
+                    "lce":              lce_setups,
                 }
             log.info(
-                "[scheduler] Digest cache built: vcp=%d  dry=%d  res=%d  pb=%d  opt=%d",
+                "[scheduler] Digest cache built: vcp=%d  dry=%d  res=%d  pb=%d  opt=%d  htf=%d  lce=%d",
                 len(vcp_setups), len(watchlist), len(res_setups), len(pb_setups), len(opt_setups),
+                len(htf_setups), len(lce_setups),
             )
 
         asyncio.run(_scan_and_cache())
@@ -871,12 +876,14 @@ async def _run_scan(
         base_count = 0
         res_count  = 0
         opt_count  = 0
+        htf_count  = 0
+        lce_count  = 0
         liquidity_filtered = 0
         earnings_filtered  = 0
         process_start_time = time.time()
 
         async def _process(ticker: str, idx: int) -> None:
-            nonlocal vcp_count, pb_count, base_count, res_count, opt_count, dropped_tickers, liquidity_filtered, earnings_filtered
+            nonlocal vcp_count, pb_count, base_count, res_count, opt_count, htf_count, lce_count, dropped_tickers, liquidity_filtered, earnings_filtered
 
             try:
                 # ── Data Integrity Check ────────────────────────────────────
@@ -1146,6 +1153,7 @@ async def _run_scan(
                             else:
                                 htf["sector"] = SECTORS.get(ticker, "Unknown")
                                 collected_setups.append(htf)
+                                htf_count += 1
                                 _scan_state["engine_stats"]["e8"]["htf"] += 1
                                 log.info("  HTF      %-6s  runup=%.0f%%  flag=%dd  vol=×%.1f",
                                          ticker, htf.get("runup_pct", 0),
@@ -1170,6 +1178,7 @@ async def _run_scan(
                             else:
                                 lce["sector"] = SECTORS.get(ticker, "Unknown")
                                 collected_setups.append(lce)
+                                lce_count += 1
                                 _scan_state["engine_stats"]["e9"]["lce"] += 1
                                 log.info("  LCE      %-6s  dist=%.1f%%  vol=×%.2f",
                                          ticker, lce.get("distance_to_resistance_pct", 0),
@@ -1216,10 +1225,10 @@ async def _run_scan(
         process_time = time.time() - process_start_time
         _scan_state["engine_stats"]["timing"]["process_s"] = round(process_time, 2)
         log.info(
-            "Per-ticker processing completed  [%.1fs]  vcp=%d  pb=%d  base=%d  res=%d  opt=%d  "
+            "Per-ticker processing completed  [%.1fs]  vcp=%d  pb=%d  base=%d  res=%d  opt=%d  HTF=%d  LCE=%d  "
             "total_setups=%d  filtered(liq=%d  earn=%d)",
             process_time,
-            vcp_count, pb_count, base_count, res_count, opt_count,
+            vcp_count, pb_count, base_count, res_count, opt_count, htf_count, lce_count,
             len(collected_setups),
             liquidity_filtered, earnings_filtered,
         )
@@ -1334,10 +1343,10 @@ async def _run_scan(
             log.info("✓ DATA QUALITY: All %d tickers processed successfully (0 dropped)", len(tickers))
 
         log.info(
-            "✔ Scan complete  VCP=%d  Pullbacks=%d  Base=%d  ResBreakout=%d  Options=%d  "
+            "✔ Scan complete  VCP=%d  Pullbacks=%d  Base=%d  ResBreakout=%d  Options=%d  HTF=%d  LCE=%d  "
             "Processed=%d/%d  filtered(liq=%d  earn=%d)  "
             "Total=%.1fs  [regime=%.1fs  spy=%.1fs  prefetch=%.1fs  process=%.1fs  db=%.1fs]",
-            vcp_count, pb_count, base_count, res_count, opt_count,
+            vcp_count, pb_count, base_count, res_count, opt_count, htf_count, lce_count,
             processed_tickers, len(tickers),
             liquidity_filtered, earnings_filtered,
             total_scan_elapsed,
