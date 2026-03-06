@@ -33,6 +33,7 @@ from constants import (
     SCORE_SELECTIVE_REGIME_FACTOR,
     SCORE_WEIGHT_QUALITY,
     SCORE_WEIGHT_REGIME,
+    SCORE_WEIGHT_RS_QUALITY,
     SCORE_WEIGHT_RS_RANK,
     SCORE_WEIGHT_RR,
     SCORE_WEIGHT_SECTOR,
@@ -310,6 +311,46 @@ def _quality_component(setup: Dict) -> float:
     return min(max_pts, pts)
 
 
+def _rs_quality_component(setup: Dict) -> float:
+    """
+    RS momentum quality component (0 – SCORE_WEIGHT_RS_QUALITY pts).
+
+    Scoring contributions (additive, capped at SCORE_WEIGHT_RS_QUALITY):
+      rs_vs_spy > 0.00  → +6 pts
+      rs_vs_spy > 0.05  → +8 pts additional (total +14 if both)
+      rs_improving      → +4 pts
+      rs_near_high      → +4 pts
+      rs_acceleration > 0.10 → +6 pts
+      rs_acceleration > 0.05 → +4 pts (only if not above 0.10)
+      tight_range_5d    → +4 pts
+    """
+    max_pts = float(SCORE_WEIGHT_RS_QUALITY)
+    pts = 0.0
+
+    rs_vs_spy = float(setup.get("rs_vs_spy") or 0.0)
+    if rs_vs_spy > 0.0:
+        pts += 6.0
+    if rs_vs_spy > 0.05:
+        pts += 8.0
+
+    if setup.get("rs_improving"):
+        pts += 4.0
+
+    if setup.get("rs_near_high"):
+        pts += 4.0
+
+    rs_accel = float(setup.get("rs_acceleration") or 0.0)
+    if rs_accel > 0.10:
+        pts += 6.0
+    elif rs_accel > 0.05:
+        pts += 4.0
+
+    if setup.get("tight_range_5d"):
+        pts += 4.0
+
+    return min(max_pts, pts)
+
+
 def compute_setup_score(
     setup: Dict,
     rs_rank: float,
@@ -357,7 +398,10 @@ def compute_setup_score(
     # ── 6. Pattern Quality (0 – SCORE_WEIGHT_QUALITY pts) ────────────────────
     qual_pts = _quality_component(setup)
 
-    raw = rs_pts + rr_pts + vol_pts + reg_pts + sector_pts + qual_pts
+    # ── 7. RS Quality Signals (0 – SCORE_WEIGHT_RS_QUALITY pts) ──────────────
+    rs_qual_pts = _rs_quality_component(setup)
+
+    raw = rs_pts + rr_pts + vol_pts + reg_pts + sector_pts + qual_pts + rs_qual_pts
     return min(100, max(0, int(round(raw))))
 
 
@@ -394,15 +438,26 @@ def score_and_filter_setups(
     for setup in setups:
         ticker = setup.get("ticker", "")
         rs_rank = rs_rank_map.get(ticker)
+
+        # In DEFENSIVE, RS gate is bypassed so some tickers may lack a rank entry.
+        # For WATCHLIST items specifically, use 0 as the fallback rank so the
+        # setup still gets a score and is included (proximity is the quality filter).
+        # For actionable setups, still exclude if no rank (data too short for RS).
+        is_watchlist = setup.get("setup_type") == "WATCHLIST"
         if rs_rank is None:
-            continue   # no RS rank computed for this ticker → exclude
+            if is_watchlist:
+                rs_rank = 0.0  # will score low but still surfaces in the watchlist
+            else:
+                continue  # no RS rank → exclude actionable setups
 
         score = compute_setup_score(
             setup, rs_rank, regime_score, regime_str, top_sectors
         )
         setup["setup_score"] = score
 
-        if score >= min_score:
+        # WATCHLIST items bypass the score threshold — proximity to resistance is
+        # already the quality filter (engine2 gates at ≤1.5% below level).
+        if is_watchlist or score >= min_score:
             surviving.append(setup)
 
     surviving.sort(key=lambda s: s["setup_score"], reverse=True)

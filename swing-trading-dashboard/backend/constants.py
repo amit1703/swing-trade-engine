@@ -82,6 +82,7 @@ SCORE_WEIGHT_VOL        = 20    # Volume surge / momentum
 SCORE_WEIGHT_REGIME     = 15    # Market regime alignment
 SCORE_WEIGHT_SECTOR     = 10    # Sector in top-5 by RS
 SCORE_WEIGHT_QUALITY    = 5     # Pattern quality / confirmation signals
+SCORE_WEIGHT_RS_QUALITY = 20    # RS momentum signals (improving, near-high, acceleration, tight range)
 SCORE_SELECTIVE_REGIME_FACTOR = 0.53   # SELECTIVE regime earns 53% of AGGRESSIVE pts (~8/15)
 
 # ──────────────────────────────────────────────────────────────────────────
