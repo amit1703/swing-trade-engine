@@ -56,7 +56,10 @@ CCI_RLX_FLOOR    = -30.0  # CCI oversold floor for relaxed pullback hook
 # Risk Management & Stop Loss
 # ──────────────────────────────────────────────────────────────────────────
 
-ATR_STOP_MULTIPLIER = 0.2  # 20% of ATR below swing low for stop placement
+ATR_STOP_MULTIPLIER = 0.8  # ATR × multiplier below swing low (widened to prevent stop hunts)
+
+# ── VCP Volatility Contraction (Task 13) ───────────────────────────────────
+VCP_ATR_CONTRACTION_THRESHOLD = 0.6   # ATR today < ATR20_avg × 0.6 confirms compression
 ENTRY_PRICE_MULTIPLIER = 1.001  # 0.1% above current price for entry orders
 MIN_RISK_REWARD_RATIO = 1.0  # Minimum acceptable R:R ratio for setups
 TARGET_RR             = 2.0  # Default take-profit multiplier (change to 3.0 for 3:1 target)
@@ -92,6 +95,19 @@ OPTIONS_SKEW_NEUTRAL       = 0.5         # Call/Put skew at neutral (50/50)
 OPTIONS_SKEW_MAX           = 0.9         # Call/Put skew at which component maxes out
 OPTIONS_IV_SLOPE_TARGET    = 0.30        # IV term slope delta at which component maxes out
 
+# ── Market Regime Scoring Weights (Task 2) ─────────────────────────────────
+REGIME_WEIGHT_EMA20    = 20   # SPY close > EMA20
+REGIME_WEIGHT_SMA50    = 15   # SPY close > SMA50
+REGIME_WEIGHT_MA_STACK = 15   # SMA50 > SMA200
+REGIME_WEIGHT_SLOPE    = 10   # EMA20 slope over 5 days
+REGIME_WEIGHT_BREADTH  = 20   # % universe above SMA50
+REGIME_WEIGHT_HL       = 10   # New 52-week highs vs lows ratio
+REGIME_WEIGHT_VIX      = 10   # VIX below its 20-day SMA
+
+REGIME_AGGRESSIVE_THRESHOLD = 70   # 70–100 = AGGRESSIVE
+REGIME_SELECTIVE_THRESHOLD  = 40   # 40–69  = SELECTIVE
+                                    # 0–39   = DEFENSIVE (Engines 2 & 3 disabled)
+
 # ──────────────────────────────────────────────────────────────────────────
 # Scan Settings
 # ──────────────────────────────────────────────────────────────────────────
@@ -118,3 +134,24 @@ VITALITY_MIN_RANGE_PCT = 0.02  # Minimum H-L range (2%) to pass vitality
 # ──────────────────────────────────────────────────────────────────────────
 
 MIN_ATR_PCT = 2.0           # ATR(14)/Close×100 minimum — filters low-vol stocks
+
+# ──────────────────────────────────────────────────────────────────────────
+# Liquidity Gate (Task 7) — enforced per-ticker before engines run
+# ──────────────────────────────────────────────────────────────────────────
+
+LIQUIDITY_MIN_AVG_VOLUME    = 500_000      # 50-day avg share volume minimum
+LIQUIDITY_MIN_DOLLAR_VOLUME = 20_000_000   # price × avg volume (daily $) minimum
+
+# ──────────────────────────────────────────────────────────────────────────
+# Earnings Blackout (Task 1) — skip tickers with earnings within N days
+# ──────────────────────────────────────────────────────────────────────────
+
+EARNINGS_BLACKOUT_DAYS    = 7             # calendar days before earnings → skip
+EARNINGS_CACHE_FILE       = "cache/earnings_cache.json"
+EARNINGS_CACHE_TTL_HOURS  = 24            # refresh cache entries older than this
+
+# ──────────────────────────────────────────────────────────────────────────
+# Bulk Download (Task 5)
+# ──────────────────────────────────────────────────────────────────────────
+
+BULK_DOWNLOAD_BATCH_SIZE = 200            # tickers per yf.download() call
