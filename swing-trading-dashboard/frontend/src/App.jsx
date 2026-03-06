@@ -282,7 +282,14 @@ export default function App() {
         onOpenGuide={() => setShowGuide(true)}
         devMode={devMode}
         dryRun={dryRun}
-        onToggleDev={() => { const next = !devMode; setDevMode(next); if (!next) setDryRun(false) }}
+        onToggleDev={() => {
+          const next = !devMode
+          setDevMode(next)
+          if (!next) {
+            setDryRun(false)
+            if (activeTab === 'backtest') setActiveTab('scanner')
+          }
+        }}
         onToggleDryRun={() => setDryRun(v => !v)}
         onScanTicker={handleScanTicker}
       />

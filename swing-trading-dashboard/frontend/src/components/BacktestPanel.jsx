@@ -30,6 +30,11 @@ export default function BacktestPanel() {
 
     if (tickers.length === 0 || setupTypes.length === 0) return
 
+    if (startDate >= endDate) {
+      setStatus('Error: start date must be before end date')
+      return
+    }
+
     setRunning(true)
     setResults([])
     setStatus(`Starting ${tickers.length} backtest(s)…`)
@@ -317,7 +322,7 @@ export default function BacktestPanel() {
               {results.map((row, i) => {
                 const winRateColor = row.win_rate >= 50 ? 'var(--go)' : 'var(--halt)'
                 const pfColor = row.profit_factor >= 1.0 ? 'var(--go)' : 'var(--halt)'
-                const pfDisplay = row.profit_factor === Infinity || row.profit_factor > 9999
+                const pfDisplay = row.profit_factor === Infinity || row.profit_factor === 'Infinity' || Number(row.profit_factor) > 9999
                   ? '∞'
                   : Number(row.profit_factor).toFixed(2)
 
