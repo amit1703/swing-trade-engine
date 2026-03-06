@@ -1,3 +1,11 @@
+/**
+ * BacktestPanel — Dev-only historical replay UI
+ *
+ * Renders ONLY when devMode === true (gated in App.jsx).
+ * Accepts comma-separated tickers, date range, and setup types.
+ * Fires POST /api/run-backtest per ticker (background), then polls
+ * GET /api/backtest-results/{ticker} every 5s up to 90s for results.
+ */
 import { useState } from 'react'
 import { runBacktest, fetchBacktestResults } from '../api.js'
 
@@ -39,6 +47,8 @@ export default function BacktestPanel() {
     setResults([])
     setStatus(`Starting ${tickers.length} backtest(s)…`)
 
+    // Note: tickers are queued sequentially. For large lists this eats into
+    // the 90s polling window. Acceptable for dev-only use with ≤10 tickers.
     for (const ticker of tickers) {
       try {
         setStatus(`Queuing ${ticker}…`)

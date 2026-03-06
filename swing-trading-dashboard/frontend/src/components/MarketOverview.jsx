@@ -91,6 +91,7 @@ export default function MarketOverview() {
   const timerRef = useRef(null)
 
   const load = async () => {
+    setLoading(true)
     setError(false)
     try {
       const d = await fetchMarketOverview()
@@ -141,7 +142,7 @@ export default function MarketOverview() {
           </span>
         ) : error && !data ? (
           <button
-            onClick={() => { setLoading(true); load() }}
+            onClick={load}
             style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'IBM Plex Mono, monospace', background: 'none', border: '1px solid var(--border)', padding: '1px 6px', cursor: 'pointer' }}
           >
             retry
@@ -177,7 +178,7 @@ export default function MarketOverview() {
           </div>
         ) : error && !data ? (
           <button
-            onClick={() => { setLoading(true); load() }}
+            onClick={load}
             style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'IBM Plex Mono, monospace', background: 'none', border: '1px solid var(--border)', padding: '1px 6px', cursor: 'pointer' }}
           >
             retry
