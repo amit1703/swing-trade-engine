@@ -1396,7 +1396,7 @@ class BacktestRequest(BaseModel):
     ticker:      str
     start_date:  date
     end_date:    date
-    setup_types: List[str] = Field(default_factory=lambda: ["VCP", "PULLBACK", "BASE"])
+    setup_types: List[str] = Field(default_factory=lambda: ["VCP", "PULLBACK", "BASE", "RES_BREAKOUT"])
 
     @model_validator(mode="after")
     def check_date_range(self) -> "BacktestRequest":

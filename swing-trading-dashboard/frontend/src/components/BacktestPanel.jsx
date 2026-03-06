@@ -9,7 +9,7 @@
 import { useState } from 'react'
 import { runBacktest, fetchBacktestResults } from '../api.js'
 
-const SETUP_OPTIONS = ['VCP', 'PULLBACK', 'BASE']
+const SETUP_OPTIONS = ['VCP', 'PULLBACK', 'BASE', 'RES_BREAKOUT']
 
 function defaultStartDate() {
   const d = new Date()
@@ -21,7 +21,7 @@ export default function BacktestPanel() {
   const [tickerInput, setTickerInput] = useState('')
   const [startDate,   setStartDate  ] = useState(defaultStartDate)
   const [endDate,     setEndDate    ] = useState(() => new Date().toISOString().slice(0, 10))
-  const [setupTypes,  setSetupTypes ] = useState(['VCP', 'PULLBACK', 'BASE'])
+  const [setupTypes,  setSetupTypes ] = useState(['VCP', 'PULLBACK', 'BASE', 'RES_BREAKOUT'])
   const [running,     setRunning    ] = useState(false)
   const [status,      setStatus     ] = useState('')
   const [results,     setResults    ] = useState([])

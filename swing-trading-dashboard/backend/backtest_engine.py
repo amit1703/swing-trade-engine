@@ -463,7 +463,7 @@ class BacktestEngine:
         self.ticker      = ticker.upper()
         self.start_date  = start_date
         self.end_date    = end_date
-        self.setup_types = setup_types or ["VCP", "PULLBACK", "BASE"]
+        self.setup_types = setup_types or ["VCP", "PULLBACK", "BASE", "RES_BREAKOUT"]
         self.run_id      = run_id or str(uuid.uuid4())
 
     async def run(self) -> BacktestSummary:
