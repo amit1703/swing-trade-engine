@@ -107,7 +107,7 @@ from engines.engine0 import check_market_regime
 from engines.engine1 import calculate_sr_zones
 from engines.engine2 import scan_vcp, detect_trendline, scan_near_breakout
 from engines.engine3 import scan_pullback, scan_relaxed_pullback
-from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats, calculate_rs_score
+from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats, calculate_rs_score, get_rs_signals
 from engines.engine5 import scan_base_pattern
 from engines.engine6 import scan_resistance_breakout
 from engines.engine7 import scan_options_catalyst
@@ -1711,6 +1711,7 @@ async def debug_ticker(ticker: str):
     rs_52w_high = 0.0
     rs_blue_dot = False
     rs_score    = 0
+    rs_signals  = {"rs_improving": False, "rs_near_high": False, "rs_acceleration": 0.0}
     try:
         spy_df = await _fetch("SPY")
         if spy_df is not None and len(spy_df) >= MIN_CANDLES_FOR_RS:
@@ -1721,6 +1722,7 @@ async def debug_ticker(ticker: str):
                 rs_52w_high = float(rs_stats.get("rs_52w_high", 0.0))
                 rs_blue_dot = bool(detect_rs_blue_dot(rs_line))
                 rs_score    = int(await loop.run_in_executor(None, calculate_rs_score, df, spy_df))
+                rs_signals  = get_rs_signals(rs_line)
     except Exception as exc:
         log.warning("debug RS failed for %s: %s", sym, exc)
 
@@ -1745,7 +1747,8 @@ async def debug_ticker(ticker: str):
     # Engine 2 — VCP
     e2 = await loop.run_in_executor(
         None, _run_engine, scan_vcp,
-        sym, df, zones, 0.0, rs_ratio, rs_52w_high, rs_blue_dot, rs_score
+        sym, df, zones, 0.0, rs_ratio, rs_52w_high, rs_blue_dot, rs_score,
+        rs_signals["rs_improving"], rs_signals["rs_near_high"], rs_signals["rs_acceleration"]
     )
     # Engine 3 — Pullback (strict then relaxed then pure EMA path)
     e3 = await loop.run_in_executor(None, _run_engine, scan_pullback, sym, df, zones, tl, rs_score)
