@@ -39,20 +39,12 @@ async def test_get_market_overview_uses_cache_on_second_call():
     }
     svc._cache_ts = time.monotonic()  # fresh
 
-    call_count = 0
-    original   = svc._fetch_fear_greed
+    with patch.object(svc, "_fetch_fear_greed",   new=AsyncMock(side_effect=AssertionError("cache should have been used"))):
+        with patch.object(svc, "_fetch_index_change", new=AsyncMock(side_effect=AssertionError("cache should have been used"))):
+            with patch.object(svc, "_fetch_news",     new=AsyncMock(side_effect=AssertionError("cache should have been used"))):
+                result = await svc.get_market_overview()
 
-    async def _counting_mock():
-        nonlocal call_count
-        call_count += 1
-        return None
-
-    svc._fetch_fear_greed = _counting_mock
-    try:
-        await svc.get_market_overview()
-        assert call_count == 0, "Cache should have been used — fetch should not have been called"
-    finally:
-        svc._fetch_fear_greed = original
+    assert result["fear_greed"]["score"] == 99.0
 
 
 @pytest.mark.asyncio

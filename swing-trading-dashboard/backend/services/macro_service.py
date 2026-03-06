@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -60,7 +61,7 @@ async def _fetch_fear_greed() -> Optional[Dict[str, Any]]:
 
 async def _fetch_index_change(symbol: str) -> Optional[Dict[str, Any]]:
     """Today's price + % change for a symbol (blocking yfinance in executor)."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         def _get() -> Optional[Dict[str, Any]]:
             hist = yf.Ticker(symbol).history(period="2d")
@@ -78,7 +79,7 @@ async def _fetch_index_change(symbol: str) -> Optional[Dict[str, Any]]:
 
 async def _fetch_news(max_items: int = 5) -> List[Dict[str, Any]]:
     """Top market headlines from yfinance ^GSPC."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         def _get() -> List[Dict[str, Any]]:
             raw     = yf.Ticker("^GSPC").news or []
@@ -108,10 +109,9 @@ async def get_market_overview() -> Dict[str, Any]:
     Refreshes from external sources when cache is older than _CACHE_TTL_SECONDS.
     Never raises — partial failures surface as None / [] fields.
     """
-    import time as _time
     global _cache, _cache_ts
 
-    now       = _time.monotonic()
+    now       = time.monotonic()
     cache_age = now - _cache_ts
     if _cache is not None and cache_age < _CACHE_TTL_SECONDS:
         return {**_cache, "cache_age_s": int(cache_age)}
