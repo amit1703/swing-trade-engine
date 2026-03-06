@@ -33,6 +33,9 @@ from constants import (
 )
 
 
+_TIGHT_RANGE_CONTRACTION = 0.7   # recent 5-bar range < 70% of prior 5-bar range → tight
+
+
 def scan_lce(
     ticker: str,
     df: pd.DataFrame,
@@ -125,7 +128,7 @@ def scan_lce(
         vol_avg_20   = float(np.mean(volume_arr[-vol_lookback - 1:-1])) if vol_lookback > 0 else 0.0
         if vol_avg_20 <= 0:
             return None
-        vol_avg_5 = float(np.mean(volume_arr[-5:]))
+        vol_avg_5 = float(np.mean(volume_arr[-6:-1]))
         vol_ratio = vol_avg_5 / vol_avg_20
         if vol_ratio > LCE_VOL_CONTRACTION_RATIO:
             if debug:
@@ -164,7 +167,7 @@ def scan_lce(
             "volume_ratio":               round(vol_ratio, 2),
             "is_vol_surge":               False,
             "zone_source":                nearest.get("source", "kde"),
-            "tight_range_5d":             avg_recent / avg_prior < 0.7 if avg_prior > 0 else False,
+            "tight_range_5d":             avg_recent / avg_prior < _TIGHT_RANGE_CONTRACTION if avg_prior > 0 else False,
             "rs_vs_spy":                  0.0,
             "rs_improving":               False,
             "rs_near_high":               False,
