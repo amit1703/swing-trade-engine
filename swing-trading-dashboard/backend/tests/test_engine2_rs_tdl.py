@@ -34,7 +34,12 @@ def make_resistance_zone(level: float, atr: float = 1.0):
 # ── RS threshold tests ─────────────────────────────────────────────────────────
 
 def test_brk_rs_threshold_contrast():
-    """Path B fires with rs_vs_spy > -0.05 but not with rs_vs_spy < -0.05."""
+    """Path B fires for both strong and weak RS stocks (RS gate removed).
+
+    After removing the rs_score > 0 hard gate from Path B, both setups
+    should fire when volume and resistance conditions are met, regardless
+    of relative strength vs SPY.
+    """
     df_weak = make_trending_df(base_price=101.5)
     df_strong = make_trending_df(base_price=101.5)
     zone = make_resistance_zone(100.0, atr=1.0)
@@ -43,17 +48,16 @@ def test_brk_rs_threshold_contrast():
     df_weak.iloc[-1, df_weak.columns.get_loc("Volume")] = 1_600_000.0
     df_strong.iloc[-1, df_strong.columns.get_loc("Volume")] = 1_600_000.0
 
-    # With spy_3m=0.15: stock ~+6% over 63 days, rs_vs_spy ≈ -0.09 — Path B blocked
+    # With spy_3m=0.15: stock ~+6% over 63 days, rs_vs_spy ≈ -0.09
+    # RS gate removed — Path B should now fire for both
     result_weak = scan_vcp("TEST", df_weak, [zone], spy_3m_return=0.15, rs_blue_dot=False)
 
     # With spy_3m=0.02: stock ~+6% over 63 days, rs_vs_spy ≈ +0.04 — Path B should fire
     result_strong = scan_vcp("TEST", df_strong, [zone], spy_3m_return=0.02, rs_blue_dot=False)
 
     assert result_strong is not None, "BRK should fire when rs_vs_spy > -0.05"
-    if result_weak is not None:
-        # Path B should not be what fired — check rs_vs_spy
-        assert result_weak.get("rs_vs_spy", 0) > -0.05, \
-            "If any result returned, its rs_vs_spy must be > -0.05 (Path B was not the source)"
+    # RS gate removed: weak RS stocks can also fire Path B now
+    assert result_weak is not None, "BRK should fire even with weak RS (gate removed)"
 
 
 def test_brk_accepts_stock_lagging_spy_by_less_than_5pct():

@@ -666,6 +666,9 @@ def scan_vcp(
     rs_52w_high: float = 0.0,
     rs_blue_dot: bool = False,
     rs_score: float = 0.0,
+    rs_improving: bool = False,
+    rs_near_high: bool = False,
+    rs_acceleration: float = 0.0,
     debug: bool = False,
 ) -> Optional[Dict]:
     """
@@ -708,6 +711,12 @@ def scan_vcp(
 
         # Extract scalars and use .item() for numpy types to avoid Series comparison errors
         lc   = float(close.iloc[-1].item() if hasattr(close.iloc[-1], 'item') else close.iloc[-1])
+
+        # ── Tight Price Action: 5-day close range / last close ────────────────
+        _closes_5    = data[_adj_col(data)].iloc[-5:].values if len(data) >= 5 else data[_adj_col(data)].values
+        _c5_range    = (float(_closes_5.max()) - float(_closes_5.min())) / float(lc) if lc > 0 else 1.0
+        tight_range_5d = _c5_range <= 0.025
+
         lh   = float(high.iloc[-1].item() if hasattr(high.iloc[-1], 'item') else high.iloc[-1])
         ll   = float(low.iloc[-1].item() if hasattr(low.iloc[-1], 'item') else low.iloc[-1])
         l8   = float(ema8.iloc[-1].item() if hasattr(ema8.iloc[-1], 'item') else ema8.iloc[-1])
@@ -774,7 +783,7 @@ def scan_vcp(
         confirmed_breakout = False
         bk_zone: Optional[Dict] = None
 
-        if resistance_zones and is_vol_surge and rs_score > 0:
+        if resistance_zones and is_vol_surge:
             # Find resistance zones whose UPPER bound price has cleared
             broken = [z for z in resistance_zones if lc > z["upper"]]
             if broken:
@@ -833,6 +842,10 @@ def scan_vcp(
                     "weekly_confirmed":    _weekly_confirmed(df),
                     "atr_compressed":      False,
                     "is_minervini_dryup":  _has_vol_dryup(volume, avg_vol),
+                    "rs_improving":        rs_improving,
+                    "rs_near_high":        rs_near_high,
+                    "rs_acceleration":     rs_acceleration,
+                    "tight_range_5d":      tight_range_5d,
                 }
 
         # ── Path B debug: no vol surge or rs_score not positive ──────────────
@@ -907,6 +920,10 @@ def scan_vcp(
                     "weekly_confirmed":    _weekly_confirmed(df),
                     "atr_compressed":      False,
                     "is_minervini_dryup":  _has_vol_dryup(volume, avg_vol),
+                    "rs_improving":        rs_improving,
+                    "rs_near_high":        rs_near_high,
+                    "rs_acceleration":     rs_acceleration,
+                    "tight_range_5d":      tight_range_5d,
                 }
 
         # ── Path C debug: no valid descending trendline detected ─────────────
@@ -936,8 +953,7 @@ def scan_vcp(
             # Check: 0.1% to 2.5% above resistance + volume ≥115% + RS ≥0
             is_kde_breakout = (
                 0.001 <= pct_above_upper <= 0.025 and
-                lvol >= 1.15 * avg_vol and
-                rs_vs_spy >= 0
+                lvol >= 1.15 * avg_vol
             )
 
             if is_kde_breakout:
@@ -979,6 +995,10 @@ def scan_vcp(
                         "weekly_confirmed":    _weekly_confirmed(df),
                         "atr_compressed":      False,
                         "is_minervini_dryup":  _has_vol_dryup(volume, avg_vol),
+                        "rs_improving":        rs_improving,
+                        "rs_near_high":        rs_near_high,
+                        "rs_acceleration":     rs_acceleration,
+                        "tight_range_5d":      tight_range_5d,
                     }
 
         # ── Path D debug: no KDE breakout ────────────────────────────────────
@@ -1043,6 +1063,10 @@ def scan_vcp(
                         "weekly_confirmed":    _weekly_confirmed(df),
                         "atr_compressed":      False,
                         "is_minervini_dryup":  _has_vol_dryup(volume, avg_vol),
+                        "rs_improving":        rs_improving,
+                        "rs_near_high":        rs_near_high,
+                        "rs_acceleration":     rs_acceleration,
+                        "tight_range_5d":      tight_range_5d,
                     }
 
         # ── PATH A — DRY (Coiled Spring) ──────────────────────────────────
@@ -1054,18 +1078,6 @@ def scan_vcp(
                 print(
                     f"Engine 2 VCP: REJECTED - Trend filter failed "
                     f"(Close {lc:.2f} below SMA200 {l200_str} — Path A requires Stage 2)"
-                )
-            return None
-
-        # ── A1b. RS quality gate ──────────────────────────────────────────
-        # DRY setups require stock to be at least neutral vs SPY (rs_score ≥ 0),
-        # matching the same bar as BRK (Path B). Coiling on a weak RS stock
-        # has significantly lower follow-through probability.
-        if rs_score < 0:
-            if debug:
-                print(
-                    f"Engine 2 VCP: REJECTED - RS score negative "
-                    f"({rs_score:.3f} < 0 — Path A requires rs_score ≥ 0)"
                 )
             return None
 
@@ -1221,6 +1233,10 @@ def scan_vcp(
             "weekly_confirmed":    _weekly_confirmed(df),
             "atr_compressed":      atr_compressed,
             "is_minervini_dryup":  is_minervini_dryup,
+            "rs_improving":        rs_improving,
+            "rs_near_high":        rs_near_high,
+            "rs_acceleration":     rs_acceleration,
+            "tight_range_5d":      tight_range_5d,
         }
 
     except Exception as exc:  # noqa: BLE001
