@@ -32,10 +32,8 @@ from constants import (
     LCE_MAX_DISTANCE_PCT,
     LCE_VOL_CONTRACTION_RATIO,
     LCE_MAX_RISK_PCT,
+    LCE_TIGHT_RANGE_CONTRACTION,
 )
-
-
-_TIGHT_RANGE_CONTRACTION = 0.7   # recent 5-bar range < 70% of prior 5-bar range → tight
 
 
 def scan_lce(
@@ -169,7 +167,7 @@ def scan_lce(
             "volume_ratio":               round(vol_ratio, 2),
             "is_vol_surge":               False,
             "zone_source":                nearest.get("source", "kde"),
-            "tight_range_5d":             avg_recent / avg_prior < _TIGHT_RANGE_CONTRACTION if avg_prior > 0 else False,
+            "tight_range_5d":             avg_recent / avg_prior < LCE_TIGHT_RANGE_CONTRACTION if avg_prior > 0 else False,
             "rs_vs_spy":                  0.0,
             "rs_improving":               False,
             "rs_near_high":               False,

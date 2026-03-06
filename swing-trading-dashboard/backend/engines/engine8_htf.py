@@ -132,7 +132,7 @@ def scan_htf(
             return None
         if lc > flag_high * (1 + HTF_MAX_EXTEND_PCT):
             if debug:
-                print(f"Engine 8 HTF {ticker}: REJECTED — overextended (>{5:.0f}% above flag)")
+                print(f"Engine 8 HTF {ticker}: REJECTED — overextended (>{HTF_MAX_EXTEND_PCT*100:.0f}% above flag)")
             return None
 
         # ── 4. Volume ─────────────────────────────────────────────────────────

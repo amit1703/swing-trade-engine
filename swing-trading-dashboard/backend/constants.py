@@ -35,6 +35,7 @@ HTF_MAX_RISK_PCT      = 0.35  # Max stop-loss as fraction of entry (wide for HTF
 LCE_MAX_DISTANCE_PCT      = 0.03  # Price within 3% below resistance
 LCE_VOL_CONTRACTION_RATIO = 0.80  # 5-bar avg volume ≤ 80% of 20-day avg
 LCE_MAX_RISK_PCT          = 0.15  # Max stop-loss as fraction of entry for LCE setups
+LCE_TIGHT_RANGE_CONTRACTION = 0.70  # recent 5-bar range < 70% of prior → tight flag
 
 # ──────────────────────────────────────────────────────────────────────────
 # Time Periods & Candle Counts
