@@ -113,6 +113,7 @@ from validation import is_price_vital
 from universe_builder import build_universe, load_universe, save_universe, UNIVERSE_FILE
 from scoring import compute_rs_rank_map, compute_top_sectors, score_and_filter_setups
 from email_digest import send_digest
+from services.macro_service import get_market_overview
 
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration (imported from constants.py for centralized management)
@@ -837,23 +838,12 @@ async def _run_scan(
         }
         _scan_state["engine_stats"]["timing"]["regime_s"] = round(regime_time, 2)
 
-        if not regime["is_bullish"] and not force:
+        if not regime["is_bullish"]:
             log.info(
-                "Regime DEFENSIVE (score=%d < %d) — all per-ticker engines disabled",
+                "Regime DEFENSIVE (score=%d < %d) — Engines 2 & 3 (VCP/Pullback) disabled; "
+                "Engines 5/6/7 (Base/ResBreakout/Options) still active%s",
                 regime["regime_score"], REGIME_SELECTIVE_THRESHOLD,
-            )
-            _scan_state["engine_stats"]["total_tickers"] = 0
-            _scan_state["engine_stats"]["total_duration_s"] = round(time.time() - scan_start_time, 1)
-            _scan_state["engine_stats"]["timing"]["total_s"] = round(time.time() - scan_start_time, 2)
-            if not dry_run:
-                await complete_scan_run(DB_PATH, scan_ts, 0)
-            _scan_state["last_completed"] = scan_ts
-            return
-
-        if not regime["is_bullish"] and force:
-            log.info(
-                "Regime DEFENSIVE (score=%d) — force=True, overriding halt gate",
-                regime["regime_score"],
+                "  [force=True]" if force else "",
             )
 
         # ── Load earnings cache from disk (Task 1) ────────────────────────────
@@ -913,8 +903,11 @@ async def _run_scan(
                     return
 
                 # ── Task 8: RS Rank gate ──────────────────────────────────────────
-                # Bypass gate entirely if rank map is empty (SPY fetch failed)
-                if _rs_rank_map:
+                # Bypass if:  rank map empty (SPY fetch failed)
+                #             regime is DEFENSIVE (Engines 2&3 already off; scoring gate
+                #             handles quality — applying RS gate here would kill all WL/Base)
+                #             force=True (dev mode, see everything)
+                if _rs_rank_map and regime["is_bullish"] and not force:
                     _ticker_rs_rank = _rs_rank_map.get(ticker)
                     if _ticker_rs_rank is None or _ticker_rs_rank < RS_RANK_MIN_PERCENTILE:
                         log.debug(
@@ -979,34 +972,35 @@ async def _run_scan(
                 # Detect trendline early (used by VCP follow-up, near-breakout, and pullback)
                 tl = await loop.run_in_executor(None, detect_trendline, ticker, df)
 
-                # Engine 2: VCP breakout (with RS parameters for Path E)
-                vcp = await loop.run_in_executor(
-                    None, scan_vcp, ticker, df, zones, spy_3m_return,
-                    rs_ratio, rs_52w_high, rs_blue_dot, rs_score
-                )
-                if vcp:
-                    # Sanitize VCP output: ensure all numeric fields are proper floats
-                    try:
-                        vcp["entry"] = float(vcp.get("entry", 0.0))
-                        vcp["stop_loss"] = float(vcp.get("stop_loss", 0.0))
-                        vcp["take_profit"] = float(vcp.get("take_profit", 0.0))
-                        vcp["rr"] = float(vcp.get("rr", 2.0))
-                    except (ValueError, TypeError) as conv_err:
-                        log.warning("VCP conversion failed for %s: %s", ticker, conv_err)
-                        return
+                # ── Engine 2: VCP (SELECTIVE/AGGRESSIVE only) ────────────────────
+                vcp = None
+                if regime["is_bullish"] or force:
+                    vcp = await loop.run_in_executor(
+                        None, scan_vcp, ticker, df, zones, spy_3m_return,
+                        rs_ratio, rs_52w_high, rs_blue_dot, rs_score
+                    )
+                    if vcp:
+                        # Sanitize VCP output: ensure all numeric fields are proper floats
+                        try:
+                            vcp["entry"] = float(vcp.get("entry", 0.0))
+                            vcp["stop_loss"] = float(vcp.get("stop_loss", 0.0))
+                            vcp["take_profit"] = float(vcp.get("take_profit", 0.0))
+                            vcp["rr"] = float(vcp.get("rr", 2.0))
+                        except (ValueError, TypeError) as conv_err:
+                            log.warning("VCP conversion failed for %s: %s", ticker, conv_err)
+                            return
 
-                    # Add sector to setup and collect for batch save
-                    vcp["sector"] = SECTORS.get(ticker, "Unknown")
-                    collected_setups.append(vcp)
-                    vcp_count += 1
-                    _scan_state["engine_stats"]["e2"]["vcp"] += 1
+                        # Add sector to setup and collect for batch save
+                        vcp["sector"] = SECTORS.get(ticker, "Unknown")
+                        collected_setups.append(vcp)
+                        vcp_count += 1
+                        _scan_state["engine_stats"]["e2"]["vcp"] += 1
 
-                    setup_type = "RS LEAD" if vcp.get("is_rs_lead") else "VCP"
-                    log.info("  %s      %-6s  entry=%.2f", setup_type, ticker, vcp["entry"])
+                        setup_type = "RS LEAD" if vcp.get("is_rs_lead") else "VCP"
+                        log.info("  %s      %-6s  entry=%.2f", setup_type, ticker, vcp["entry"])
 
-                else:
-                    # Only check near-breakout if not already a full setup
-                    # Wrap entire near-breakout logic in try-except for robustness
+                # ── Near-breakout / Watchlist (always runs — useful even in DEFENSIVE) ──
+                if not vcp:
                     try:
                         near = await loop.run_in_executor(
                             None, scan_near_breakout, ticker, df, zones, tl
@@ -1027,50 +1021,50 @@ async def _run_scan(
                             log.info("  NEAR     %-6s  dist=%.1f%%", ticker, near["distance_pct"])
                     except Exception as near_exc:
                         log.warning("Near-breakout check failed for %s: %s", ticker, near_exc)
-                        # Continue to pullback checks even if near-breakout fails
 
-                # Engine 3: Tactical pullback (strict, then relaxed)
-                pb = await loop.run_in_executor(None, scan_pullback, ticker, df, zones, tl, rs_score)
-                if pb:
-                    # Sanitize pullback output
-                    try:
-                        pb["entry"] = float(pb.get("entry", 0.0))
-                        pb["stop_loss"] = float(pb.get("stop_loss", 0.0))
-                        pb["take_profit"] = float(pb.get("take_profit", 0.0))
-                        pb["rr"] = float(pb.get("rr", 2.0))
-                    except (ValueError, TypeError) as conv_err:
-                        log.warning("Pullback conversion failed for %s: %s", ticker, conv_err)
-                        return
+                # ── Engine 3: Pullback (SELECTIVE/AGGRESSIVE only) ────────────────────
+                if regime["is_bullish"] or force:
+                    pb = await loop.run_in_executor(None, scan_pullback, ticker, df, zones, tl, rs_score)
+                    if pb:
+                        # Sanitize pullback output
+                        try:
+                            pb["entry"] = float(pb.get("entry", 0.0))
+                            pb["stop_loss"] = float(pb.get("stop_loss", 0.0))
+                            pb["take_profit"] = float(pb.get("take_profit", 0.0))
+                            pb["rr"] = float(pb.get("rr", 2.0))
+                        except (ValueError, TypeError) as conv_err:
+                            log.warning("Pullback conversion failed for %s: %s", ticker, conv_err)
+                            return
 
-                    pb["sector"] = SECTORS.get(ticker, "Unknown")
-                    collected_setups.append(pb)
-                    pb_count += 1
-                    _scan_state["engine_stats"]["e3"]["pullback"] += 1
-                    log.info("  PULLBACK %-6s  entry=%.2f", ticker, pb["entry"])
-                else:
-                    # Only check relaxed if no strict pullback found
-                    try:
-                        pb_relaxed = await loop.run_in_executor(
-                            None, scan_relaxed_pullback, ticker, df, zones, tl, rs_score
-                        )
-                        if pb_relaxed:
-                            # Sanitize relaxed pullback output
-                            try:
-                                pb_relaxed["entry"] = float(pb_relaxed.get("entry", 0.0))
-                                pb_relaxed["stop_loss"] = float(pb_relaxed.get("stop_loss", 0.0))
-                                pb_relaxed["take_profit"] = float(pb_relaxed.get("take_profit", 0.0))
-                                pb_relaxed["rr"] = float(pb_relaxed.get("rr", 2.0))
-                            except (ValueError, TypeError) as conv_err:
-                                log.warning("Relaxed pullback conversion failed for %s: %s", ticker, conv_err)
-                                return
+                        pb["sector"] = SECTORS.get(ticker, "Unknown")
+                        collected_setups.append(pb)
+                        pb_count += 1
+                        _scan_state["engine_stats"]["e3"]["pullback"] += 1
+                        log.info("  PULLBACK %-6s  entry=%.2f", ticker, pb["entry"])
+                    else:
+                        # Only check relaxed if no strict pullback found
+                        try:
+                            pb_relaxed = await loop.run_in_executor(
+                                None, scan_relaxed_pullback, ticker, df, zones, tl, rs_score
+                            )
+                            if pb_relaxed:
+                                # Sanitize relaxed pullback output
+                                try:
+                                    pb_relaxed["entry"] = float(pb_relaxed.get("entry", 0.0))
+                                    pb_relaxed["stop_loss"] = float(pb_relaxed.get("stop_loss", 0.0))
+                                    pb_relaxed["take_profit"] = float(pb_relaxed.get("take_profit", 0.0))
+                                    pb_relaxed["rr"] = float(pb_relaxed.get("rr", 2.0))
+                                except (ValueError, TypeError) as conv_err:
+                                    log.warning("Relaxed pullback conversion failed for %s: %s", ticker, conv_err)
+                                    return
 
-                            pb_relaxed["sector"] = SECTORS.get(ticker, "Unknown")
-                            collected_setups.append(pb_relaxed)
-                            pb_count += 1
-                            _scan_state["engine_stats"]["e3"]["relaxed"] += 1
-                            log.info("  PULLBACK %-6s  entry=%.2f (relaxed)", ticker, pb_relaxed["entry"])
-                    except Exception as pb_rel_exc:
-                        log.warning("Relaxed pullback check failed for %s: %s", ticker, pb_rel_exc)
+                                pb_relaxed["sector"] = SECTORS.get(ticker, "Unknown")
+                                collected_setups.append(pb_relaxed)
+                                pb_count += 1
+                                _scan_state["engine_stats"]["e3"]["relaxed"] += 1
+                                log.info("  PULLBACK %-6s  entry=%.2f (relaxed)", ticker, pb_relaxed["entry"])
+                        except Exception as pb_rel_exc:
+                            log.warning("Relaxed pullback check failed for %s: %s", ticker, pb_rel_exc)
 
                 # Engine 5: Base pattern (Cup & Handle / Flat Base)
                 try:
@@ -1177,15 +1171,19 @@ async def _run_scan(
         except Exception as exc:
             log.warning("Sector clustering failed: %s", exc)
 
-        # ── Task 9: Unified scoring — score, filter (score < 70), and sort ──
+        # ── Task 9: Unified scoring — score, filter, and sort ────────────────
+        # Dev / God-mode (force=True): lower threshold to 50 so raw engine
+        # findings reach the frontend despite a DEFENSIVE regime penalty of 0.
+        # Production (force=False): strict 70 threshold unchanged.
         pre_score_count = len(collected_setups)
+        _score_threshold = 50 if force else MIN_SETUP_SCORE
         try:
             collected_setups = score_and_filter_setups(
                 collected_setups,
                 _rs_rank_map,
                 regime,
                 _top_sectors,
-                min_score=MIN_SETUP_SCORE,
+                min_score=_score_threshold,
             )
             log.info(
                 "Scoring: %d → %d setups (filtered %d below score %d)  "
@@ -1193,7 +1191,7 @@ async def _run_scan(
                 pre_score_count,
                 len(collected_setups),
                 pre_score_count - len(collected_setups),
-                MIN_SETUP_SCORE,
+                _score_threshold,
                 _top_sectors,
             )
         except Exception as exc:
@@ -1373,6 +1371,12 @@ def _inject_hot_sector(setups: List[Dict], threshold: int = 3) -> None:
 # ────────────────────────────────────────────────────────────────────────────
 # Endpoints
 # ────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/market-overview")
+async def market_overview_endpoint():
+    """Cached market sentiment: Fear & Greed, SPY/QQQ performance, top news."""
+    return await get_market_overview()
+
 
 @app.get("/api/health")
 async def health():
