@@ -42,6 +42,9 @@ async def test_save_and_retrieve_backtest_result():
             "loss_count": 2,
             "win_rate": 60.0,
             "avg_rr": 1.8,
+            "avg_win_r": 2.5,
+            "avg_loss_r": -0.8,
+            "peak_equity": 12.3,
             "profit_factor": 2.2,
             "max_drawdown_pct": 5.5,
             "avg_holding_days": 12.0,
@@ -58,6 +61,9 @@ async def test_save_and_retrieve_backtest_result():
         assert results[0]["run_id"] == "test-run-1"
         assert len(results[0]["trades"]) == 1
         assert results[0]["net_profit_pct"] == 600.0
+        assert results[0]["avg_win_r"] == 2.5
+        assert results[0]["avg_loss_r"] == -0.8
+        assert results[0]["peak_equity"] == 12.3
     finally:
         os.unlink(db_path)
 
@@ -139,8 +145,8 @@ def test_compute_metrics_profit_factor():
     ]
     summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
     assert abs(summary.profit_factor - 2.0) < 0.05
-    # avg_rr must be wins-only: winning trade rr = (110-100)/(100-95) = 2.0
-    assert abs(summary.avg_rr - 2.0) < 0.01
+    # avg_rr = mean of ALL trades: win rr=2.0, loss rr=-1.0 → avg = 0.5
+    assert abs(summary.avg_rr - 0.5) < 0.01
     # net_profit_pct = 10 + (-5) = 5.0
     assert abs(summary.net_profit_pct - 5.0) < 0.1
 
@@ -153,6 +159,9 @@ def test_compute_metrics_no_trades():
     assert summary.win_rate == 0.0
     assert summary.profit_factor == 0.0
     assert summary.net_profit_pct == 0.0
+    assert summary.avg_win_r == 0.0
+    assert summary.avg_loss_r == 0.0
+    assert summary.peak_equity == 0.0
 
 
 def test_compute_metrics_max_drawdown():
@@ -264,16 +273,32 @@ def test_backtest_engine_zero_signals():
     assert summary.win_rate == 0.0
 
 
-def test_avg_rr_is_wins_only():
-    """avg_rr must average only winning trades (not losses)."""
+def test_avg_rr_is_all_trades():
+    """avg_rr = mean R across ALL trades including losses."""
     from backtest_engine import compute_metrics
     trades = [
-        _make_trade(100, 110, 95),  # win: rr = (110-100)/(100-95) = 2.0
+        _make_trade(100, 110, 95),  # win: rr = (110-100)/(100-95) = +2.0
         _make_trade(100, 95, 95),   # loss: rr = (95-100)/(100-95) = -1.0
     ]
     summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
-    # avg_rr must be 2.0 (wins only), NOT 0.5 (average of 2.0 and -1.0)
-    assert abs(summary.avg_rr - 2.0) < 0.01
+    # avg_rr = mean(2.0, -1.0) = 0.5
+    assert abs(summary.avg_rr - 0.5) < 0.01
+    # avg_win_r = 2.0 (wins only)
+    assert abs(summary.avg_win_r - 2.0) < 0.01
+    # avg_loss_r = -1.0 (losses only)
+    assert abs(summary.avg_loss_r - (-1.0)) < 0.01
+
+
+def test_peak_equity_compound():
+    """peak_equity tracks the peak of the compound equity curve."""
+    from backtest_engine import compute_metrics
+    # +10%, -5%: equity 1.0 → 1.10 → 1.045; peak=1.10 so peak_equity=10.0%
+    trades = [
+        _make_trade(100, 110, 95, days=5),  # +10%
+        _make_trade(100, 95, 95, days=5),   # -5%
+    ]
+    summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
+    assert abs(summary.peak_equity - 10.0) < 0.5
 
 
 def test_net_profit_pct():

@@ -307,7 +307,7 @@ export default function BacktestPanel() {
           }}>
             <thead>
               <tr style={{ background: 'var(--surface)' }}>
-                {['Ticker', 'Setup', 'Trades', 'Win %', 'P.Factor', 'Avg R:R', 'Net P%', 'Max DD%'].map(col => (
+                {['Ticker', 'Setup', 'Trades', 'Win %', 'Avg R', 'Avg Win R', 'Net P%', 'Max DD%'].map(col => (
                   <th
                     key={col}
                     style={{
@@ -331,10 +331,6 @@ export default function BacktestPanel() {
             <tbody>
               {results.map((row, i) => {
                 const winRateColor = row.win_rate >= 50 ? 'var(--go)' : 'var(--halt)'
-                const pfColor = row.profit_factor >= 1.0 ? 'var(--go)' : 'var(--halt)'
-                const pfDisplay = row.profit_factor === Infinity || row.profit_factor === 'Infinity' || Number(row.profit_factor) > 9999
-                  ? '∞'
-                  : Number(row.profit_factor).toFixed(2)
 
                 return (
                   <tr
@@ -378,17 +374,17 @@ export default function BacktestPanel() {
                     <td style={{
                       fontSize: 10,
                       padding: '5px 10px',
-                      color: pfColor,
+                      color: row.avg_rr > 0 ? 'var(--go)' : row.avg_rr < 0 ? 'var(--halt)' : 'var(--muted)',
                       fontWeight: 600,
                     }}>
-                      {pfDisplay}
+                      {Number(row.avg_rr).toFixed(2)}R
                     </td>
                     <td style={{
                       fontSize: 10,
                       padding: '5px 10px',
-                      color: 'var(--text)',
+                      color: row.avg_win_r > 0 ? 'var(--go)' : 'var(--muted)',
                     }}>
-                      {Number(row.avg_rr).toFixed(2)}
+                      {row.avg_win_r > 0 ? `${Number(row.avg_win_r).toFixed(2)}R` : '—'}
                     </td>
                     <td style={{
                       fontSize: 10,

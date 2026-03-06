@@ -117,12 +117,15 @@ class BacktestSummary:
     win_count:        int
     loss_count:       int
     win_rate:         float   # %
-    avg_rr:           float
+    avg_rr:           float   # mean R across ALL trades (expectancy)
     profit_factor:    float   # gross_profit / abs(gross_loss); inf if no losses
-    max_drawdown_pct: float   # peak-to-trough of cumulative PnL %
+    max_drawdown_pct: float   # peak-to-trough of compound equity curve %
     avg_holding_days: float
     gross_profit:     float   # sum of winning pnl_pct
     gross_loss:       float   # sum of losing pnl_pct (negative number)
+    avg_win_r:        float = 0.0  # mean R of winning trades only
+    avg_loss_r:       float = 0.0  # mean R of losing trades only
+    peak_equity:      float = 0.0  # peak compound equity as % gain (e.g. 15.3 = +15.3%)
     net_profit_pct:   float = 0.0  # gross_profit + gross_loss
     trades:           List[TradeRecord] = field(default_factory=list)
 
@@ -138,6 +141,9 @@ class BacktestSummary:
             "loss_count":       self.loss_count,
             "win_rate":         self.win_rate,
             "avg_rr":           self.avg_rr,
+            "avg_win_r":        self.avg_win_r,
+            "avg_loss_r":       self.avg_loss_r,
+            "peak_equity":      self.peak_equity,
             "profit_factor":    self.profit_factor,
             "max_drawdown_pct": self.max_drawdown_pct,
             "avg_holding_days": self.avg_holding_days,
@@ -179,8 +185,9 @@ def compute_metrics(
             run_id=run_id, ticker=ticker, setup_type=setup_type,
             start_date=start_date, end_date=end_date,
             total_trades=0, win_count=0, loss_count=0,
-            win_rate=0.0, avg_rr=0.0, profit_factor=0.0,
-            max_drawdown_pct=0.0, avg_holding_days=0.0,
+            win_rate=0.0, avg_rr=0.0, avg_win_r=0.0, avg_loss_r=0.0,
+            profit_factor=0.0,
+            max_drawdown_pct=0.0, peak_equity=0.0, avg_holding_days=0.0,
             gross_profit=0.0, gross_loss=0.0, net_profit_pct=0.0, trades=[],
         )
 
@@ -188,7 +195,13 @@ def compute_metrics(
     losses = [t for t in trades if not t.is_win]
 
     win_rate = round(len(wins) / len(trades) * 100, 2)
-    avg_rr   = round(float(np.mean([t.rr_achieved for t in wins])), 3) if wins else 0.0
+
+    # Avg R across ALL trades (= expectancy in R-multiples)
+    avg_rr = round(float(np.mean([t.rr_achieved for t in trades])), 3)
+
+    # Avg R for wins and losses separately
+    avg_win_r  = round(float(np.mean([t.rr_achieved for t in wins])),   3) if wins   else 0.0
+    avg_loss_r = round(float(np.mean([t.rr_achieved for t in losses])), 3) if losses else 0.0
 
     gross_profit = sum(t.pnl_pct for t in wins)
     gross_loss   = sum(t.pnl_pct for t in losses)  # negative number
@@ -201,11 +214,19 @@ def compute_metrics(
 
     avg_holding_days = round(float(np.mean([t.holding_days for t in trades])), 1)
 
-    # Peak-to-trough drawdown on cumulative pnl_pct series
-    cumulative   = np.cumsum([t.pnl_pct for t in trades])
-    running_max  = np.maximum.accumulate(cumulative)
-    drawdowns    = running_max - cumulative
-    max_drawdown_pct = round(float(drawdowns.max()), 2) if len(drawdowns) > 0 else 0.0
+    # Compound equity curve starting at $1 (normalized)
+    equity   = 1.0
+    peak     = 1.0
+    max_dd   = 0.0
+    for t in trades:
+        equity *= (1.0 + t.pnl_pct / 100.0)
+        if equity > peak:
+            peak = equity
+        dd = (peak - equity) / peak * 100.0
+        if dd > max_dd:
+            max_dd = dd
+    max_drawdown_pct = round(max_dd, 2)
+    peak_equity      = round((peak - 1.0) * 100.0, 2)   # % gain at peak
 
     return BacktestSummary(
         run_id=run_id, ticker=ticker, setup_type=setup_type,
@@ -215,8 +236,11 @@ def compute_metrics(
         loss_count=len(losses),
         win_rate=win_rate,
         avg_rr=avg_rr,
+        avg_win_r=avg_win_r,
+        avg_loss_r=avg_loss_r,
         profit_factor=profit_factor,
         max_drawdown_pct=max_drawdown_pct,
+        peak_equity=peak_equity,
         avg_holding_days=avg_holding_days,
         gross_profit=round(gross_profit, 3),
         gross_loss=round(gross_loss, 3),
