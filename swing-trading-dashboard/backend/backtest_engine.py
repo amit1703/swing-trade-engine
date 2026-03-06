@@ -320,7 +320,7 @@ def _detect_signals(
     ticker : str
     df_slice : DataFrame — data up to and including day T (df.iloc[:T+1])
     spy_slice : DataFrame — SPY data up to day T
-    setup_types : list of "VCP" | "PULLBACK" | "BASE" | "RES_BREAKOUT"
+    setup_types : list of "VCP" | "PULLBACK" | "BASE" | "RES_BREAKOUT" | "HTF" | "LCE"
 
     Returns
     -------
@@ -384,6 +384,14 @@ def _detect_signals(
             elif stype == "RES_BREAKOUT":
                 from engines.engine6 import scan_resistance_breakout
                 setup = scan_resistance_breakout(ticker, df_slice, sr_zones)
+
+            elif stype == "HTF":
+                from engines.engine8_htf import scan_htf
+                setup = scan_htf(ticker, df_slice, sr_zones)
+
+            elif stype == "LCE":
+                from engines.engine9_low_cheat import scan_lce
+                setup = scan_lce(ticker, df_slice, sr_zones)
 
             if setup is not None:
                 return setup
@@ -463,7 +471,7 @@ class BacktestEngine:
         self.ticker      = ticker.upper()
         self.start_date  = start_date
         self.end_date    = end_date
-        self.setup_types = setup_types or ["VCP", "PULLBACK", "BASE", "RES_BREAKOUT"]
+        self.setup_types = setup_types or ["VCP", "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"]
         self.run_id      = run_id or str(uuid.uuid4())
 
     async def run(self) -> BacktestSummary:
