@@ -15,7 +15,7 @@ Filter chain (all must pass):
 
 Risk Math:
   Entry      = High of setup candle + 0.1 %
-  Stop Loss  = min(Low, zone_lower) − 0.2 × ATR
+  Stop Loss  = min(Low, zone_lower) − ATR_STOP_MULTIPLIER × ATR  (currently 0.8)
   Take Profit= Entry + 2 × Risk   (1:2 R:R)
 """
 
@@ -114,7 +114,8 @@ def _find_structural_support(
             candidate = float(low_vals[i])
             if candidate <= 0:
                 continue
-            # Must be a local minimum vs surrounding 3 bars
+            # Shallow 3-bar pivot: candidate must be ≤ min of 3 bars before AND after.
+            # Not a full 5-bar pivot definition — the 3% proximity + bounce guards compensate.
             if not (candidate <= min(low_vals[max(0, i-3):i])
                     and candidate <= min(low_vals[i+1:min(len(low_vals), i+4)])):
                 continue
@@ -325,13 +326,15 @@ def scan_relaxed_pullback(
 ) -> Optional[Dict]:
     """
     Relaxed tactical pullback: triggers when no strict pullback found.
+    Structural support broadened to 4 layers (KDE, consolidation low, demand zone, ascending TDL).
 
     Criteria:
     1. Trend: 8 EMA > 20 EMA AND Close > 50 SMA
     2. Buffer Zone: Close within 2% of EMA-8 OR EMA-20
     3. CCI Early Signal: CCI[today] > CCI[yesterday] AND CCI[yesterday] < -30
     4. Low Volume: 3-day avg volume <= 100% of 50-day SMA
-    5. Support Zone: Low or Close must be inside a KDE SUPPORT zone (mandatory)
+    5. Structural Support: Low or Close must touch a structural support (KDE zone /
+       consolidation low / demand zone / ascending trendline) via _find_structural_support().
 
     Flags ascending trendline touches as is_ascending_tdl for display purposes.
     """
@@ -413,13 +416,9 @@ def scan_relaxed_pullback(
             return None
 
         # ── Structural support (KDE zone / consolidation low / demand zone / TDL) ──
-        vol_sma50_sup = ind.volume.rolling(50).mean()
-        vsm_val_sup   = vol_sma50_sup.iloc[-1]
-        avg_vol_sup   = float(vsm_val_sup.item() if hasattr(vsm_val_sup, "item") else vsm_val_sup)
-
         nearest_sup = _find_structural_support(
             ll, lc, sr_zones, trendline,
-            ind.high, ind.low, ind.close, ind.volume, avg_vol_sup,
+            ind.high, ind.low, ind.close, ind.volume, avg_vol,
         )
         if nearest_sup is None:
             if debug:
@@ -496,7 +495,7 @@ def _prepare_indicators(
     df: pd.DataFrame,
 ) -> Optional[SimpleNamespace]:
     """
-    Shared indicator preparation used by all three scan functions.
+    Shared indicator preparation used by both scan functions.
 
     Runs _prep(), computes EMA8/EMA20/SMA50/ATR/CCI, extracts the 9 scalar
     floats for the last bar, and guards for NaN.
@@ -504,7 +503,7 @@ def _prepare_indicators(
     Returns a SimpleNamespace with fields:
         data       – cleaned DataFrame (output of _prep)
         close, high, low, volume – raw Series
-        lc, lh, ll, lvol         – last-bar scalars
+        lc, lh, ll               – last-bar scalars
         l8, l20, l50, latr       – indicator scalars
         cci_today, cci_prev      – CCI scalars
         ema8, ema20, sma50, atr14, cci20  – full indicator Series
@@ -542,7 +541,6 @@ def _prepare_indicators(
     lc    = _s(close.iloc[-1])
     lh    = _s(high.iloc[-1])
     ll    = _s(low.iloc[-1])
-    lvol  = _s(volume.iloc[-1])
     l8    = _s(ema8.iloc[-1])
     l20   = _s(ema20.iloc[-1])
     l50   = _s(sma50.iloc[-1])
@@ -556,7 +554,7 @@ def _prepare_indicators(
     return SimpleNamespace(
         data=data,
         close=close, high=high, low=low, volume=volume,
-        lc=lc, lh=lh, ll=ll, lvol=lvol,
+        lc=lc, lh=lh, ll=ll,
         l8=l8, l20=l20, l50=l50, latr=latr,
         cci_today=cci_today, cci_prev=cci_prev,
         ema8=ema8, ema20=ema20, sma50=sma50, atr14=atr14, cci20=cci20,
