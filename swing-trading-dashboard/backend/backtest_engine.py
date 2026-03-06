@@ -320,7 +320,7 @@ def _detect_signals(
     ticker : str
     df_slice : DataFrame — data up to and including day T (df.iloc[:T+1])
     spy_slice : DataFrame — SPY data up to day T
-    setup_types : list of "VCP" | "PULLBACK" | "BASE"
+    setup_types : list of "VCP" | "PULLBACK" | "BASE" | "RES_BREAKOUT"
 
     Returns
     -------
@@ -380,6 +380,10 @@ def _detect_signals(
                     rs_score=inds.rs_score,
                     sr_zones=sr_zones,
                 )
+
+            elif stype == "RES_BREAKOUT":
+                from engines.engine6 import scan_resistance_breakout
+                setup = scan_resistance_breakout(ticker, df_slice, sr_zones)
 
             if setup is not None:
                 return setup
