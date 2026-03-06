@@ -17,7 +17,7 @@ Usage
         ticker="AAPL",
         start_date="2024-01-01",
         end_date="2024-12-31",
-        setup_types=["VCP", "PULLBACK"],
+        setup_types=["VCP", "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"],
     )
     result = await engine.run()   # returns BacktestSummary
 """
