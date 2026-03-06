@@ -67,6 +67,22 @@ TARGET_RR             = 2.0  # Default take-profit multiplier (change to 3.0 for
 VCP_ATR_CONTRACTION_THRESHOLD = 0.6  # ATR today < ATR20_avg × 0.6 confirms compression
 
 # ──────────────────────────────────────────────────────────────────────────
+# Phase 3 — RS Ranking & Unified Scoring (Tasks 8, 9, 10)
+# ──────────────────────────────────────────────────────────────────────────
+
+RS_RANK_MIN_PERCENTILE  = 70    # gate: skip tickers with RS rank < 70
+TOP_SECTORS_N           = 5     # top N sectors by avg RS score
+MIN_SETUP_SCORE         = 70    # gate: discard setups with unified score < 70
+
+# Score component weights (must sum to 100)
+SCORE_WEIGHT_RS_RANK    = 30    # RS percentile rank
+SCORE_WEIGHT_RR         = 20    # Reward-to-Risk ratio
+SCORE_WEIGHT_VOL        = 20    # Volume surge / momentum
+SCORE_WEIGHT_REGIME     = 15    # Market regime alignment
+SCORE_WEIGHT_SECTOR     = 10    # Sector in top-5 by RS
+SCORE_WEIGHT_QUALITY    = 5     # Pattern quality / confirmation signals
+
+# ──────────────────────────────────────────────────────────────────────────
 # Data Processing
 # ──────────────────────────────────────────────────────────────────────────
 
