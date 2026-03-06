@@ -68,17 +68,12 @@ def inject_htf(df, runup=0.90, flag_depth=0.15, flag_bars=10, vol_mult=2.0):
 
     # Breakout bar: close > flag_high, high volume
     breakout_close = flag_high_price * 1.012
-    df.iloc[-1, df.columns.get_loc("Close")] = breakout_close
-    df.iloc[-1, df.columns.get_loc("High")]  = breakout_close * 1.003
-    df.iloc[-1, df.columns.get_loc("Low")]   = breakout_close * 0.990
     avg_vol = float(np.mean(vol[-(21):-1]))
-    df.iloc[-1, df.columns.get_loc("Volume")] = avg_vol * vol_mult
 
     df["Close"] = close
     df["High"]  = high
     df["Low"]   = low
     df["Volume"] = vol
-    # Apply the breakout bar values that were set above
     df.iloc[-1, df.columns.get_loc("Close")]  = breakout_close
     df.iloc[-1, df.columns.get_loc("High")]   = breakout_close * 1.003
     df.iloc[-1, df.columns.get_loc("Low")]    = breakout_close * 0.990

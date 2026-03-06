@@ -26,12 +26,17 @@ from indicators import atr as _atr
 from constants import (
     TARGET_RR,
     ATR_STOP_MULTIPLIER,
+    ENTRY_PRICE_MULTIPLIER,
     VOL_SURGE_MULTIPLIER,
+    TR_WINDOW,
+    VCP_TIGHT_RANGE_5D_PCT,
     HTF_LOOKBACK_DAYS,
     HTF_MIN_RUNUP_PCT,
     HTF_MAX_FLAG_DEPTH_PCT,
     HTF_MIN_FLAG_BARS,
     HTF_MAX_FLAG_BARS,
+    HTF_MAX_EXTEND_PCT,
+    HTF_MAX_RISK_PCT,
 )
 
 
@@ -41,7 +46,11 @@ def scan_htf(
     zones: Optional[List[Dict]] = None,
     debug: bool = False,
 ) -> Optional[Dict]:
-    """Return a setup dict if a valid High Tight Flag is detected, else None."""
+    """Return a setup dict if a valid High Tight Flag is detected, else None.
+
+    Note: ``zones`` is accepted for API consistency with other engines but HTF
+    derives its flag boundaries directly from price action — no external zones needed.
+    """
     try:
         data = _prep(df)
         if data is None or len(data) < 60:
@@ -121,7 +130,7 @@ def scan_htf(
             if debug:
                 print(f"Engine 8 HTF {ticker}: REJECTED — no breakout (close {lc:.2f} ≤ flag_high {flag_high:.2f})")
             return None
-        if lc > flag_high * 1.05:
+        if lc > flag_high * (1 + HTF_MAX_EXTEND_PCT):
             if debug:
                 print(f"Engine 8 HTF {ticker}: REJECTED — overextended (>{5:.0f}% above flag)")
             return None
@@ -138,17 +147,17 @@ def scan_htf(
             return None
 
         # ── Risk Math ─────────────────────────────────────────────────────────
-        atr14    = _atr(high_s, low_s, close_s, 14)
+        atr14    = _atr(high_s, low_s, close_s, TR_WINDOW)
         latr_val = atr14.iloc[-1]
         latr     = float(latr_val.item() if hasattr(latr_val, "item") else latr_val)
         if np.isnan(latr) or latr <= 0:
             return None
 
-        entry      = round(lc * 1.001, 2)
+        entry      = round(lc * ENTRY_PRICE_MULTIPLIER, 2)
         stop_loss  = round(flag_low - ATR_STOP_MULTIPLIER * latr, 2)
         risk       = entry - stop_loss
         # HTF patterns have a wide flag by nature (up to 25% depth) — allow up to 35% risk
-        if risk <= 0 or risk > entry * 0.35:
+        if risk <= 0 or risk > entry * HTF_MAX_RISK_PCT:
             return None
 
         take_profit = round(entry + TARGET_RR * risk, 2)
@@ -157,7 +166,7 @@ def scan_htf(
         last5_closes = close_arr[max(idx_high_abs, n - 6): n - 1]
         if len(last5_closes) >= 2:
             c5_range      = (last5_closes.max() - last5_closes.min()) / float(last5_closes[-1]) if last5_closes[-1] > 0 else 1.0
-            tight_range_5d = c5_range <= 0.025
+            tight_range_5d = c5_range <= VCP_TIGHT_RANGE_5D_PCT
         else:
             tight_range_5d = False
 

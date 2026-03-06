@@ -28,6 +28,8 @@ HTF_MIN_RUNUP_PCT     = 0.80  # Minimum 80% gain from period low to period high
 HTF_MAX_FLAG_DEPTH_PCT= 0.25  # Flag consolidation depth ≤ 25%
 HTF_MIN_FLAG_BARS     = 5     # Minimum 5 trading days of flag consolidation
 HTF_MAX_FLAG_BARS     = 20    # Maximum 20 trading days of flag consolidation
+HTF_MAX_EXTEND_PCT    = 0.05  # Max overextension above flag high (5%)
+HTF_MAX_RISK_PCT      = 0.35  # Max stop-loss as fraction of entry (wide for HTF pattern)
 
 # ── Engine 9: Low Cheat Entry ──────────────────────────────────────────────
 LCE_MAX_DISTANCE_PCT      = 0.03  # Price within 3% below resistance
