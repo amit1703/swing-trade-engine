@@ -714,7 +714,7 @@ async def _run_scan(
         if not dry_run:
             await save_scan_run(DB_PATH, scan_ts)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         # ── SPY data (consolidated single fetch for 3m return + RS Line) ──
         # Fetched before per-ticker processing; used for RS Line calculations.
@@ -819,11 +819,12 @@ async def _run_scan(
 
         if not regime["is_bullish"] and not force:
             log.info(
-                "Regime DEFENSIVE (score=%d < %d) — Engines 2 & 3 disabled",
+                "Regime DEFENSIVE (score=%d < %d) — all per-ticker engines disabled",
                 regime["regime_score"], REGIME_SELECTIVE_THRESHOLD,
             )
             _scan_state["engine_stats"]["total_tickers"] = 0
             _scan_state["engine_stats"]["total_duration_s"] = round(time.time() - scan_start_time, 1)
+            _scan_state["engine_stats"]["timing"]["total_s"] = round(time.time() - scan_start_time, 2)
             if not dry_run:
                 await complete_scan_run(DB_PATH, scan_ts, 0)
             _scan_state["last_completed"] = scan_ts
@@ -1295,7 +1296,9 @@ def compute_universe_breadth(
                 continue
             lc = float(close.iloc[-1])
             sma50_val = close.rolling(50).mean().iloc[-1]
-            if not pd.isna(sma50_val) and lc > float(sma50_val):
+            if pd.isna(sma50_val):
+                continue
+            if lc > float(sma50_val):
                 above_50 += 1
             lookback = min(252, len(close))
             h52 = float(close.iloc[-lookback:].max())
