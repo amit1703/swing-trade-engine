@@ -70,3 +70,6 @@ export const fetchOptionsSetups = () =>
 
 export const fetchPrices = (tickers) =>
   fetch(`/api/prices?tickers=${tickers.join(',')}`).then(handleResponse)
+
+export const fetchMarketOverview = () =>
+  fetch('/api/market-overview').then(handleResponse)
