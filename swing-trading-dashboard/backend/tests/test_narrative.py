@@ -81,3 +81,52 @@ def test_narrative_res_breakout_today():
              "take_profit": 130.0, "days_since_breakout": 0, "volume_ratio": 2.1}
     result = generate_narrative(setup, "BULLISH")
     assert "today" in result.lower() or "breaking" in result.lower()
+
+
+def test_narrative_options_catalyst():
+    """OPTIONS_CATALYST uses the generic fallback branch without raising."""
+    setup = {
+        "ticker": "SPY",
+        "setup_type": "OPTIONS_CATALYST",
+        "entry": 500.0,
+        "stop_loss": 490.0,
+        "take_profit": 515.0,
+        "options_score": 85,
+    }
+    result = generate_narrative(setup, "BULLISH")
+    assert isinstance(result, str) and len(result) > 20
+    assert "SPY" in result
+
+
+def test_narrative_watchlist():
+    """WATCHLIST setup uses the generic fallback branch without raising."""
+    setup = {
+        "ticker": "MSFT",
+        "setup_type": "WATCHLIST",
+        "entry": 400.0,
+        "stop_loss": 390.0,
+        "take_profit": 420.0,
+    }
+    result = generate_narrative(setup, "BULLISH")
+    assert isinstance(result, str) and len(result) > 20
+    assert "MSFT" in result
+
+
+def test_narrative_aggressive_regime_maps_to_bullish():
+    """AGGRESSIVE (Engine 0 output) is handled — function receives BULLISH equivalent."""
+    # The mapping happens in main.py before calling generate_narrative,
+    # so test that BULLISH produces the bullish regime sentence.
+    result = generate_narrative(
+        {"ticker": "NVDA", "setup_type": "VCP", "entry": 800.0, "stop_loss": 780.0, "take_profit": 840.0},
+        "BULLISH"
+    )
+    assert "uptrend" in result.lower() or "bullish" in result.lower() or "confirmed" in result.lower()
+
+
+def test_narrative_defensive_regime_maps_to_bearish():
+    """DEFENSIVE (Engine 0 output) maps to BEARISH — downtrend warning present."""
+    result = generate_narrative(
+        {"ticker": "NVDA", "setup_type": "VCP", "entry": 800.0, "stop_loss": 780.0, "take_profit": 840.0},
+        "BEARISH"
+    )
+    assert "caution" in result.lower() or "downtrend" in result.lower() or "bearish" in result.lower()

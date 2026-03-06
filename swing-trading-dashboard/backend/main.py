@@ -1376,7 +1376,14 @@ def _inject_hot_sector(setups: List[Dict], threshold: int = 3) -> None:
 async def _inject_narratives(setups: list) -> None:
     """Add 'narrative' field to each setup in-place (lazy, at fetch time)."""
     regime_row = await get_latest_regime(DB_PATH)
-    regime_str = regime_row.get("regime", "NEUTRAL") if regime_row else "NEUTRAL"
+    raw_regime = regime_row.get("regime", "NEUTRAL") if regime_row else "NEUTRAL"
+    # Engine 0 writes AGGRESSIVE/SELECTIVE/DEFENSIVE; map to narrative vocabulary
+    _REGIME_MAP = {
+        "AGGRESSIVE": "BULLISH",
+        "SELECTIVE":  "BULLISH",
+        "DEFENSIVE":  "BEARISH",
+    }
+    regime_str = _REGIME_MAP.get(raw_regime, "NEUTRAL")
     for s in setups:
         s["narrative"] = generate_narrative(s, regime_str)
 
