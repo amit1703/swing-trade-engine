@@ -21,7 +21,7 @@ PATH B — BRK (Confirmed Breakout):
 
 Risk Math (both paths):
   Entry      = High of setup candle × 1.001
-  Stop Loss  = min(Low, zone_lower_bound) − 0.2 × ATR
+  Stop Loss  = min(Low, zone_lower_bound) − ATR_STOP_MULTIPLIER × ATR  (currently 0.8)
   Take Profit= Entry + 2 × Risk   (1:2 R:R)
 """
 
@@ -36,7 +36,7 @@ from scipy.signal import find_peaks
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, true_range as _tr
-from constants import TARGET_RR
+from constants import TARGET_RR, ATR_STOP_MULTIPLIER, VCP_ATR_CONTRACTION_THRESHOLD
 from zone_utils import nearest_resistance_target
 
 
@@ -591,6 +591,52 @@ def _count_contractions(
         return 0, "NONE", False
 
 
+def _weekly_confirmed(df: pd.DataFrame) -> bool:
+    """
+    Task 12: Multi-timeframe confirmation.
+
+    Resamples daily OHLCV to weekly (week-ending Friday) and checks:
+      • Weekly EMA8 > Weekly EMA20
+      • Weekly Close > Weekly EMA20  (price above short-term weekly trend)
+
+    Returns True when both conditions hold on the most recent complete week.
+    Returns False on any data error (fail open — do not block setups).
+    """
+    try:
+        data = _prep(df)
+        if data is None or len(data) < 40:
+            return False
+
+        adj  = _adj_col(data)
+        wkly = data.resample("W-FRI").agg({
+            adj:    "last",
+            "High": "max",
+            "Low":  "min",
+        }).dropna()
+
+        if len(wkly) < 22:
+            return False
+
+        wc      = wkly[adj]
+        w_ema8  = _ema(wc, 8)
+        w_ema20 = _ema(wc, 20)
+
+        if w_ema8.dropna().empty or w_ema20.dropna().empty:
+            return False
+
+        we8  = float(w_ema8.iloc[-1])
+        we20 = float(w_ema20.iloc[-1])
+        wlc  = float(wc.iloc[-1])
+
+        if any(np.isnan(v) for v in [we8, we20, wlc]):
+            return False
+
+        return we8 > we20 and wlc > we20
+
+    except Exception:
+        return False  # fail open
+
+
 def scan_vcp(
     ticker: str,
     df: pd.DataFrame,
@@ -723,7 +769,7 @@ def scan_vcp(
         if confirmed_breakout and bk_zone is not None:
             entry      = round(lh * 1.001, 2)
             stop_base  = min(ll, bk_zone["lower"])
-            stop_loss  = round(stop_base - 0.2 * latr, 2)
+            stop_loss  = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
             risk       = entry - stop_loss
             if risk <= 0 or risk > entry * 0.15:
                 if debug:
@@ -764,6 +810,9 @@ def scan_vcp(
                     "contraction_count":  contraction_count,
                     "contraction_pattern": contraction_pattern,
                     "is_progressive_tightening": is_progressive,
+                    "weekly_confirmed":    _weekly_confirmed(df),
+                    "atr_compressed":      False,
+                    "is_minervini_dryup":  _has_vol_dryup(volume, avg_vol),
                 }
 
         # ── Path B debug: no vol surge or rs_score not positive ──────────────
@@ -803,7 +852,7 @@ def scan_vcp(
         if is_trendline_breakout and trendline_data is not None:
             entry      = round(lh * 1.001, 2)
             stop_base  = min(ll, 0.98 * desc_tl["series"][-1]["value"])
-            stop_loss  = round(stop_base - 0.2 * latr, 2)
+            stop_loss  = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
             risk       = entry - stop_loss
             if risk > 0 and risk <= entry * 0.15:
                 take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
@@ -835,6 +884,9 @@ def scan_vcp(
                     "contraction_count":  contraction_count,
                     "contraction_pattern": contraction_pattern,
                     "is_progressive_tightening": is_progressive,
+                    "weekly_confirmed":    _weekly_confirmed(df),
+                    "atr_compressed":      False,
+                    "is_minervini_dryup":  _has_vol_dryup(volume, avg_vol),
                 }
 
         # ── Path C debug: no valid descending trendline detected ─────────────
@@ -871,7 +923,7 @@ def scan_vcp(
             if is_kde_breakout:
                 entry      = round(lh * 1.001, 2)
                 stop_base  = min(ll, nearest_res_above["lower"])
-                stop_loss  = round(stop_base - 0.2 * latr, 2)
+                stop_loss  = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
                 risk       = entry - stop_loss
 
                 if risk > 0 and risk <= entry * 0.15:
@@ -904,6 +956,9 @@ def scan_vcp(
                         "contraction_count":  contraction_count,
                         "contraction_pattern": contraction_pattern,
                         "is_progressive_tightening": is_progressive,
+                        "weekly_confirmed":    _weekly_confirmed(df),
+                        "atr_compressed":      False,
+                        "is_minervini_dryup":  _has_vol_dryup(volume, avg_vol),
                     }
 
         # ── Path D debug: no KDE breakout ────────────────────────────────────
@@ -932,7 +987,7 @@ def scan_vcp(
             if is_rs_lead:
                 entry      = round(lh * 1.001, 2)
                 stop_base  = min(ll, nearest_res_above["lower"])
-                stop_loss  = round(stop_base - 0.2 * latr, 2)
+                stop_loss  = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
                 risk       = entry - stop_loss
 
                 if risk > 0 and risk <= entry * 0.15:
@@ -965,6 +1020,9 @@ def scan_vcp(
                         "contraction_count":  contraction_count,
                         "contraction_pattern": contraction_pattern,
                         "is_progressive_tightening": is_progressive,
+                        "weekly_confirmed":    _weekly_confirmed(df),
+                        "atr_compressed":      False,
+                        "is_minervini_dryup":  _has_vol_dryup(volume, avg_vol),
                     }
 
         # ── PATH A — DRY (Coiled Spring) ──────────────────────────────────
@@ -1013,6 +1071,26 @@ def scan_vcp(
                 )
             return None
 
+        # ── A2b. ATR contraction confirmation (Task 13) ───────────────────────
+        # Require today's ATR < 20-bar ATR average × VCP_ATR_CONTRACTION_THRESHOLD
+        # This confirms genuine volatility compression, not just a low-TR day.
+        atr_today   = float(atr14.iloc[-1].item() if hasattr(atr14.iloc[-1], "item") else atr14.iloc[-1])
+        atr20_clean = atr14.dropna()
+        atr_compressed = False
+        if len(atr20_clean) >= 20:
+            atr20_avg = float(atr20_clean.iloc[-20:].mean())
+            atr_compressed = atr_today < atr20_avg * VCP_ATR_CONTRACTION_THRESHOLD
+            if not atr_compressed:
+                if debug:
+                    print(
+                        f"Engine 2 VCP: REJECTED - ATR not compressed "
+                        f"(ATR={atr_today:.4f}, ATR20avg={atr20_avg:.4f}, "
+                        f"threshold={atr20_avg * VCP_ATR_CONTRACTION_THRESHOLD:.4f})"
+                    )
+                return None
+        else:
+            atr_compressed = False  # insufficient data — let pass-through
+
         # ── A3. U-shape parabolic check ───────────────────────────────────
         lb      = min(15, len(close) - 5)
         recent  = close.values[-lb:].astype(float)
@@ -1050,6 +1128,8 @@ def scan_vcp(
         last3_vol_val = volume.iloc[-3:].mean()
         last3_vol = float(last3_vol_val.item() if hasattr(last3_vol_val, 'item') else last3_vol_val)
         is_dry = last3_vol < avg_vol and _has_vol_dryup(volume, avg_vol)
+        # Task 14: Minervini strict dry-up — any bar in last 10 < 50% avg vol
+        is_minervini_dryup = _has_vol_dryup(volume, avg_vol)
 
         # ── A5. Engine 1 resistance proximity ────────────────────────────
         nearest_res = None
@@ -1085,7 +1165,7 @@ def scan_vcp(
         # ── Risk math ─────────────────────────────────────────────────────
         entry      = round(lh * 1.001, 2)
         stop_base  = min(ll, nearest_res["lower"])
-        stop_loss  = round(stop_base - 0.2 * latr, 2)
+        stop_loss  = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
         risk       = entry - stop_loss
         if risk <= 0 or risk > entry * 0.15:
             return None
@@ -1120,6 +1200,9 @@ def scan_vcp(
             "contraction_count":  contraction_count,
             "contraction_pattern": contraction_pattern,
             "is_progressive_tightening": is_progressive,
+            "weekly_confirmed":    _weekly_confirmed(df),
+            "atr_compressed":      atr_compressed,
+            "is_minervini_dryup":  is_minervini_dryup,
         }
 
     except Exception as exc:  # noqa: BLE001
