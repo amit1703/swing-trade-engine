@@ -99,6 +99,8 @@ from database import (
     get_trades,
     close_trade,
     get_closed_trades,
+    save_backtest_result,
+    get_backtest_results,
 )
 from engines.engine0 import check_market_regime
 from engines.engine1 import calculate_sr_zones
@@ -114,6 +116,7 @@ from universe_builder import build_universe, load_universe, save_universe, UNIVE
 from scoring import compute_rs_rank_map, compute_top_sectors, score_and_filter_setups
 from email_digest import send_digest
 from services.macro_service import get_market_overview
+from backtest_engine import BacktestEngine
 
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration (imported from constants.py for centralized management)
@@ -1369,6 +1372,17 @@ def _inject_hot_sector(setups: List[Dict], threshold: int = 3) -> None:
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# Pydantic request models
+# ────────────────────────────────────────────────────────────────────────────
+
+class BacktestRequest(BaseModel):
+    ticker:      str
+    start_date:  str           # "YYYY-MM-DD"
+    end_date:    str           # "YYYY-MM-DD"
+    setup_types: List[str] = Field(default=["VCP", "PULLBACK", "BASE"])
+
+
+# ────────────────────────────────────────────────────────────────────────────
 # Endpoints
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -1376,6 +1390,43 @@ def _inject_hot_sector(setups: List[Dict], threshold: int = 3) -> None:
 async def market_overview_endpoint():
     """Cached market sentiment: Fear & Greed, SPY/QQQ performance, top news."""
     return await get_market_overview()
+
+
+@app.post("/api/run-backtest")
+async def run_backtest(req: BacktestRequest, background_tasks: BackgroundTasks):
+    """
+    Kick off a backtest run in the background.
+    Returns immediately with a run_id; poll /api/backtest-results/{ticker}
+    to retrieve results once complete.
+    """
+    import uuid
+    run_id = str(uuid.uuid4())
+
+    async def _do_backtest():
+        try:
+            engine = BacktestEngine(
+                ticker=req.ticker,
+                start_date=req.start_date,
+                end_date=req.end_date,
+                setup_types=req.setup_types,
+            )
+            summary = await engine.run()
+            result  = summary.to_dict()
+            result["run_id"] = run_id
+            await save_backtest_result(DB_PATH, result)
+            log.info("Backtest %s done: %d trades", run_id, summary.total_trades)
+        except Exception as exc:
+            log.exception("Backtest %s failed: %s", run_id, exc)
+
+    background_tasks.add_task(_do_backtest)
+    return {"run_id": run_id, "status": "started"}
+
+
+@app.get("/api/backtest-results/{ticker}")
+async def backtest_results(ticker: str):
+    """Return all completed backtest runs for a ticker."""
+    results = await get_backtest_results(DB_PATH, ticker.upper())
+    return {"ticker": ticker.upper(), "results": results}
 
 
 @app.get("/api/health")
