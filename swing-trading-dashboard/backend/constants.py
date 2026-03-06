@@ -27,7 +27,6 @@ TRENDLINE_TOUCH_TOLERANCE_PCT = 0.015  # 1.5% tolerance for ascending trendline 
 
 TRADING_DAYS_IN_YEAR = 252  # Standard trading days for annualized metrics
 DAYS_3_MONTHS = 64  # Approximately 3 months of trading days
-DAYS_52_WEEKS = 252  # 52-week high lookback (1 year)
 MIN_CANDLES_FOR_ANALYSIS = 60  # Minimum candles required for ticker analysis
 MIN_CANDLES_FOR_RS = 252  # Minimum candles required for RS Line calculation
 
@@ -48,21 +47,24 @@ TR_WINDOW = 14  # True Range period for ATR
 EMA_SHORT = 8  # Short-term EMA period
 EMA_LONG = 20  # Long-term EMA period
 SMA_LONG = 50  # Long-term SMA period
-CCI_PERIOD = 20          # Commodity Channel Index period
+CCI_PERIOD = 20  # Commodity Channel Index period
 CCI_STRICT_FLOOR = -50.0  # CCI oversold floor for strict pullback hook
-CCI_RLX_FLOOR    = -30.0  # CCI oversold floor for relaxed pullback hook
+CCI_RLX_FLOOR = -30.0  # CCI oversold floor for relaxed pullback hook
 
 # ──────────────────────────────────────────────────────────────────────────
 # Risk Management & Stop Loss
 # ──────────────────────────────────────────────────────────────────────────
 
 ATR_STOP_MULTIPLIER = 0.8  # ATR × multiplier below swing low (widened to prevent stop hunts)
-
-# ── VCP Volatility Contraction (Task 13) ───────────────────────────────────
-VCP_ATR_CONTRACTION_THRESHOLD = 0.6   # ATR today < ATR20_avg × 0.6 confirms compression
 ENTRY_PRICE_MULTIPLIER = 1.001  # 0.1% above current price for entry orders
 MIN_RISK_REWARD_RATIO = 1.0  # Minimum acceptable R:R ratio for setups
 TARGET_RR             = 2.0  # Default take-profit multiplier (change to 3.0 for 3:1 target)
+
+# ──────────────────────────────────────────────────────────────────────────
+# VCP Volatility Contraction (Task 13)
+# ──────────────────────────────────────────────────────────────────────────
+
+VCP_ATR_CONTRACTION_THRESHOLD = 0.6  # ATR today < ATR20_avg × 0.6 confirms compression
 
 # ──────────────────────────────────────────────────────────────────────────
 # Data Processing
@@ -80,21 +82,6 @@ PIVOT_TOUCH_MARGIN_PCT    = 0.020  # 2.0% — catches real double-tops (was 1.5%
 PIVOT_MIN_SEPARATION_DAYS = 7      # minimum bars between two matching highs
 PIVOT_MIN_TOUCHES         = 2      # minimum pivots to form a valid zone
 
-# ──────────────────────────────────────────────────────────────────────────
-# Engine 7 — Options Catalyst
-# ──────────────────────────────────────────────────────────────────────────
-OPTIONS_MIN_ADV            = 500_000     # Min 50-day avg daily volume (liquidity gate)
-OPTIONS_MIN_PRICE          = 10.0        # Min share price (no penny stocks)
-OPTIONS_DTE_MIN            = 7           # Min days to expiry
-OPTIONS_DTE_MAX            = 45          # Max days to expiry
-OPTIONS_OTM_MAX_PCT        = 0.10        # Max OTM % for strike filter (10%)
-OPTIONS_MIN_SCORE          = 45          # Minimum OPTIONS_SCORE to flag
-OPTIONS_VOL_OI_TARGET      = 1.0         # Vol/OI ratio at which component maxes out
-OPTIONS_CALL_VOL_TARGET    = 2000        # Absolute call volume at which component maxes out
-OPTIONS_SKEW_NEUTRAL       = 0.5         # Call/Put skew at neutral (50/50)
-OPTIONS_SKEW_MAX           = 0.9         # Call/Put skew at which component maxes out
-OPTIONS_IV_SLOPE_TARGET    = 0.30        # IV term slope delta at which component maxes out
-
 # ── Market Regime Scoring Weights (Task 2) ─────────────────────────────────
 REGIME_WEIGHT_EMA20    = 20   # SPY close > EMA20
 REGIME_WEIGHT_SMA50    = 15   # SPY close > SMA50
@@ -107,6 +94,21 @@ REGIME_WEIGHT_VIX      = 10   # VIX below its 20-day SMA
 REGIME_AGGRESSIVE_THRESHOLD = 70   # 70–100 = AGGRESSIVE
 REGIME_SELECTIVE_THRESHOLD  = 40   # 40–69  = SELECTIVE
                                     # 0–39   = DEFENSIVE (Engines 2 & 3 disabled)
+
+# ──────────────────────────────────────────────────────────────────────────
+# Engine 7 — Options Catalyst
+# ──────────────────────────────────────────────────────────────────────────
+OPTIONS_MIN_ADV            = 500_000     # options engine liquidity gate (separate from LIQUIDITY_MIN_AVG_VOLUME)
+OPTIONS_MIN_PRICE          = 10.0        # Min share price (no penny stocks)
+OPTIONS_DTE_MIN            = 7           # Min days to expiry
+OPTIONS_DTE_MAX            = 45          # Max days to expiry
+OPTIONS_OTM_MAX_PCT        = 0.10        # Max OTM % for strike filter (10%)
+OPTIONS_MIN_SCORE          = 45          # Minimum OPTIONS_SCORE to flag
+OPTIONS_VOL_OI_TARGET      = 1.0         # Vol/OI ratio at which component maxes out
+OPTIONS_CALL_VOL_TARGET    = 2000        # Absolute call volume at which component maxes out
+OPTIONS_SKEW_NEUTRAL       = 0.5         # Call/Put skew at neutral (50/50)
+OPTIONS_SKEW_MAX           = 0.9         # Call/Put skew at which component maxes out
+OPTIONS_IV_SLOPE_TARGET    = 0.30        # IV term slope delta at which component maxes out
 
 # ──────────────────────────────────────────────────────────────────────────
 # Scan Settings
