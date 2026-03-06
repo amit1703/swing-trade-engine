@@ -123,6 +123,7 @@ class BacktestSummary:
     avg_holding_days: float
     gross_profit:     float   # sum of winning pnl_pct
     gross_loss:       float   # sum of losing pnl_pct (negative number)
+    net_profit_pct:   float = 0.0  # gross_profit + gross_loss
     trades:           List[TradeRecord] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
@@ -142,6 +143,7 @@ class BacktestSummary:
             "avg_holding_days": self.avg_holding_days,
             "gross_profit":     self.gross_profit,
             "gross_loss":       self.gross_loss,
+            "net_profit_pct":   self.net_profit_pct,
             "trades":           [t.to_dict() for t in self.trades],
         }
 
@@ -179,17 +181,18 @@ def compute_metrics(
             total_trades=0, win_count=0, loss_count=0,
             win_rate=0.0, avg_rr=0.0, profit_factor=0.0,
             max_drawdown_pct=0.0, avg_holding_days=0.0,
-            gross_profit=0.0, gross_loss=0.0, trades=[],
+            gross_profit=0.0, gross_loss=0.0, net_profit_pct=0.0, trades=[],
         )
 
     wins   = [t for t in trades if t.is_win]
     losses = [t for t in trades if not t.is_win]
 
     win_rate = round(len(wins) / len(trades) * 100, 2)
-    avg_rr   = round(float(np.mean([t.rr_achieved for t in trades])), 3)
+    avg_rr   = round(float(np.mean([t.rr_achieved for t in wins])), 3) if wins else 0.0
 
     gross_profit = sum(t.pnl_pct for t in wins)
     gross_loss   = sum(t.pnl_pct for t in losses)  # negative number
+    net_profit_pct = round(gross_profit + gross_loss, 3)
 
     if gross_loss == 0:
         profit_factor = float("inf") if gross_profit > 0 else 0.0
@@ -217,6 +220,7 @@ def compute_metrics(
         avg_holding_days=avg_holding_days,
         gross_profit=round(gross_profit, 3),
         gross_loss=round(gross_loss, 3),
+        net_profit_pct=net_profit_pct,
         trades=trades,
     )
 

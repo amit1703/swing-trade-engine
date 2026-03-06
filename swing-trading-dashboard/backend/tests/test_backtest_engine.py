@@ -125,6 +125,7 @@ def test_compute_metrics_win_rate():
     ]
     summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
     assert abs(summary.win_rate - 66.67) < 0.05
+    assert isinstance(summary.net_profit_pct, float)
 
 
 def test_compute_metrics_profit_factor():
@@ -136,6 +137,10 @@ def test_compute_metrics_profit_factor():
     ]
     summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
     assert abs(summary.profit_factor - 2.0) < 0.05
+    # avg_rr must be wins-only: winning trade rr = (110-100)/(100-95) = 2.0
+    assert abs(summary.avg_rr - 2.0) < 0.01
+    # net_profit_pct = 10 + (-5) = 5.0
+    assert abs(summary.net_profit_pct - 5.0) < 0.1
 
 
 def test_compute_metrics_no_trades():
@@ -145,6 +150,7 @@ def test_compute_metrics_no_trades():
     assert summary.total_trades == 0
     assert summary.win_rate == 0.0
     assert summary.profit_factor == 0.0
+    assert summary.net_profit_pct == 0.0
 
 
 def test_compute_metrics_max_drawdown():
@@ -254,3 +260,26 @@ def test_backtest_engine_zero_signals():
 
     assert summary.total_trades == 0
     assert summary.win_rate == 0.0
+
+
+def test_avg_rr_is_wins_only():
+    """avg_rr must average only winning trades (not losses)."""
+    from backtest_engine import compute_metrics
+    trades = [
+        _make_trade(100, 110, 95),  # win: rr = (110-100)/(100-95) = 2.0
+        _make_trade(100, 95, 95),   # loss: rr = (95-100)/(100-95) = -1.0
+    ]
+    summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
+    # avg_rr must be 2.0 (wins only), NOT 0.5 (average of 2.0 and -1.0)
+    assert abs(summary.avg_rr - 2.0) < 0.01
+
+
+def test_net_profit_pct():
+    """net_profit_pct = gross_profit + gross_loss (wins + losses)."""
+    from backtest_engine import compute_metrics
+    trades = [
+        _make_trade(100, 110, 95),  # pnl_pct = +10%
+        _make_trade(100, 95, 95),   # pnl_pct = -5%
+    ]
+    summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
+    assert abs(summary.net_profit_pct - 5.0) < 0.1

@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS backtest_results (
     avg_holding_days REAL    NOT NULL,
     gross_profit     REAL    NOT NULL,
     gross_loss       REAL    NOT NULL,
+    net_profit_pct   REAL    NOT NULL DEFAULT 0,
     trades_json      TEXT    NOT NULL,
     created_at       TEXT    DEFAULT CURRENT_TIMESTAMP
 );
@@ -155,6 +156,12 @@ async def init_db(db_path: str) -> None:
                 await db.commit()
             except Exception:
                 pass  # column already exists — safe to ignore
+        # Migration: add net_profit_pct column to backtest_results if not exists
+        try:
+            await db.execute("ALTER TABLE backtest_results ADD COLUMN net_profit_pct REAL NOT NULL DEFAULT 0")
+            await db.commit()
+        except Exception:
+            pass  # column already exists — safe to ignore
 
 
 # ---------------------------------------------------------------------------
@@ -509,8 +516,8 @@ async def save_backtest_result(db_path: str, result: Dict) -> int:
                (run_id, ticker, setup_type, start_date, end_date,
                 total_trades, win_count, loss_count, win_rate,
                 avg_rr, profit_factor, max_drawdown_pct, avg_holding_days,
-                gross_profit, gross_loss, trades_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                gross_profit, gross_loss, net_profit_pct, trades_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 result["run_id"],
                 result["ticker"].upper(),
@@ -527,6 +534,7 @@ async def save_backtest_result(db_path: str, result: Dict) -> int:
                 result["avg_holding_days"],
                 result["gross_profit"],
                 result["gross_loss"],
+                result.get("net_profit_pct", 0.0),
                 json.dumps(result.get("trades", [])),
             ),
         )
@@ -541,7 +549,7 @@ async def get_backtest_results(db_path: str, ticker: str) -> List[Dict]:
             """SELECT run_id, ticker, setup_type, start_date, end_date,
                       total_trades, win_count, loss_count, win_rate,
                       avg_rr, profit_factor, max_drawdown_pct, avg_holding_days,
-                      gross_profit, gross_loss, trades_json, created_at
+                      gross_profit, gross_loss, net_profit_pct, trades_json, created_at
                FROM backtest_results WHERE ticker = ?
                ORDER BY created_at DESC""",
             (ticker.upper(),),
@@ -565,7 +573,8 @@ async def get_backtest_results(db_path: str, ticker: str) -> List[Dict]:
                     "avg_holding_days": r[12],
                     "gross_profit":     r[13],
                     "gross_loss":       r[14],
-                    "trades":           json.loads(r[15]) if r[15] else [],
-                    "created_at":       r[16],
+                    "net_profit_pct":   r[15],
+                    "trades":           json.loads(r[16]) if r[16] else [],
+                    "created_at":       r[17],
                 })
             return results

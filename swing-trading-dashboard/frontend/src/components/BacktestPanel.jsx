@@ -307,7 +307,7 @@ export default function BacktestPanel() {
           }}>
             <thead>
               <tr style={{ background: 'var(--surface)' }}>
-                {['Ticker', 'Setup', 'Trades', 'Win %', 'P.Factor', 'Avg R:R', 'Max DD%'].map(col => (
+                {['Ticker', 'Setup', 'Trades', 'Win %', 'P.Factor', 'Avg R:R', 'Net P%', 'Max DD%'].map(col => (
                   <th
                     key={col}
                     style={{
@@ -389,6 +389,14 @@ export default function BacktestPanel() {
                       color: 'var(--text)',
                     }}>
                       {Number(row.avg_rr).toFixed(2)}
+                    </td>
+                    <td style={{
+                      fontSize: 10,
+                      padding: '5px 10px',
+                      color: row.net_profit_pct > 0 ? 'var(--go)' : row.net_profit_pct < 0 ? 'var(--halt)' : 'var(--muted)',
+                      fontWeight: 600,
+                    }}>
+                      {Number(row.net_profit_pct).toFixed(1)}%
                     </td>
                     <td style={{
                       fontSize: 10,
