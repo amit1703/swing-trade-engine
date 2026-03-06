@@ -58,3 +58,44 @@ async def test_save_and_retrieve_backtest_result():
         assert len(results[0]["trades"]) == 1
     finally:
         os.unlink(db_path)
+
+
+def test_trade_record_fields():
+    """TradeRecord has all required fields and computes derived properties correctly."""
+    from backtest_engine import TradeRecord
+    trade = TradeRecord(
+        ticker="AAPL",
+        setup_type="VCP",
+        signal_date="2024-03-01",
+        entry_date="2024-03-04",
+        entry_price=175.0,
+        initial_stop=168.0,
+        take_profit=189.0,
+        exit_date="2024-03-15",
+        exit_price=189.0,
+        exit_reason="TARGET",
+        holding_days=11,
+    )
+    assert abs(trade.rr_achieved - 2.0) < 0.01
+    assert abs(trade.pnl_pct - (189.0 - 175.0) / 175.0 * 100) < 0.01
+    assert trade.is_win is True
+
+
+def test_trade_record_loss():
+    """TradeRecord.is_win is False when exit_price <= entry_price."""
+    from backtest_engine import TradeRecord
+    trade = TradeRecord(
+        ticker="AAPL",
+        setup_type="VCP",
+        signal_date="2024-03-01",
+        entry_date="2024-03-04",
+        entry_price=175.0,
+        initial_stop=168.0,
+        take_profit=189.0,
+        exit_date="2024-03-06",
+        exit_price=168.0,
+        exit_reason="STOP",
+        holding_days=2,
+    )
+    assert abs(trade.rr_achieved - (-1.0)) < 0.01
+    assert trade.is_win is False
