@@ -323,7 +323,11 @@ def send_digest(scan_results: Dict) -> None:
         msg.attach(MIMEText(plain, "plain"))
         msg.attach(MIMEText(html_body, "html"))
 
-        context = ssl.create_default_context()
+        try:
+            import certifi
+            context = ssl.create_default_context(cafile=certifi.where())
+        except ImportError:
+            context = ssl.create_default_context()
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=context) as server:
             server.login(email_from, email_password)
             server.sendmail(email_from, email_to, msg.as_string())
@@ -343,4 +347,4 @@ def send_digest(scan_results: Dict) -> None:
     except OSError as exc:
         log.error("Email digest failed (network error): %s", exc)
     except Exception as exc:  # noqa: BLE001
-        log.error("Email digest failed (unexpected error): %s", exc)
+        log.exception("Email digest failed (unexpected error): %s", exc)

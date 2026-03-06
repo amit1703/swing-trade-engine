@@ -36,6 +36,7 @@ import asyncio
 import json
 import logging
 import os
+import threading
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -174,6 +175,7 @@ _ticker_cache: dict = {}  # ticker → (timestamp: float, df: Optional[pd.DataFr
 # ── Email digest cache ────────────────────────────────────────────────────────
 # Populated by the 7:30 AM scheduler job; consumed by the 8:00 AM email job.
 _digest_cache: dict = {}
+_digest_cache_lock = threading.Lock()
 
 # ── APScheduler instance ──────────────────────────────────────────────────────
 _scheduler: Optional[BackgroundScheduler] = None
@@ -191,16 +193,14 @@ def run_morning_scan() -> None:
     so we use asyncio.run() to create a fresh event loop for the async scan pipeline.
     The semaphore is re-created inside that loop so it is bound to the correct loop.
     """
-    global _digest_cache
     log.info("[scheduler] 7:30 AM scan job starting…")
     try:
-        import asyncio as _asyncio
-
         async def _scan_and_cache() -> None:
-            global _semaphore, _digest_cache
+            global _digest_cache
 
-            # Create a fresh semaphore bound to this loop
-            _semaphore = _asyncio.Semaphore(CONCURRENCY_LIMIT)
+            # Create a fresh semaphore local to this loop (do not overwrite the
+            # module-level _semaphore used by the main FastAPI event loop)
+            _local_semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
             scan_ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -208,7 +208,7 @@ def run_morning_scan() -> None:
             await init_db(DB_PATH)
 
             # Run full scan pipeline (saves to DB and updates _scan_state)
-            await _run_scan(scan_ts, ACTIVE_UNIVERSE, force=False, dry_run=False)
+            await _run_scan(scan_ts, ACTIVE_UNIVERSE, force=False, dry_run=False, semaphore=_local_semaphore)
 
             # Pull results from DB to build the digest cache
             from database import get_latest_regime as _get_regime, get_latest_setups as _get_setups
@@ -223,7 +223,7 @@ def run_morning_scan() -> None:
             # Enrich regime with SPY SMA50 for BULL/BEAR/NEUTRAL badge
             spy_sma50: Optional[float] = None
             try:
-                spy_df_sched = await _fetch("SPY")
+                spy_df_sched = await _fetch("SPY", semaphore=_local_semaphore)
                 if spy_df_sched is not None and len(spy_df_sched) >= 50:
                     from indicators import sma as _sma_fn
                     adj_col = "Adj Close" if "Adj Close" in spy_df_sched.columns else "Close"
@@ -235,20 +235,21 @@ def run_morning_scan() -> None:
             if isinstance(regime, dict):
                 regime["spy_sma50"] = spy_sma50
 
-            _digest_cache = {
-                "regime":           regime,
-                "vcp":              vcp_setups,
-                "vcp_dry":          watchlist,
-                "res_breakout":     res_setups,
-                "pullback":         pb_setups,
-                "options_catalyst": opt_setups,
-            }
+            with _digest_cache_lock:
+                _digest_cache = {
+                    "regime":           regime,
+                    "vcp":              vcp_setups,
+                    "vcp_dry":          watchlist,
+                    "res_breakout":     res_setups,
+                    "pullback":         pb_setups,
+                    "options_catalyst": opt_setups,
+                }
             log.info(
                 "[scheduler] Digest cache built: vcp=%d  dry=%d  res=%d  pb=%d  opt=%d",
                 len(vcp_setups), len(watchlist), len(res_setups), len(pb_setups), len(opt_setups),
             )
 
-        _asyncio.run(_scan_and_cache())
+        asyncio.run(_scan_and_cache())
 
     except Exception as exc:
         log.error("[scheduler] Morning scan job failed: %s", exc)
@@ -261,14 +262,16 @@ def send_morning_email() -> None:
     If the cache is empty (e.g., scan failed), the email is skipped with a warning.
     """
     log.info("[scheduler] 8:00 AM email job starting…")
-    if not _digest_cache:
+    with _digest_cache_lock:
+        cache_snapshot = dict(_digest_cache)
+    if not cache_snapshot:
         log.warning(
             "[scheduler] Email digest skipped: _digest_cache is empty. "
             "The 7:30 AM scan may not have completed."
         )
         return
     try:
-        send_digest(_digest_cache)
+        send_digest(cache_snapshot)
     except Exception as exc:
         log.error("[scheduler] Email send job failed: %s", exc)
 
@@ -341,7 +344,60 @@ app.add_middleware(
 # Data helpers
 # ────────────────────────────────────────────────────────────────────────────
 
-async def _fetch(ticker: str, retry_count: int = 0) -> Optional[pd.DataFrame]:
+PREFETCH_BATCH_SIZE = 200  # tickers per yf.download() call
+
+
+def _batch_download_sync(tickers_batch: List[str]) -> Dict[str, pd.DataFrame]:
+    """
+    Download 1y daily OHLCV for a batch of tickers in ONE yfinance HTTP request.
+    Returns {ticker: DataFrame} for tickers that returned valid data.
+    Much faster than individual Ticker().history() calls.
+    """
+    if not tickers_batch:
+        return {}
+    if len(tickers_batch) == 1:
+        t = tickers_batch[0]
+        try:
+            df = yf.Ticker(t).history(period="1y", interval="1d", auto_adjust=False)
+            return {t: df} if df is not None and not df.empty else {}
+        except Exception:
+            return {}
+    try:
+        raw = yf.download(
+            tickers_batch,
+            period="1y",
+            interval="1d",
+            auto_adjust=False,
+            group_by="ticker",
+            progress=False,
+            threads=True,
+        )
+        result: Dict[str, pd.DataFrame] = {}
+        top_level = raw.columns.get_level_values(0).unique().tolist()
+        for ticker in tickers_batch:
+            try:
+                if ticker not in top_level:
+                    continue
+                df = raw[ticker].copy()
+                df = df.dropna(how="all")
+                if df.empty:
+                    continue
+                if df.columns.duplicated().any():
+                    df = df.loc[:, ~df.columns.duplicated()]
+                result[ticker] = df
+            except Exception:
+                pass
+        return result
+    except Exception as exc:
+        log.warning("Batch download failed: %s", exc)
+        return {}
+
+
+async def _fetch(
+    ticker: str,
+    retry_count: int = 0,
+    semaphore: Optional[asyncio.Semaphore] = None,
+) -> Optional[pd.DataFrame]:
     """
     Download daily OHLCV for one ticker with retry logic and exponential backoff.
 
@@ -352,7 +408,13 @@ async def _fetch(ticker: str, retry_count: int = 0) -> Optional[pd.DataFrame]:
 
     Semaphore is acquired per-attempt (not held across retries) to prevent
     deadlock when multiple tasks retry simultaneously.
+
+    The ``semaphore`` parameter allows callers that run in an isolated
+    ``asyncio.run()`` loop (e.g. the APScheduler morning-scan job) to supply
+    their own local semaphore so the module-level ``_semaphore`` (bound to the
+    main FastAPI event loop) is never touched from a background thread.
     """
+    _sem = semaphore if semaphore is not None else _semaphore
     # ── In-memory TTL cache ───────────────────────────────────────────────────
     # Successive scan runs within the same session reuse cached data, preventing
     # yfinance rate-limiting from causing different tickers to be dropped each run.
@@ -366,7 +428,7 @@ async def _fetch(ticker: str, retry_count: int = 0) -> Optional[pd.DataFrame]:
     for attempt in range(retry_count, FETCH_MAX_RETRIES + 1):
         need_retry = False
         backoff_delay = 0.0
-        async with _semaphore:
+        async with _sem:
             loop = asyncio.get_event_loop()
             try:
                 def _do_download(t=ticker):
@@ -436,11 +498,22 @@ async def _fetch(ticker: str, retry_count: int = 0) -> Optional[pd.DataFrame]:
 # Background scan worker
 # ────────────────────────────────────────────────────────────────────────────
 
-async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_run: bool = False) -> None:
+async def _run_scan(
+    scan_ts: str,
+    tickers: List[str],
+    force: bool = False,
+    dry_run: bool = False,
+    semaphore: Optional[asyncio.Semaphore] = None,
+) -> None:
     """
     Full scan pipeline:
       Engine 0 → (if bullish) Engine 1 → Engine 2 + Engine 3
     Results written to SQLite; frontend reads from DB.
+
+    The optional ``semaphore`` parameter is forwarded to ``_fetch`` so that
+    callers running inside an isolated ``asyncio.run()`` event loop (e.g. the
+    APScheduler morning-scan job) can supply their own loop-local semaphore
+    without touching the module-level one used by the FastAPI event loop.
     """
     global _scan_state
     scan_start_time = time.time()
@@ -477,10 +550,11 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
         (_time.time() - _os.path.getmtime(UNIVERSE_FILE)) / 3600
         if _os.path.exists(UNIVERSE_FILE) else 999
     )
-    _universe_stale = _universe_age_h >= 24
+    _universe_stale = _universe_age_h >= 48
     global ACTIVE_UNIVERSE, SECTORS
     if tickers is ACTIVE_UNIVERSE and _universe_stale:
         log.info("Universe is %.1fh old — rebuilding via SEC EDGAR + yfinance pre-filters…", _universe_age_h)
+        _scan_state["rebuilding_universe"] = True
         loop = asyncio.get_running_loop()
         try:
             universe_dict = await loop.run_in_executor(
@@ -501,6 +575,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                 ACTIVE_UNIVERSE = new_tickers
                 SECTORS = universe_dict["sectors"]
                 tickers = ACTIVE_UNIVERSE
+                _scan_state["rebuilding_universe"] = False
                 log.info(
                     "Universe rebuilt: %d tickers (price≥$10, vol≥500K, ATR%%≥%.1f%%)",
                     len(tickers),
@@ -510,6 +585,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
                 log.warning("Universe rebuild returned 0 tickers — keeping existing universe")
         except Exception:
             log.exception("Universe rebuild failed — proceeding with existing universe")
+            _scan_state["rebuilding_universe"] = False
     elif tickers is ACTIVE_UNIVERSE:
         log.info("Universe is %.1fh old — using cached list (%d tickers)", _universe_age_h, len(tickers))
 
@@ -559,7 +635,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
         spy_df_full = None
         spy_fetch_start = time.time()
         try:
-            spy_df_full = await _fetch("SPY")
+            spy_df_full = await _fetch("SPY", semaphore=semaphore)
             if spy_df_full is not None and len(spy_df_full) >= MIN_CANDLES_FOR_RS:
                 log.info("SPY data fetched: %d days for RS Line", len(spy_df_full))
                 # Extract 3-month return from the consolidated fetch
@@ -575,6 +651,42 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
 
         spy_fetch_time = time.time() - spy_fetch_start
         log.info("SPY fetch completed  [%.1fs]", spy_fetch_time)
+
+        # ── Bulk pre-fetch all ticker data (single HTTP request per batch) ──
+        # yf.download(200 tickers) is ~10× faster than 200 individual calls.
+        # Results go straight into _ticker_cache so _fetch() calls below hit cache.
+        uncached = [
+            t for t in tickers
+            if t not in _ticker_cache
+            or time.time() - _ticker_cache[t][0] >= CACHE_TTL_SUCCESS
+        ]
+        if uncached:
+            prefetch_batches = [
+                uncached[i: i + PREFETCH_BATCH_SIZE]
+                for i in range(0, len(uncached), PREFETCH_BATCH_SIZE)
+            ]
+            _scan_state["prefetching"] = True
+            log.info(
+                "Pre-fetching %d/%d tickers in %d batches…",
+                len(uncached), len(tickers), len(prefetch_batches),
+            )
+            for b_idx, batch in enumerate(prefetch_batches):
+                try:
+                    batch_data = await loop.run_in_executor(
+                        None, lambda b=batch: _batch_download_sync(b)
+                    )
+                    for t, df in batch_data.items():
+                        _ticker_cache[t] = (time.time(), df)
+                    log.info(
+                        "Pre-fetch %d/%d: %d/%d tickers OK",
+                        b_idx + 1, len(prefetch_batches), len(batch_data), len(batch),
+                    )
+                except Exception as exc:
+                    log.warning("Pre-fetch batch %d failed: %s", b_idx + 1, exc)
+            _scan_state["prefetching"] = False
+            log.info("Pre-fetch complete — %d tickers in cache", len(_ticker_cache))
+        else:
+            log.info("Pre-fetch skipped — all %d tickers already cached", len(tickers))
 
         # ── Per-ticker processing ─────────────────────────────────────────
         # Collect setups instead of saving individually for batch optimization
@@ -593,7 +705,7 @@ async def _run_scan(scan_ts: str, tickers: List[str], force: bool = False, dry_r
             try:
                 # ── Data Integrity Check ────────────────────────────────────
                 # Skip tickers with empty/delisted data immediately
-                df = await _fetch(ticker)
+                df = await _fetch(ticker, semaphore=semaphore)
                 if df is None or len(df) < MIN_CANDLES_FOR_ANALYSIS:
                     if df is None:
                         dropped_tickers.append(ticker)  # Record as dropped
@@ -1710,3 +1822,64 @@ async def list_closed_trades():
     """Return the 50 most recently closed trades with realised P/L."""
     trades = await get_closed_trades(DB_PATH)
     return {"trades": trades, "count": len(trades)}
+
+
+@app.post("/api/send-digest")
+async def send_digest_now(email: str):
+    """
+    Immediately build a digest from the latest DB data and send to the given email.
+    Query: POST /api/send-digest?email=you@example.com
+    """
+    import re
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        raise HTTPException(status_code=422, detail="Invalid email address")
+
+    regime = await get_latest_regime(DB_PATH) or {}
+    vcp      = await get_latest_setups(DB_PATH, setup_type="VCP")
+    watchlist= await get_latest_setups(DB_PATH, setup_type="WATCHLIST")
+    res      = await get_latest_setups(DB_PATH, setup_type="RES_BREAKOUT")
+    pb       = await get_latest_setups(DB_PATH, setup_type="PULLBACK")
+    opt      = await get_latest_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
+
+    total = len(vcp) + len(watchlist) + len(res) + len(pb) + len(opt)
+    if total == 0:
+        raise HTTPException(status_code=409, detail="No scan data yet — run a scan first")
+
+    # Enrich with SPY SMA50
+    try:
+        spy_df = await _fetch("SPY", semaphore=_semaphore)
+        if spy_df is not None and len(spy_df) >= 50:
+            from indicators import sma as _sma_fn
+            adj_col = "Adj Close" if "Adj Close" in spy_df.columns else "Close"
+            regime["spy_sma50"] = float(_sma_fn(spy_df[adj_col], 50).iloc[-1])
+    except Exception as exc:
+        log.warning("send-digest: could not compute SPY SMA50: %s", exc)
+
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(
+        None,
+        lambda: _send_to(email, {
+            "regime":           regime,
+            "vcp":              vcp,
+            "vcp_dry":          watchlist,
+            "res_breakout":     res,
+            "pullback":         pb,
+            "options_catalyst": opt,
+        }),
+    )
+    return {"ok": True, "email": email, "setups": total}
+
+
+def _send_to(email: str, data: dict) -> None:
+    """Send digest to an arbitrary email (overrides EMAIL_TO env var)."""
+    import os as _os
+    orig = _os.environ.get("EMAIL_TO")
+    _os.environ["EMAIL_TO"] = email
+    try:
+        from email_digest import send_digest
+        send_digest(data)
+    finally:
+        if orig is None:
+            _os.environ.pop("EMAIL_TO", None)
+        else:
+            _os.environ["EMAIL_TO"] = orig

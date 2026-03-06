@@ -78,7 +78,7 @@ def test_liquidity_passes_high_volume_and_price():
 
 
 def test_liquidity_fails_low_volume():
-    df = _make_flat_df(avg_vol=500_000, price=50.0)
+    df = _make_flat_df(avg_vol=400_000, price=50.0)
     assert _passes_liquidity_filter(df) is False
 
 
@@ -125,9 +125,9 @@ def test_compute_score_neutral_inputs_returns_zero():
 
 
 def test_compute_score_partial_inputs_below_threshold():
-    # vol/oi=1.0 (30pts) + call_vol=2000 (25pts) = 55pts < OPTIONS_MIN_SCORE=60
+    # vol/oi=0.0 (0pts) + call_vol=2000 (25pts) = 25pts < OPTIONS_MIN_SCORE=45
     metrics = {
-        "avg_vol_oi_ratio":  1.0,
+        "avg_vol_oi_ratio":  0.0,
         "total_call_volume": 2000,
         "call_put_ratio":    0.5,   # neutral → 0 pts
         "iv_term_slope":     1.0,   # flat → 0 pts
