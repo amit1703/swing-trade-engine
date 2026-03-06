@@ -155,13 +155,6 @@ async def init_db(db_path: str) -> None:
                 await db.commit()
             except Exception:
                 pass  # column already exists — safe to ignore
-        # Migration: create backtest_results table if it does not yet exist
-        try:
-            await db.execute(_CREATE_BACKTEST_RESULTS)
-            await db.execute(_BACKTEST_INDEX)
-            await db.commit()
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------
@@ -510,7 +503,6 @@ async def get_sr_zones_for_ticker_from_db(db_path: str, ticker: str) -> List[Dic
 
 async def save_backtest_result(db_path: str, result: Dict) -> int:
     """Insert one backtest result row. Returns new row id."""
-    import json as _json
     async with aiosqlite.connect(db_path) as db:
         cur = await db.execute(
             """INSERT INTO backtest_results
@@ -521,7 +513,7 @@ async def save_backtest_result(db_path: str, result: Dict) -> int:
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 result["run_id"],
-                result["ticker"],
+                result["ticker"].upper(),
                 result["setup_type"],
                 result["start_date"],
                 result["end_date"],
@@ -535,7 +527,7 @@ async def save_backtest_result(db_path: str, result: Dict) -> int:
                 result["avg_holding_days"],
                 result["gross_profit"],
                 result["gross_loss"],
-                _json.dumps(result.get("trades", [])),
+                json.dumps(result.get("trades", [])),
             ),
         )
         await db.commit()
@@ -544,7 +536,6 @@ async def save_backtest_result(db_path: str, result: Dict) -> int:
 
 async def get_backtest_results(db_path: str, ticker: str) -> List[Dict]:
     """Return all backtest results for a ticker, newest first."""
-    import json as _json
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(
             """SELECT run_id, ticker, setup_type, start_date, end_date,
@@ -574,7 +565,7 @@ async def get_backtest_results(db_path: str, ticker: str) -> List[Dict]:
                     "avg_holding_days": r[12],
                     "gross_profit":     r[13],
                     "gross_loss":       r[14],
-                    "trades":           _json.loads(r[15]) if r[15] else [],
+                    "trades":           json.loads(r[15]) if r[15] else [],
                     "created_at":       r[16],
                 })
             return results
