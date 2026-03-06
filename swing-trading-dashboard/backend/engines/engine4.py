@@ -236,7 +236,7 @@ def get_rs_signals(rs_line: List[float]) -> dict:
     -------
     dict with keys:
         rs_improving    bool   — RS ratio trending up over last 10 bars
-        rs_near_high    bool   — RS within 10% of 60-bar peak
+        rs_near_high    bool   — RS now >= 90% of 60-bar peak (not more than 10% below)
         rs_acceleration float  — (rs[-1] - rs[-10]) / abs(rs[-10])
     """
     _default = {"rs_improving": False, "rs_near_high": False, "rs_acceleration": 0.0}
