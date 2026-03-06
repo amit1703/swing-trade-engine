@@ -36,6 +36,7 @@ import WatchlistPanel from './components/WatchlistPanel.jsx'
 import SystemGuideModal from './components/SystemGuideModal.jsx'
 import EngineHealthPanel from './components/EngineHealthPanel.jsx'
 import DebugDrawer      from './components/DebugDrawer.jsx'
+import MarketOverview from './components/MarketOverview.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -284,6 +285,8 @@ export default function App() {
         onToggleDryRun={() => setDryRun(v => !v)}
         onScanTicker={handleScanTicker}
       />
+
+      <MarketOverview />
 
       {/* ── Tab bar ────────────────────────────────────────────────────── */}
       <div
