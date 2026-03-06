@@ -24,7 +24,8 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-import sys, os
+import os
+import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma
 from constants import (
@@ -93,7 +94,7 @@ def check_market_regime(
         close = spy[close_col].dropna()
 
         if len(close) < 22:
-            return _error(f"Insufficient SPY data: {len(close)} bars (need 22)")
+            return _error(f"Insufficient SPY data: {len(close)} bars (need ≥22)")
 
         # ── Compute SPY indicators ────────────────────────────────────────────
         ema20_s  = _ema(close, 20)
@@ -103,7 +104,7 @@ def check_market_regime(
         def _fv(s) -> float:
             v = s.iloc[-1]
             f = float(v.item() if hasattr(v, "item") else v)
-            return 0.0 if f != f else f  # NaN → 0.0
+            return 0.0 if np.isnan(f) else f
 
         lc       = _fv(close)
         l_ema20  = _fv(ema20_s)
@@ -122,7 +123,7 @@ def check_market_regime(
             if old > 0:
                 pct_slope = (new - old) / old  # e.g. +0.005 = rising 0.5%/5d
                 # Linear scale: ≥+0.5% → full 10pts; ≤-0.5% → 0pts
-                slope_score = int(min(10, max(0, (pct_slope + 0.005) / 0.01 * 10)))
+                slope_score = int(min(REGIME_WEIGHT_SLOPE, max(0, (pct_slope + 0.005) / 0.01 * REGIME_WEIGHT_SLOPE)))
 
         # ── Factor 1–4 scores ─────────────────────────────────────────────────
         f1 = REGIME_WEIGHT_EMA20    if lc > l_ema20  else 0
