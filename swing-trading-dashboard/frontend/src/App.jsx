@@ -58,6 +58,8 @@ export default function App() {
   const [pullbackSetups, setPullbackSetups] = useState([])
   const [baseSetups,        setBaseSetups       ] = useState([])
   const [resBreakoutSetups, setResBreakoutSetups] = useState([])
+  const [htfSetups,         setHtfSetups        ] = useState([])
+  const [lceSetups,         setLceSetups        ] = useState([])
   const [optionsSetups,     setOptionsSetups    ] = useState([])
   const [watchlistItems, setWatchlistItems] = useState([])
   const [selectedTicker, setSelectedTicker] = useState(null)
@@ -81,7 +83,7 @@ export default function App() {
   const loadAllData = useCallback(async () => {
     setLoadingSetups(true)
     try {
-      const [reg, vcp, pb, base, wl, res, opts] = await Promise.allSettled([
+      const [reg, vcp, pb, base, wl, res, opts, htf, lce] = await Promise.allSettled([
         fetchRegime(),
         fetchSetups('vcp'),
         fetchSetups('pullback'),
@@ -89,6 +91,8 @@ export default function App() {
         fetchWatchlist(),
         fetchSetups('res-breakout'),
         fetchOptionsSetups(),
+        fetchSetups('htf'),
+        fetchSetups('lce'),
       ])
       if (reg.status === 'fulfilled')  setRegime(reg.value)
       if (vcp.status === 'fulfilled')  setVcpSetups(vcp.value.setups ?? [])
@@ -97,6 +101,8 @@ export default function App() {
       if (wl.status === 'fulfilled')   setWatchlistItems(wl.value.items ?? [])
       if (res.status === 'fulfilled')  setResBreakoutSetups(res.value.setups ?? [])
       if (opts.status === 'fulfilled') setOptionsSetups(opts.value.setups ?? [])
+      if (htf.status === 'fulfilled')  setHtfSetups(htf.value.setups ?? [])
+      if (lce.status === 'fulfilled')  setLceSetups(lce.value.setups ?? [])
     } catch (err) {
       console.error('[App] loadAllData:', err)
     } finally {
@@ -183,6 +189,8 @@ export default function App() {
       ...baseSetups,
       ...resBreakoutSetups,
       ...optionsSetups,
+      ...htfSetups,
+      ...lceSetups,
     ].map((s) => s.ticker)
 
     const unique = [...new Set(allTickers)]
@@ -194,7 +202,7 @@ export default function App() {
     } catch (err) {
       console.warn('[App] fetchLivePrices:', err)
     }
-  }, [vcpSetups, pullbackSetups, baseSetups, resBreakoutSetups, optionsSetups])
+  }, [vcpSetups, pullbackSetups, baseSetups, resBreakoutSetups, optionsSetups, htfSetups, lceSetups])
 
   useEffect(() => {
     fetchLivePrices()
@@ -222,6 +230,8 @@ export default function App() {
             setResBreakoutSetups(dr.res_breakout ?? [])
             setWatchlistItems(dr.watchlist ?? [])
             setOptionsSetups(dr.options_catalyst ?? [])
+            setHtfSetups(dr.htf ?? [])
+            setLceSetups(dr.lce ?? [])
             const e0 = status.engine_stats.e0
             if (e0 && e0.is_bullish != null) {
               setRegime({
@@ -480,6 +490,15 @@ export default function App() {
 
                     <SetupTable title="Resistance Breakouts" accentColor="green"
                       setups={applySort(resBreakoutSetups)} {...tblProps} />
+
+                    {/* ── Group 5: Momentum ──────────────────────────── */}
+                    <SectionLabel label="MOMENTUM" color="var(--t-blue, #2196F3)" />
+
+                    <SetupTable title="High Tight Flags" accentColor="blue"
+                      setups={applySort(htfSetups)} {...tblProps} />
+
+                    <SetupTable title="Low Cheat Entries" accentColor="blue"
+                      setups={applySort(lceSetups)} {...tblProps} />
                   </>
                 )
               })()}
