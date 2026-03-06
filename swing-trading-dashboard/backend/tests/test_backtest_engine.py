@@ -225,3 +225,32 @@ def test_detect_signals_returns_none_for_short_slice():
 
     result = _detect_signals("AAPL", df, df, ["VCP"])
     assert result is None
+
+
+def test_backtest_engine_zero_signals():
+    """BacktestEngine produces 0-trade summary when no signals fire."""
+    import asyncio
+    import unittest.mock as mock
+    from backtest_engine import BacktestEngine
+
+    with mock.patch("backtest_engine._detect_signals", return_value=None), \
+         mock.patch("backtest_engine._fetch_data") as mock_fetch:
+        import numpy as np
+        import pandas as pd
+
+        # 400 bars of flat price history
+        dates = pd.date_range("2023-01-01", periods=400, freq="B")
+        price = np.full(400, 100.0)
+        df = pd.DataFrame({
+            "Open": price, "High": price * 1.01,
+            "Low": price * 0.99, "Close": price,
+            "Adj Close": price, "Volume": np.ones(400) * 1_000_000,
+        }, index=dates)
+
+        mock_fetch.return_value = (df, df)
+
+        engine = BacktestEngine("AAPL", "2024-01-01", "2024-12-31", ["VCP"])
+        summary = asyncio.get_event_loop().run_until_complete(engine.run())
+
+    assert summary.total_trades == 0
+    assert summary.win_rate == 0.0

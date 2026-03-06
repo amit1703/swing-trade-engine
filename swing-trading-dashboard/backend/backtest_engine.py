@@ -400,3 +400,179 @@ async def _fetch_data(ticker: str, start_date: str) -> tuple:
     except Exception as exc:
         logger.warning("_fetch_data: gather failed for %s: %s", ticker, exc)
         return None, None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main engine
+# ─────────────────────────────────────────────────────────────────────────────
+
+class BacktestEngine:
+    """
+    Day-by-day historical replay backtester.
+
+    Prevents lookahead bias by slicing the DataFrame at each step T so that
+    signal engines only ever see data available up to and including day T.
+
+    Trade lifecycle
+    ---------------
+    Signal on day T → entry executes at T+1 open price.
+    Open trade managed daily: stop loss, take profit, trailing stop ratchet.
+    Any trade still open at end_date is closed at that day's close price.
+    """
+
+    def __init__(
+        self,
+        ticker: str,
+        start_date: str,
+        end_date: str,
+        setup_types: Optional[List[str]] = None,
+    ):
+        self.ticker      = ticker.upper()
+        self.start_date  = start_date
+        self.end_date    = end_date
+        self.setup_types = setup_types or ["VCP", "PULLBACK", "BASE"]
+
+    async def run(self) -> BacktestSummary:
+        """Execute the backtest. Returns a BacktestSummary with all closed trades."""
+        run_id = str(uuid.uuid4())
+        logger.info(
+            "Backtest [%s] %s %s→%s starting",
+            run_id, self.ticker, self.start_date, self.end_date,
+        )
+
+        # ── 1. Fetch data ─────────────────────────────────────────────────
+        ticker_df, spy_df = await _fetch_data(self.ticker, self.start_date)
+        if ticker_df is None or spy_df is None:
+            logger.warning("Backtest: data fetch failed for %s", self.ticker)
+            return compute_metrics(
+                self.ticker, "+".join(self.setup_types),
+                self.start_date, self.end_date, [], run_id,
+            )
+
+        # ── 2. Identify replay window ─────────────────────────────────────
+        start = pd.Timestamp(self.start_date)
+        end   = pd.Timestamp(self.end_date)
+
+        all_dates    = ticker_df.index
+        replay_dates = all_dates[(all_dates >= start) & (all_dates <= end)]
+
+        if len(replay_dates) < 2:
+            logger.warning("Backtest: no dates in replay window for %s", self.ticker)
+            return compute_metrics(
+                self.ticker, "+".join(self.setup_types),
+                self.start_date, self.end_date, [], run_id,
+            )
+
+        # ── 3. Pre-compute EMA20 series for trailing stop management ──────
+        adj_col    = "Adj Close" if "Adj Close" in ticker_df.columns else "Close"
+        ema20_full = _ema(ticker_df[adj_col], EMA_LONG)
+
+        # ── 4. Replay loop ────────────────────────────────────────────────
+        completed_trades: List[TradeRecord] = []
+        open_trade: Optional[Dict]          = None   # in-flight trade state
+
+        for T_date in replay_dates:
+            full_idx = all_dates.get_loc(T_date)
+
+            # ── 4a. Manage open trade ─────────────────────────────────────
+            if open_trade is not None:
+                ema20_T = float(ema20_full.iloc[full_idx])
+                bar = {
+                    "date":  T_date.strftime("%Y-%m-%d"),
+                    "open":  float(ticker_df["Open"].iloc[full_idx]),
+                    "high":  float(ticker_df["High"].iloc[full_idx]),
+                    "low":   float(ticker_df["Low"].iloc[full_idx]),
+                    "close": float(ticker_df[adj_col].iloc[full_idx]),
+                    "ema20": ema20_T if not np.isnan(ema20_T) else open_trade["trailing_stop"],
+                }
+                closed, exit_price, exit_reason = _manage_open_trade(open_trade, bar)
+
+                if closed:
+                    entry_dt     = pd.Timestamp(open_trade["entry_date"])
+                    holding_days = max(1, (T_date - entry_dt).days)
+                    completed_trades.append(TradeRecord(
+                        ticker=self.ticker,
+                        setup_type=open_trade["setup_type"],
+                        signal_date=open_trade["signal_date"],
+                        entry_date=open_trade["entry_date"],
+                        entry_price=open_trade["entry_price"],
+                        initial_stop=open_trade["initial_stop"],
+                        take_profit=open_trade["take_profit"],
+                        exit_date=T_date.strftime("%Y-%m-%d"),
+                        exit_price=exit_price,
+                        exit_reason=exit_reason,
+                        holding_days=holding_days,
+                    ))
+                    open_trade = None
+
+                # Skip signal detection while a trade is open
+                continue
+
+            # ── 4b. Signal detection on lookahead-safe slice ──────────────
+            df_slice  = ticker_df.iloc[:full_idx + 1]
+            spy_slice = spy_df.loc[spy_df.index <= T_date]
+
+            signal = _detect_signals(self.ticker, df_slice, spy_slice, self.setup_types)
+            if signal is None:
+                continue
+
+            # ── 4c. Schedule entry on T+1 ─────────────────────────────────
+            next_idx = full_idx + 1
+            if next_idx >= len(all_dates):
+                continue  # no next bar available — end of data
+
+            next_date   = all_dates[next_idx]
+            entry_price = float(ticker_df["Open"].iloc[next_idx])  # T+1 open
+
+            stop_loss   = signal.get("stop_loss", 0.0)
+            take_profit = signal.get("take_profit", 0.0)
+
+            # Guard: entry must be above stop, and target must be above entry
+            if stop_loss <= 0 or stop_loss >= entry_price:
+                continue
+            if take_profit <= entry_price:
+                continue
+
+            open_trade = {
+                "setup_type":    signal.get("setup_type", self.setup_types[0]),
+                "signal_date":   T_date.strftime("%Y-%m-%d"),
+                "entry_date":    next_date.strftime("%Y-%m-%d"),
+                "entry_price":   entry_price,
+                "initial_stop":  stop_loss,
+                "trailing_stop": stop_loss,
+                "take_profit":   take_profit,
+            }
+
+        # ── 5. Close any still-open trade at end of period ────────────────
+        if open_trade is not None:
+            last_date    = replay_dates[-1]
+            last_full_idx = all_dates.get_loc(last_date)
+            exit_price   = float(ticker_df[adj_col].iloc[last_full_idx])
+            entry_dt     = pd.Timestamp(open_trade["entry_date"])
+            holding_days = max(1, (last_date - entry_dt).days)
+            completed_trades.append(TradeRecord(
+                ticker=self.ticker,
+                setup_type=open_trade["setup_type"],
+                signal_date=open_trade["signal_date"],
+                entry_date=open_trade["entry_date"],
+                entry_price=open_trade["entry_price"],
+                initial_stop=open_trade["initial_stop"],
+                take_profit=open_trade["take_profit"],
+                exit_date=last_date.strftime("%Y-%m-%d"),
+                exit_price=exit_price,
+                exit_reason="EOD",
+                holding_days=holding_days,
+            ))
+
+        # ── 6. Compute and return metrics ─────────────────────────────────
+        setup_label = "+".join(self.setup_types)
+        logger.info(
+            "Backtest [%s] done: %d trades, win rate %.1f%%",
+            run_id, len(completed_trades),
+            (sum(1 for t in completed_trades if t.is_win) / len(completed_trades) * 100)
+            if completed_trades else 0.0,
+        )
+        return compute_metrics(
+            self.ticker, setup_label, self.start_date, self.end_date,
+            completed_trades, run_id,
+        )
