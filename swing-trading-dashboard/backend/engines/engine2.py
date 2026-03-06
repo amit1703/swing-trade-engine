@@ -848,7 +848,7 @@ def scan_vcp(
                     "tight_range_5d":      tight_range_5d,
                 }
 
-        # ── Path B debug: no vol surge or rs_score not positive ──────────────
+        # ── Path B debug: no vol surge or no cleared resistance zone ─────────
         if debug and not confirmed_breakout:
             if not resistance_zones:
                 print(
@@ -859,10 +859,6 @@ def scan_vcp(
                 print(
                     f"Engine 2 VCP: REJECTED - Breakout volume {volume_ratio:.1f}x "
                     f"(required: ≥1.5x 50d SMA)"
-                )
-            elif rs_score <= 0:
-                print(
-                    f"Engine 2 VCP: REJECTED - RS score not positive ({rs_score:.3f})"
                 )
 
         # ── PATH C — Trendline Breakout ────────────────────────────────────
