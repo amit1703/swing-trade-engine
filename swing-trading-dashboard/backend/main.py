@@ -801,6 +801,11 @@ async def _run_scan(
             "RS rank map: %d tickers ranked  top_sectors=%s  [%.1fs]",
             len(_rs_rank_map), _top_sectors, time.time() - rs_rank_start,
         )
+        if not _rs_rank_map:
+            log.warning(
+                "RS rank map is empty (SPY data unavailable?) — "
+                "RS rank gate will be bypassed for all tickers this scan"
+            )
 
         # ── Engine 0: Multi-factor regime (computed after prefetch for breadth) ──
         regime_start = time.time()
@@ -908,15 +913,17 @@ async def _run_scan(
                     return
 
                 # ── Task 8: RS Rank gate ──────────────────────────────────────────
-                _ticker_rs_rank = _rs_rank_map.get(ticker)
-                if _ticker_rs_rank is None or _ticker_rs_rank < RS_RANK_MIN_PERCENTILE:
-                    log.debug(
-                        "Skipped %s: RS rank %.1f < %.0f (threshold)",
-                        ticker,
-                        _ticker_rs_rank if _ticker_rs_rank is not None else 0.0,
-                        RS_RANK_MIN_PERCENTILE,
-                    )
-                    return
+                # Bypass gate entirely if rank map is empty (SPY fetch failed)
+                if _rs_rank_map:
+                    _ticker_rs_rank = _rs_rank_map.get(ticker)
+                    if _ticker_rs_rank is None or _ticker_rs_rank < RS_RANK_MIN_PERCENTILE:
+                        log.debug(
+                            "Skipped %s: RS rank %.1f < %.0f (threshold)",
+                            ticker,
+                            _ticker_rs_rank if _ticker_rs_rank is not None else 0.0,
+                            RS_RANK_MIN_PERCENTILE,
+                        )
+                        return
 
                 # ── Centralized Indicator Engine (Task 6) ────────────────────────
                 ind: Optional[TickerIndicators] = await loop.run_in_executor(
