@@ -158,8 +158,8 @@ async def get_market_overview() -> Dict[str, Any]:
     result = {
         "fear_greed": fg or _FALLBACK_FEAR_GREED,
         "indices":    {
-            "SPY": spy or _FALLBACK_INDEX,
-            "QQQ": qqq or _FALLBACK_INDEX,
+            "SPY": spy or {**_FALLBACK_INDEX},
+            "QQQ": qqq or {**_FALLBACK_INDEX},
         },
         "news":       news if news else _FALLBACK_NEWS,
         "cached_at":  datetime.now(timezone.utc).isoformat(),

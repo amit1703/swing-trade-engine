@@ -36,7 +36,7 @@ function fmtAge(min) {
 // Reusable index badge (SPY / QQQ)
 function IndexBadge({ sym, info }) {
   const up  = info?.change_pct >= 0
-  const nil = info == null
+  const nil = info == null || info.change_pct == null
   return (
     <span style={{
       fontFamily: 'IBM Plex Mono, monospace',
@@ -139,16 +139,15 @@ export default function MarketOverview() {
           <span style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'IBM Plex Mono, monospace' }}>
             loading…
           </span>
+        ) : error && !data ? (
+          <button
+            onClick={() => { setLoading(true); load() }}
+            style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'IBM Plex Mono, monospace', background: 'none', border: '1px solid var(--border)', padding: '1px 6px', cursor: 'pointer' }}
+          >
+            retry
+          </button>
         ) : (
           <>
-            {!loading && error && !data && (
-              <button
-                onClick={() => { setLoading(true); load() }}
-                style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'IBM Plex Mono, monospace', background: 'none', border: '1px solid var(--border)', padding: '1px 6px', cursor: 'pointer' }}
-              >
-                retry
-              </button>
-            )}
             <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 10, color: fgClr, fontWeight: 700, whiteSpace: 'nowrap' }}>
               F&amp;G {fgScore != null ? fgScore.toFixed(0) : '—'}{' '}
               <span style={{ fontWeight: 400, opacity: 0.75 }}>{fgLabel}</span>
@@ -176,16 +175,15 @@ export default function MarketOverview() {
               <div key={i} className="shimmer-row" style={{ width: w, height: 12, borderRadius: 2 }} />
             ))}
           </div>
+        ) : error && !data ? (
+          <button
+            onClick={() => { setLoading(true); load() }}
+            style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'IBM Plex Mono, monospace', background: 'none', border: '1px solid var(--border)', padding: '1px 6px', cursor: 'pointer' }}
+          >
+            retry
+          </button>
         ) : (
           <>
-            {!loading && error && !data && (
-              <button
-                onClick={() => { setLoading(true); load() }}
-                style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'IBM Plex Mono, monospace', background: 'none', border: '1px solid var(--border)', padding: '1px 6px', cursor: 'pointer' }}
-              >
-                retry
-              </button>
-            )}
             {/* F&G score + gauge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 8, letterSpacing: '0.15em', color: 'var(--muted)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono, monospace', whiteSpace: 'nowrap' }}>
