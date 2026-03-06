@@ -30,6 +30,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(__file__))
 from constants import (
     MIN_SETUP_SCORE,
+    SCORE_SELECTIVE_REGIME_FACTOR,
     SCORE_WEIGHT_QUALITY,
     SCORE_WEIGHT_REGIME,
     SCORE_WEIGHT_RS_RANK,
@@ -97,7 +98,7 @@ def _extract_close(df: pd.DataFrame) -> Optional[np.ndarray]:
     if col not in data.columns:
         return None
     arr = data[col].dropna().values.astype(float)
-    return arr if len(arr) >= 63 else None
+    return arr if len(arr) > 63 else None
 
 
 def _spy_close_array(spy_df: pd.DataFrame) -> Optional[np.ndarray]:
@@ -260,7 +261,8 @@ def _vol_component(setup: Dict) -> float:
 
     if st == "WATCHLIST":
         # distance_pct is "% below resistance", lower = closer = better
-        dist = float(setup.get("distance_pct") or 1.5)  # default 1.5% if missing
+        _d = setup.get("distance_pct")
+        dist = float(_d if _d is not None else 1.5)
         # Closer to breakout = higher score; 0% dist → full score, 1.5% → 0 pts
         proximity_pts = max(0.0, (1.5 - dist) / 1.5) * (max_pts - 5)
         rs_dot_bonus  = 5.0 if setup.get("rs_blue_dot") else 0.0
@@ -344,7 +346,7 @@ def compute_setup_score(
     if regime == "AGGRESSIVE":
         reg_pts = float(SCORE_WEIGHT_REGIME)
     elif regime == "SELECTIVE":
-        reg_pts = float(SCORE_WEIGHT_REGIME) * 0.53   # ~8 of 15
+        reg_pts = float(SCORE_WEIGHT_REGIME) * SCORE_SELECTIVE_REGIME_FACTOR
     else:  # DEFENSIVE
         reg_pts = 0.0
 
