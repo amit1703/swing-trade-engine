@@ -158,3 +158,45 @@ def test_compute_metrics_max_drawdown():
     ]
     summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
     assert abs(summary.max_drawdown_pct - 15.0) < 0.5
+
+
+def test_manage_trade_stop_hit():
+    """Trade closes at stop when low <= trailing_stop."""
+    from backtest_engine import _manage_open_trade
+    bar = {"date": "2024-03-05", "open": 102.0, "high": 104.0, "low": 94.0, "close": 96.0, "ema20": 101.0}
+    state = {"entry_price": 100.0, "trailing_stop": 95.0, "take_profit": 110.0, "entry_date": "2024-03-04"}
+    closed, exit_price, exit_reason = _manage_open_trade(state, bar)
+    assert closed is True
+    assert exit_reason == "STOP"
+    assert abs(exit_price - 95.0) < 0.01
+
+
+def test_manage_trade_target_hit():
+    """Trade closes at take_profit when high >= take_profit."""
+    from backtest_engine import _manage_open_trade
+    bar = {"date": "2024-03-05", "open": 108.0, "high": 112.0, "low": 107.0, "close": 111.0, "ema20": 102.0}
+    state = {"entry_price": 100.0, "trailing_stop": 95.0, "take_profit": 110.0, "entry_date": "2024-03-04"}
+    closed, exit_price, exit_reason = _manage_open_trade(state, bar)
+    assert closed is True
+    assert exit_reason == "TARGET"
+    assert abs(exit_price - 110.0) < 0.01
+
+
+def test_manage_trade_trailing_stop_ratchets():
+    """trailing_stop increases to ema20 when close > entry and ema20 > trailing_stop."""
+    from backtest_engine import _manage_open_trade
+    bar = {"date": "2024-03-05", "open": 105.0, "high": 108.0, "low": 104.0, "close": 106.0, "ema20": 103.0}
+    state = {"entry_price": 100.0, "trailing_stop": 95.0, "take_profit": 115.0, "entry_date": "2024-03-04"}
+    closed, exit_price, exit_reason = _manage_open_trade(state, bar)
+    assert closed is False
+    assert abs(state["trailing_stop"] - 103.0) < 0.01
+
+
+def test_manage_trade_trailing_stop_does_not_drop():
+    """trailing_stop never decreases even if ema20 dips below it."""
+    from backtest_engine import _manage_open_trade
+    bar = {"date": "2024-03-05", "open": 105.0, "high": 108.0, "low": 104.0, "close": 106.0, "ema20": 93.0}
+    state = {"entry_price": 100.0, "trailing_stop": 95.0, "take_profit": 115.0, "entry_date": "2024-03-04"}
+    closed, _, _ = _manage_open_trade(state, bar)
+    assert closed is False
+    assert abs(state["trailing_stop"] - 95.0) < 0.01

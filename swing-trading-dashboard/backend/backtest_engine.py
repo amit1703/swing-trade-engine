@@ -219,3 +219,53 @@ def compute_metrics(
         gross_loss=round(gross_loss, 3),
         trades=trades,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Trade management
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _manage_open_trade(
+    state: Dict,
+    bar: Dict,
+) -> tuple:
+    """
+    Advance one trading day for an open position.
+
+    Stop is checked FIRST (conservative — protects against gap-downs).
+    Then target. Then trailing stop is updated if we're still open.
+
+    Modifies `state` in-place: trailing_stop may ratchet upward.
+
+    Parameters
+    ----------
+    state : dict with keys:
+        entry_price, trailing_stop, take_profit, entry_date
+    bar : dict with keys:
+        date, open, high, low, close, ema20
+
+    Returns
+    -------
+    (closed: bool, exit_price: float | None, exit_reason: str | None)
+    """
+    low    = bar["low"]
+    high   = bar["high"]
+    close  = bar["close"]
+    ema20  = bar["ema20"]
+    stop   = state["trailing_stop"]
+    target = state["take_profit"]
+    entry  = state["entry_price"]
+
+    # 1. Stop hit first (low ≤ stop → filled at stop price)
+    if low <= stop:
+        return True, stop, "STOP"
+
+    # 2. Target hit (high ≥ target → filled at target)
+    if high >= target:
+        return True, target, "TARGET"
+
+    # 3. Update trailing stop: ratchet to EMA20 only when in profit
+    if close > entry and ema20 > stop:
+        state["trailing_stop"] = ema20
+
+    return False, None, None
