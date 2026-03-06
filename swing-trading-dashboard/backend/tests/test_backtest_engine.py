@@ -200,3 +200,28 @@ def test_manage_trade_trailing_stop_does_not_drop():
     closed, _, _ = _manage_open_trade(state, bar)
     assert closed is False
     assert abs(state["trailing_stop"] - 95.0) < 0.01
+
+
+def test_detect_signals_returns_none_for_short_slice():
+    """
+    _detect_signals must return None when df_slice has fewer than MIN_BARS_FOR_SIGNAL bars.
+    This verifies the lookahead-prevention guard works correctly.
+    """
+    from backtest_engine import _detect_signals, MIN_BARS_FOR_SIGNAL
+    import pandas as pd
+    import numpy as np
+
+    # 30 bars — below the 60-bar minimum
+    dates = pd.date_range("2024-01-01", periods=30, freq="B")
+    price = 100.0 + np.random.randn(30).cumsum()
+    df = pd.DataFrame({
+        "Open": price * 0.99,
+        "High": price * 1.01,
+        "Low":  price * 0.98,
+        "Close": price,
+        "Adj Close": price,
+        "Volume": np.ones(30) * 1_000_000,
+    }, index=dates)
+
+    result = _detect_signals("AAPL", df, df, ["VCP"])
+    assert result is None

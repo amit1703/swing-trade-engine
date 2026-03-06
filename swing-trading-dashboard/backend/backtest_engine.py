@@ -269,3 +269,129 @@ def _manage_open_trade(
         state["trailing_stop"] = ema20
 
     return False, None, None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Signal detection (lookahead-safe)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _detect_signals(
+    ticker: str,
+    df_slice: pd.DataFrame,
+    spy_slice: pd.DataFrame,
+    setup_types: List[str],
+) -> Optional[Dict]:
+    """
+    Run the appropriate signal engine(s) on a lookahead-safe slice.
+
+    IMPORTANT: df_slice must be df.iloc[:T+1] — only data up to day T.
+    This function never looks beyond the last row of df_slice.
+
+    Parameters
+    ----------
+    ticker : str
+    df_slice : DataFrame — data up to and including day T (df.iloc[:T+1])
+    spy_slice : DataFrame — SPY data up to day T
+    setup_types : list of "VCP" | "PULLBACK" | "BASE"
+
+    Returns
+    -------
+    First matching setup dict, or None.
+    Each type is tried in order; first match wins.
+    """
+    if len(df_slice) < MIN_BARS_FOR_SIGNAL:
+        return None
+
+    try:
+        from indicators.indicator_engine import compute_indicators
+        inds = compute_indicators(df_slice, spy_slice)
+        if inds is None:
+            return None
+
+        # SPY 3m return for RS engine filters
+        spy_adj = "Adj Close" if "Adj Close" in spy_slice.columns else "Close"
+        n_spy = len(spy_slice)
+        spy_3m_return = 0.0
+        if n_spy > 63:
+            spy_vals = spy_slice[spy_adj].values
+            spy_3m_return = float(spy_vals[-1] / spy_vals[-64] - 1.0)
+
+        # Compute KDE zones (lookahead-safe: only uses df_slice)
+        from engines.engine1 import calculate_sr_zones
+        sr_zones = calculate_sr_zones(ticker, df_slice)
+
+        for stype in setup_types:
+            setup = None
+
+            if stype == "VCP":
+                from engines.engine2 import scan_vcp
+                setup = scan_vcp(
+                    ticker, df_slice, sr_zones,
+                    spy_3m_return=spy_3m_return,
+                    rs_ratio=inds.rs_ratio,
+                    rs_52w_high=inds.rs_52w_high,
+                    rs_blue_dot=inds.rs_blue_dot,
+                    rs_score=inds.rs_score,
+                )
+
+            elif stype == "PULLBACK":
+                from engines.engine3 import scan_pullback, scan_relaxed_pullback
+                setup = scan_pullback(ticker, df_slice, sr_zones, rs_score=inds.rs_score)
+                if setup is None:
+                    setup = scan_relaxed_pullback(ticker, df_slice, sr_zones, rs_score=inds.rs_score)
+
+            elif stype == "BASE":
+                from engines.engine5 import scan_base_pattern
+                setup = scan_base_pattern(
+                    ticker, df_slice,
+                    spy_3m_return=spy_3m_return,
+                    rs_ratio=inds.rs_ratio,
+                    rs_52w_high=inds.rs_52w_high,
+                    rs_blue_dot=inds.rs_blue_dot,
+                    rs_score=inds.rs_score,
+                    sr_zones=sr_zones,
+                )
+
+            if setup is not None:
+                return setup
+
+    except Exception as exc:
+        logger.debug("_detect_signals %s: %s", ticker, exc)
+
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Data fetching
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _fetch_data(ticker: str, start_date: str) -> tuple:
+    """
+    Fetch full ticker + SPY history needed for the backtest.
+
+    Fetches from (start_date - WARMUP_BARS trading days) back in calendar time.
+    Returns (ticker_df, spy_df). Either may be None on failure.
+    """
+    loop = asyncio.get_running_loop()
+
+    start = date.fromisoformat(start_date)
+    # 1.5x calendar days to ensure enough trading days (accounts for weekends/holidays)
+    fetch_from = start - timedelta(days=int(WARMUP_BARS * 1.5))
+    fetch_from_str = fetch_from.isoformat()
+
+    def _download(sym: str) -> Optional[pd.DataFrame]:
+        try:
+            hist = yf.Ticker(sym).history(start=fetch_from_str, auto_adjust=False)
+            if hist is None or hist.empty:
+                return None
+            hist.index = pd.to_datetime(hist.index).tz_localize(None)
+            return hist
+        except Exception as exc:
+            logger.warning("_fetch_data: download failed for %s: %s", sym, exc)
+            return None
+
+    ticker_df, spy_df = await asyncio.gather(
+        loop.run_in_executor(None, _download, ticker),
+        loop.run_in_executor(None, _download, "SPY"),
+    )
+    return ticker_df, spy_df
