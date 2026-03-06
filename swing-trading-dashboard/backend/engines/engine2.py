@@ -637,6 +637,26 @@ def _weekly_confirmed(df: pd.DataFrame) -> bool:
         return False  # fail open
 
 
+def _has_vol_dryup(
+    volume: pd.Series,
+    avg_vol: float,
+    window: int = 10,
+    threshold: float = 0.5,
+) -> bool:
+    """
+    Return True if at least one bar in the last `window` bars has
+    volume strictly less than `threshold` × avg_vol.
+
+    Implements the Minervini/O'Neil "institutional dry-up" gate:
+    genuine volume evaporation must include at least one day of real
+    indifference (< 50 % of the 50-day average), not just a mild
+    drift below the average.
+    """
+    if avg_vol <= 0 or len(volume) < window:
+        return False
+    return bool((volume.iloc[-window:] < threshold * avg_vol).any())
+
+
 def scan_vcp(
     ticker: str,
     df: pd.DataFrame,
@@ -1071,25 +1091,23 @@ def scan_vcp(
                 )
             return None
 
-        # ── A2b. ATR contraction confirmation (Task 13) ───────────────────────
-        # Require today's ATR < 20-bar ATR average × VCP_ATR_CONTRACTION_THRESHOLD
-        # This confirms genuine volatility compression, not just a low-TR day.
-        atr_today   = float(atr14.iloc[-1].item() if hasattr(atr14.iloc[-1], "item") else atr14.iloc[-1])
+        # A2b. ATR contraction confirmation (Task 13)
+        # latr (already extracted and NaN-checked above) is today's ATR value.
         atr20_clean = atr14.dropna()
         atr_compressed = False
         if len(atr20_clean) >= 20:
             atr20_avg = float(atr20_clean.iloc[-20:].mean())
-            atr_compressed = atr_today < atr20_avg * VCP_ATR_CONTRACTION_THRESHOLD
+            atr_compressed = latr < atr20_avg * VCP_ATR_CONTRACTION_THRESHOLD
             if not atr_compressed:
                 if debug:
                     print(
                         f"Engine 2 VCP: REJECTED - ATR not compressed "
-                        f"(ATR={atr_today:.4f}, ATR20avg={atr20_avg:.4f}, "
+                        f"(ATR={latr:.4f}, ATR20avg={atr20_avg:.4f}, "
                         f"threshold={atr20_avg * VCP_ATR_CONTRACTION_THRESHOLD:.4f})"
                     )
                 return None
-        else:
-            atr_compressed = False  # insufficient data — let pass-through
+        # Note: atr20_clean always has ≥46 values when len(data)≥60, so the else
+        # branch is unreachable in production — atr_compressed is always set above.
 
         # ── A3. U-shape parabolic check ───────────────────────────────────
         lb      = min(15, len(close) - 5)
@@ -1127,9 +1145,9 @@ def scan_vcp(
         #       (< 50 % of the 50-day average) — eliminates mild drift-down
         last3_vol_val = volume.iloc[-3:].mean()
         last3_vol = float(last3_vol_val.item() if hasattr(last3_vol_val, 'item') else last3_vol_val)
-        is_dry = last3_vol < avg_vol and _has_vol_dryup(volume, avg_vol)
         # Task 14: Minervini strict dry-up — any bar in last 10 < 50% avg vol
         is_minervini_dryup = _has_vol_dryup(volume, avg_vol)
+        is_dry = last3_vol < avg_vol and is_minervini_dryup
 
         # ── A5. Engine 1 resistance proximity ────────────────────────────
         nearest_res = None
@@ -1213,26 +1231,6 @@ def scan_vcp(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _has_vol_dryup(
-    volume: pd.Series,
-    avg_vol: float,
-    window: int = 10,
-    threshold: float = 0.5,
-) -> bool:
-    """
-    Return True if at least one bar in the last `window` bars has
-    volume strictly less than `threshold` × avg_vol.
-
-    Implements the Minervini/O'Neil "institutional dry-up" gate:
-    genuine volume evaporation must include at least one day of real
-    indifference (< 50 % of the 50-day average), not just a mild
-    drift below the average.
-    """
-    if avg_vol <= 0 or len(volume) < window:
-        return False
-    return bool((volume.iloc[-window:] < threshold * avg_vol).any())
-
 
 def _parabola(x: np.ndarray, a: float, b: float, c: float) -> np.ndarray:
     return a * x**2 + b * x + c
