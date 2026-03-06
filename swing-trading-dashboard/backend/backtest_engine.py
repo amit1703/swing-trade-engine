@@ -69,7 +69,7 @@ class TradeRecord:
     take_profit:   float
     exit_date:     str
     exit_price:    float
-    exit_reason:   str    # "TARGET" | "STOP" | "TRAIL_STOP" | "EOD"
+    exit_reason:   str    # "TARGET" | "STOP" | "EOD"
     holding_days:  int
 
     # Computed properties (derived in __post_init__)

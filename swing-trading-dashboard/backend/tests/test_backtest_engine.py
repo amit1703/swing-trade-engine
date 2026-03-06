@@ -250,7 +250,7 @@ def test_backtest_engine_zero_signals():
         mock_fetch.return_value = (df, df)
 
         engine = BacktestEngine("AAPL", "2024-01-01", "2024-12-31", ["VCP"])
-        summary = asyncio.get_event_loop().run_until_complete(engine.run())
+        summary = asyncio.run(engine.run())
 
     assert summary.total_trades == 0
     assert summary.win_rate == 0.0
