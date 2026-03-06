@@ -20,6 +20,7 @@ KDE_BREAKOUT_LOWER_PCT = 0.001  # 0.1% below resistance for near-breakout detect
 DRY_RESISTANCE_PROXIMITY_PCT = 0.05  # 5% proximity for dry setups
 WATCHLIST_PROXIMITY_PCT = 0.015  # 1.5% below resistance for watchlist items
 TRENDLINE_TOUCH_TOLERANCE_PCT = 0.015  # 1.5% tolerance for ascending trendline touch check
+VCP_TIGHT_RANGE_5D_PCT = 0.025         # 2.5% close range over 5 days signals price compression
 
 # ──────────────────────────────────────────────────────────────────────────
 # Time Periods & Candle Counts
@@ -49,7 +50,7 @@ EMA_LONG = 20  # Long-term EMA period
 SMA_LONG = 50  # Long-term SMA period
 CCI_PERIOD = 20  # Commodity Channel Index period
 CCI_STRICT_FLOOR = -50.0  # CCI oversold floor for strict pullback hook
-CCI_RLX_FLOOR = -30.0  # CCI oversold floor for relaxed pullback hook
+CCI_RLX_FLOOR = -20.0  # CCI oversold floor for relaxed pullback hook
 
 # ──────────────────────────────────────────────────────────────────────────
 # Risk Management & Stop Loss

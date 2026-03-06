@@ -36,7 +36,7 @@ from scipy.signal import find_peaks
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, true_range as _tr
-from constants import TARGET_RR, ATR_STOP_MULTIPLIER, VCP_ATR_CONTRACTION_THRESHOLD
+from constants import TARGET_RR, ATR_STOP_MULTIPLIER, VCP_ATR_CONTRACTION_THRESHOLD, VCP_TIGHT_RANGE_5D_PCT
 from zone_utils import nearest_resistance_target
 
 
@@ -687,6 +687,15 @@ def scan_vcp(
         52-week high of the RS ratio.
     rs_blue_dot : bool
         True if RS ratio is at 52-week high (institutional signal).
+    rs_improving : bool
+        True if the RS line slope over the last 10 bars is positive.
+        Passed through to all return dicts as a quality signal.
+    rs_near_high : bool
+        True if current RS ratio is within 10% of its 52-week high.
+        Passed through to all return dicts as a quality signal.
+    rs_acceleration : float
+        Rate of change of the RS line over 10 bars, normalised by prior value.
+        Positive = accelerating outperformance. Passed through to all return dicts.
     """
     try:
         data = _prep(df)
@@ -715,7 +724,7 @@ def scan_vcp(
         # ── Tight Price Action: 5-day close range / last close ────────────────
         _closes_5    = data[_adj_col(data)].iloc[-5:].values if len(data) >= 5 else data[_adj_col(data)].values
         _c5_range    = (float(_closes_5.max()) - float(_closes_5.min())) / float(lc) if lc > 0 else 1.0
-        tight_range_5d = _c5_range <= 0.025
+        tight_range_5d = _c5_range <= VCP_TIGHT_RANGE_5D_PCT
 
         lh   = float(high.iloc[-1].item() if hasattr(high.iloc[-1], 'item') else high.iloc[-1])
         ll   = float(low.iloc[-1].item() if hasattr(low.iloc[-1], 'item') else low.iloc[-1])
