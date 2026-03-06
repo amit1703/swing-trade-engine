@@ -47,6 +47,7 @@ async def test_save_and_retrieve_backtest_result():
             "avg_holding_days": 12.0,
             "gross_profit": 1100.0,
             "gross_loss": -500.0,
+            "net_profit_pct": 600.0,
             "trades": [{"entry": 150.0, "exit": 165.0}],
         }
         row_id = await database.save_backtest_result(db_path, row)
@@ -56,6 +57,7 @@ async def test_save_and_retrieve_backtest_result():
         assert results[0]["win_rate"] == 60.0
         assert results[0]["run_id"] == "test-run-1"
         assert len(results[0]["trades"]) == 1
+        assert results[0]["net_profit_pct"] == 600.0
     finally:
         os.unlink(db_path)
 
