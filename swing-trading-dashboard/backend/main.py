@@ -111,6 +111,8 @@ from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats,
 from engines.engine5 import scan_base_pattern
 from engines.engine6 import scan_resistance_breakout
 from engines.engine7 import scan_options_catalyst
+from engines.engine8_htf import scan_htf
+from engines.engine9_low_cheat import scan_lce
 from tickers import SCAN_UNIVERSE
 from validation import is_price_vital
 from universe_builder import build_universe, load_universe, save_universe, UNIVERSE_FILE
@@ -184,6 +186,8 @@ _scan_state: Dict = {
         "e5": {"cup_handle": 0, "flat_base": 0},
         "e6": {"res_breakout": 0},
         "e7": {"options_catalyst": 0},
+        "e8": {"htf": 0},
+        "e9": {"lce": 0},
         "total_tickers": 0,
         "total_duration_s": 0.0,
         "forced": False,
@@ -649,6 +653,8 @@ async def _run_scan(
             "e5": {"cup_handle": 0, "flat_base": 0},
             "e6": {"res_breakout": 0},
             "e7": {"options_catalyst": 0},
+            "e8": {"htf": 0},
+            "e9": {"lce": 0},
             "total_tickers": 0,
             "total_duration_s": 0.0,
             "forced": force,
@@ -1123,6 +1129,54 @@ async def _run_scan(
                     except Exception as res_exc:
                         log.warning("ResBreakout check failed for %s: %s", ticker, res_exc)
 
+                # Engine 8: High Tight Flag
+                if zones:
+                    try:
+                        htf = await loop.run_in_executor(
+                            None, scan_htf, ticker, df, zones
+                        )
+                        if htf:
+                            try:
+                                htf["entry"]      = float(htf.get("entry", 0.0))
+                                htf["stop_loss"]  = float(htf.get("stop_loss", 0.0))
+                                htf["take_profit"]= float(htf.get("take_profit", 0.0))
+                                htf["rr"]         = float(htf.get("rr", 2.0))
+                            except (ValueError, TypeError) as conv_err:
+                                log.warning("HTF conversion failed for %s: %s", ticker, conv_err)
+                            else:
+                                htf["sector"] = SECTORS.get(ticker, "Unknown")
+                                collected_setups.append(htf)
+                                _scan_state["engine_stats"]["e8"]["htf"] += 1
+                                log.info("  HTF      %-6s  runup=%.0f%%  flag=%dd  vol=×%.1f",
+                                         ticker, htf.get("runup_pct", 0),
+                                         htf.get("flag_bars", 0), htf.get("volume_ratio", 0))
+                    except Exception as htf_exc:
+                        log.warning("HTF check failed for %s: %s", ticker, htf_exc)
+
+                # Engine 9: Low Cheat Entry
+                if zones:
+                    try:
+                        lce = await loop.run_in_executor(
+                            None, scan_lce, ticker, df, zones
+                        )
+                        if lce:
+                            try:
+                                lce["entry"]      = float(lce.get("entry", 0.0))
+                                lce["stop_loss"]  = float(lce.get("stop_loss", 0.0))
+                                lce["take_profit"]= float(lce.get("take_profit", 0.0))
+                                lce["rr"]         = float(lce.get("rr", 2.0))
+                            except (ValueError, TypeError) as conv_err:
+                                log.warning("LCE conversion failed for %s: %s", ticker, conv_err)
+                            else:
+                                lce["sector"] = SECTORS.get(ticker, "Unknown")
+                                collected_setups.append(lce)
+                                _scan_state["engine_stats"]["e9"]["lce"] += 1
+                                log.info("  LCE      %-6s  dist=%.1f%%  vol=×%.2f",
+                                         ticker, lce.get("distance_to_resistance_pct", 0),
+                                         lce.get("volume_ratio", 0))
+                    except Exception as lce_exc:
+                        log.warning("LCE check failed for %s: %s", ticker, lce_exc)
+
                 # Engine 7: Options Catalyst (not gated by market regime)
                 try:
                     opt = await loop.run_in_executor(
@@ -1224,6 +1278,8 @@ async def _run_scan(
                 "res_breakout":      [s for s in collected_setups if s.get("setup_type") == "RES_BREAKOUT"],
                 "watchlist":         [s for s in collected_setups if s.get("setup_type") == "WATCHLIST"],
                 "options_catalyst":  [s for s in collected_setups if s.get("setup_type") == "OPTIONS_CATALYST"],
+                "htf":               [s for s in collected_setups if s.get("setup_type") == "HTF"],
+                "lce":               [s for s in collected_setups if s.get("setup_type") == "LCE"],
             }
             log.info("DRY RUN: stored %d setups in memory (no DB write)", len(collected_setups))
 
@@ -1573,6 +1629,24 @@ async def get_options_catalyst_setups():
     """Options Catalyst setups — unusual near-term call activity (Engine 7)."""
     setups = await get_latest_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
     setups.sort(key=lambda x: x.get("options_score", 0), reverse=True)
+    await _inject_narratives(setups)
+    return {"setups": setups, "count": len(setups)}
+
+
+@app.get("/api/setups/htf")
+async def get_htf_setups():
+    """High Tight Flag setups from the latest scan."""
+    setups = await get_latest_setups(DB_PATH, setup_type="HTF")
+    setups.sort(key=lambda x: x.get("runup_pct", 0), reverse=True)
+    await _inject_narratives(setups)
+    return {"setups": setups, "count": len(setups)}
+
+
+@app.get("/api/setups/lce")
+async def get_lce_setups():
+    """Low Cheat Entry setups from the latest scan."""
+    setups = await get_latest_setups(DB_PATH, setup_type="LCE")
+    setups.sort(key=lambda x: x.get("distance_to_resistance_pct", 99))
     await _inject_narratives(setups)
     return {"setups": setups, "count": len(setups)}
 
