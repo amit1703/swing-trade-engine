@@ -106,3 +106,24 @@ async def test_preloaded_df_window_slice_respects_dates():
     assert summary is not None
     assert summary.start_date == start
     assert summary.end_date   == end
+
+
+@pytest.mark.asyncio
+async def test_partial_preloaded_df_calls_fetch():
+    """When only ticker_df is provided but spy_df is omitted, _fetch_data is still called."""
+    ticker_df = _make_ticker_df()
+
+    engine = BacktestEngine(
+        ticker="AAPL",
+        start_date="2023-01-01",
+        end_date="2023-03-31",
+        setup_types=["VCP"],
+        ticker_df=ticker_df,
+        # spy_df intentionally omitted — partial supply must fall back to fetch
+    )
+
+    with patch("backtest_engine._fetch_data", new_callable=AsyncMock) as mock_fetch:
+        mock_fetch.return_value = (None, None)
+        await engine.run()
+
+    mock_fetch.assert_called_once()
