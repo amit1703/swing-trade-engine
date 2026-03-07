@@ -191,3 +191,12 @@ EARNINGS_CACHE_TTL_HOURS  = 24            # refresh cache entries older than thi
 # ──────────────────────────────────────────────────────────────────────────
 
 BULK_DOWNLOAD_BATCH_SIZE = 200            # tickers per yf.download() call
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Walk-Forward Validation (WFO)
+# ──────────────────────────────────────────────────────────────────────────────
+
+WFO_CACHE_DIR         = "data/price_cache"   # relative to backend/
+WFO_LOOKBACK_YEARS    = 10                   # years of history to download
+WFO_MIN_HISTORY_YEARS = 5                    # minimum usable years before rejecting
+WFO_BULK_BATCH_SIZE   = 100                  # tickers per yf.download() call
