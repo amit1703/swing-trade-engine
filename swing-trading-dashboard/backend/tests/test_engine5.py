@@ -520,3 +520,70 @@ class TestScanBasePattern:
             assert result["rs_vs_spy"] < 0, (
                 f"Expected negative rs_vs_spy, got {result['rs_vs_spy']}"
             )
+
+
+def test_flat_base_brk_rejected_weak_volume():
+    """BRK signal requires vol_ratio >= 1.5; vol_ratio of 1.3 must be rejected."""
+    import numpy as np
+    import pandas as pd
+    from engines.engine5 import scan_flat_base
+
+    n = 250
+    dates = pd.date_range("2021-01-01", periods=n, freq="B")
+    # Stage 2 uptrend: close rises from 60 to 100, SMA50 > SMA200 guaranteed after enough bars
+    close  = np.linspace(60.0, 100.0, n)
+    high   = close * 1.015
+    low    = close * 0.985
+    volume = np.full(n, 1_000_000.0)
+
+    df = pd.DataFrame(
+        {"Close": close, "High": high, "Low": low, "Open": close, "Volume": volume},
+        index=dates,
+    )
+
+    # Last bar: price above ceiling, volume 1.3× avg (above old 1.2 threshold, below new 1.5)
+    ceiling = float(df["High"].values[-30:].max())
+    df.iloc[-1, df.columns.get_loc("Close")]  = ceiling * 1.003  # above ceiling
+    df.iloc[-1, df.columns.get_loc("High")]   = ceiling * 1.005
+    df.iloc[-1, df.columns.get_loc("Low")]    = ceiling * 0.998
+    df.iloc[-1, df.columns.get_loc("Volume")] = 1_300_000.0  # 1.3× avg
+
+    result = scan_flat_base("TEST", df)
+    # Must not return a BRK signal (either None or DRY)
+    assert result is None or result.get("signal") != "BRK", (
+        f"Expected no BRK with vol_ratio=1.3 (below 1.5 threshold); got signal={result.get('signal') if result else None}"
+    )
+
+
+def test_flat_base_brk_rejected_noisy_range():
+    """BRK signal requires prior range contraction; expanding range must be rejected."""
+    import numpy as np
+    import pandas as pd
+    from engines.engine5 import scan_flat_base
+
+    n = 250
+    dates = pd.date_range("2021-01-01", periods=n, freq="B")
+    close  = np.linspace(60.0, 100.0, n)
+    high   = close * 1.015
+    low    = close * 0.985
+    volume = np.full(n, 1_000_000.0)
+
+    df = pd.DataFrame(
+        {"Close": close, "High": high, "Low": low, "Open": close, "Volume": volume},
+        index=dates,
+    )
+
+    # Make last 5 bars wider range than prior (noisy breakout — range expanding)
+    for i in range(-5, 0):
+        df.iloc[i, df.columns.get_loc("High")] = float(close[i]) * 1.06  # very wide
+        df.iloc[i, df.columns.get_loc("Low")]  = float(close[i]) * 0.94
+
+    # Last bar: above ceiling, vol >= 1.5× (passes vol gate)
+    ceiling = float(df["High"].values[-30:-5].max())  # ceiling from pre-noisy bars
+    df.iloc[-1, df.columns.get_loc("Close")]  = ceiling * 1.003
+    df.iloc[-1, df.columns.get_loc("Volume")] = 1_600_000.0  # 1.6× avg → passes vol gate
+
+    result = scan_flat_base("TEST", df)
+    assert result is None or result.get("signal") != "BRK", (
+        f"Expected no BRK with expanding range (noisy base); got signal={result.get('signal') if result else None}"
+    )

@@ -41,7 +41,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import atr as _atr
-from constants import TARGET_RR
+from constants import TARGET_RR, BASE_BRK_MIN_VOL_RATIO
 from zone_utils import nearest_resistance_target
 
 
@@ -90,8 +90,8 @@ def scan_flat_base(
             return None
 
         # ── Stage 2: SMA50 > SMA200 AND close > SMA50 ────────────────────
-        sma200 = close_s.rolling(200).mean()
-        sma50  = close_s.rolling(50).mean()
+        sma200 = data["_SMA200"] if "_SMA200" in data.columns else close_s.rolling(200).mean()
+        sma50  = data["_SMA50"]  if "_SMA50"  in data.columns else close_s.rolling(50).mean()
         lc   = _fval(close_s.iloc[-1])
         l200 = _fval(sma200.iloc[-1])
         l50  = _fval(sma50.iloc[-1])
@@ -104,13 +104,14 @@ def scan_flat_base(
             return None
 
         # ── ATR14 ─────────────────────────────────────────────────────────
-        atr14 = _atr(high_s, low_s, close_s, 14)
+        atr14 = data["_ATR14"] if "_ATR14" in data.columns else _atr(high_s, low_s, close_s, 14)
         latr  = _fval(atr14.iloc[-1])
         if np.isnan(latr) or latr <= 0:
             return None
 
         # ── Volume 50-day SMA ─────────────────────────────────────────────
-        vol50 = _fval(volume_s.rolling(50).mean().iloc[-1])
+        vol50 = _fval((data["_VOLSMA50"] if "_VOLSMA50" in data.columns
+                       else volume_s.rolling(50).mean()).iloc[-1])
         if np.isnan(vol50) or vol50 <= 0:
             return None
 
@@ -176,7 +177,12 @@ def scan_flat_base(
         vol_ratio = last_vol / vol50 if vol50 > 0 else 0.0
         dist_to_pivot = (ceiling - lc) / ceiling if ceiling > 0 else 1.0
 
-        if lc > ceiling and vol_ratio >= 1.2:
+        # Prior range contraction: last 5-bar avg range must be below prior 20-bar avg range
+        recent_ranges = (high_arr[-5:]  - low_arr[-5:]).mean()
+        prior_ranges  = (high_arr[-25:-5] - low_arr[-25:-5]).mean() if len(high_arr) >= 25 else recent_ranges
+        base_range_contraction = prior_ranges > 0 and recent_ranges < prior_ranges
+
+        if lc > ceiling and vol_ratio >= BASE_BRK_MIN_VOL_RATIO and base_range_contraction:
             signal = "BRK"
         elif dist_to_pivot <= 0.010:
             signal = "DRY"
@@ -259,7 +265,7 @@ def scan_cup_handle(
             return None
 
         # ── Trend: close must be above SMA200 ────────────────────────────
-        sma200 = close_s.rolling(200).mean()
+        sma200 = data["_SMA200"] if "_SMA200" in data.columns else close_s.rolling(200).mean()
         lc     = _fval(close_s.iloc[-1])
         l200   = _fval(sma200.iloc[-1])
         if l200 <= 0:           # SMA200 not yet computable
@@ -268,14 +274,15 @@ def scan_cup_handle(
             return None
 
         # ── ATR14 ─────────────────────────────────────────────────────────
-        atr14 = _atr(high_s, low_s, close_s, 14)
+        atr14 = data["_ATR14"] if "_ATR14" in data.columns else _atr(high_s, low_s, close_s, 14)
         latr  = _fval(atr14.iloc[-1])
         if np.isnan(latr) or latr <= 0:
             return None
         atr_pct = latr / lc if lc > 0 else 0.0
 
         # ── Volume 50-day SMA ─────────────────────────────────────────────
-        vol50 = _fval(volume_s.rolling(50).mean().iloc[-1])
+        vol50 = _fval((data["_VOLSMA50"] if "_VOLSMA50" in data.columns
+                       else volume_s.rolling(50).mean()).iloc[-1])
         if np.isnan(vol50) or vol50 <= 0:
             return None
 
@@ -361,7 +368,20 @@ def scan_cup_handle(
         vol_ratio = last_vol / vol50 if vol50 > 0 else 0.0
         dist_to_pivot = (handle_high_price - lc) / handle_high_price if handle_high_price > 0 else 1.0
 
-        if lc > handle_high_price and vol_ratio >= 1.2:
+        # Prior range contraction: last 5 handle bars' avg range < pre-handle 20-bar avg range
+        han_start_abs = len(high_arr) - handle_bars
+        if han_start_abs > 20 and handle_bars >= 5:
+            pre_handle_high = high_arr[max(0, han_start_abs - 20):han_start_abs]
+            pre_handle_low  = low_arr[max(0, han_start_abs - 20):han_start_abs]
+            pre_handle_range = (pre_handle_high - pre_handle_low).mean()
+            handle_high_arr  = high_arr[-min(5, handle_bars):]
+            handle_low_arr   = low_arr[-min(5, handle_bars):]
+            handle_avg_range = (handle_high_arr - handle_low_arr).mean()
+            base_range_contraction = pre_handle_range > 0 and handle_avg_range < pre_handle_range
+        else:
+            base_range_contraction = True  # not enough history → don't block
+
+        if lc > handle_high_price and vol_ratio >= BASE_BRK_MIN_VOL_RATIO and base_range_contraction:
             signal = "BRK"
         elif dist_to_pivot <= 0.010:
             signal = "DRY"
