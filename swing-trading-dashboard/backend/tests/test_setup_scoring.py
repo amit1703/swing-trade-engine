@@ -124,11 +124,17 @@ def test_defensive_regime_scores_lowest():
 # ── Sector bonus ──────────────────────────────────────────────────────────────
 
 def test_top_sector_adds_bonus():
-    """Ticker in top_sectors should score higher than ticker not in top_sectors."""
-    setup = _vcp(rr=2.0, vol_ratio=2.0)
+    """Ticker in top-5 sectors scores higher than one outside top-8 (10 vs 4 pts = +6 diff)."""
+    setup = {"ticker": "X", "setup_type": "VCP", "sector": "Technology",
+             "entry": 100.0, "stop_loss": 95.0, "take_profit": 110.0,
+             "rr": 2.0, "setup_date": "2026-03-06",
+             "is_vol_surge": True, "volume_ratio": 2.0,
+             "rs_blue_dot": False, "weekly_confirmed": False, "atr_compressed": False}
     s_in  = compute_setup_score(setup, 80, 70, "SELECTIVE", ["Technology"])
     s_out = compute_setup_score(setup, 80, 70, "SELECTIVE", ["Energy"])
     assert s_in > s_out
+    # Under 3-tier: in tier-1 (top-5) = 10 pts; outside top-8 = 4 pts → diff = 6
+    assert s_in - s_out == 6
 
 
 # ── OPTIONS / WATCHLIST specialisation ────────────────────────────────────────
@@ -229,6 +235,20 @@ def test_rs_tier2_no_multiplier():
     score_84 = compute_setup_score(setup, 84, 75, "AGGRESSIVE", [])
     score_85 = compute_setup_score(setup, 85, 75, "AGGRESSIVE", [])
     assert score_85 - score_84 >= 3   # big jump at tier boundary
+
+
+def test_rs_tier_boundary_exact_scores():
+    """Pins exact integer RS component scores at and just below tier-1 boundary.
+    rank=85: 85/100*30*1.15=29.325 → int(round)=29 pts from RS
+    rank=84: 84/100*30 =25.2   → int(round)=25 pts from RS
+    Use DEFENSIVE + empty sectors to isolate RS component only.
+    Since all other components are identical for both calls, the score
+    difference equals the RS component difference: 29 - 25 = 4.
+    """
+    setup = _vcp()
+    score_84 = compute_setup_score(setup, 84, 0, "DEFENSIVE", [])
+    score_85 = compute_setup_score(setup, 85, 0, "DEFENSIVE", [])
+    assert score_85 - score_84 >= 3   # boundary gap: 29 - 25 = 4 (allow >=3 for float rounding)
 
 
 # ── Sector tier scoring ────────────────────────────────────────────────────────

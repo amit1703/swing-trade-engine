@@ -90,7 +90,7 @@ RS_RANK_MIN_PERCENTILE  = 70    # gate: skip tickers with RS rank < 70
 TOP_SECTORS_N           = 8     # top N sectors by avg RS (raised from 5; scoring uses SECTOR_TIER1_N=5 for tier 1)
 MIN_SETUP_SCORE         = 70    # gate: discard setups with unified score < 70
 
-# Score component weights (must sum to 100)
+# Score component weights (upper bounds; raw sum = 120, capped to 100 in compute_setup_score)
 SCORE_WEIGHT_RS_RANK    = 30    # RS percentile rank
 SCORE_WEIGHT_RR         = 20    # Reward-to-Risk ratio
 SCORE_WEIGHT_VOL        = 20    # Volume surge / momentum
