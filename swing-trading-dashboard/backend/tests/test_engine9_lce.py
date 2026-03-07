@@ -38,13 +38,14 @@ def make_resistance_zone(level: float):
     }
 
 
-def inject_lce_conditions(df, resistance_level, vol_contraction=True):
+def inject_lce_conditions(df, resistance_level, vol_breakout=True):
     """
-    Configure last 10 bars to satisfy LCE conditions:
+    Configure last bars for mini-breakout LCE conditions:
     - Price below resistance but within 3%
-    - Range contraction (recent < prior)
-    - Higher low (recent 3-bar low > prior 5-bar low)
-    - Volume contraction (last 5 avg ≤ 80% of 20d avg)
+    - Higher low (recent 3-bar low > prior 5-bar low at indices -8..-3)
+    - Close > prior bar's high (micro-resistance break)
+    - Volume >= 20-day average on breakout bar
+    - Override last 20 bars with tight ranges to keep ATR small → valid R:R >= 1.0
     """
     n = len(df)
     close = df["Close"].values.copy()
@@ -52,28 +53,53 @@ def inject_lce_conditions(df, resistance_level, vol_contraction=True):
     low   = df["Low"].values.copy()
     vol   = df["Volume"].values.copy()
 
-    # Prior 5 bars (wider range)
-    for i in range(-10, -5):
-        p = resistance_level * 0.97
-        close[i] = p
-        high[i]  = p * 1.010   # 1% range
-        low[i]   = p * 0.990
-        vol[i]   = 900_000.0
+    avg_vol = 1_000_000.0  # matches make_uptrend_df baseline
+    base    = resistance_level * 0.985  # consolidation level
 
-    # Recent 5 bars — tighter range, higher lows, close just below resistance
-    for i in range(-5, -1):
-        p = resistance_level * 0.985
-        close[i] = p
-        high[i]  = p * 1.003   # 0.3% range (contracting)
-        low[i]   = p * 0.997
-        vol[i]   = 600_000.0 if vol_contraction else 1_200_000.0
+    # Override bars -20..-9: tight consolidation near resistance (tiny ATR)
+    for i in range(-20, -9):
+        close[i] = base
+        high[i]  = base * 1.001
+        low[i]   = base * 0.999
+        vol[i]   = avg_vol * 0.80
 
-    # Today's bar
-    p = resistance_level * 0.982  # 1.8% below resistance
+    # Bars -8..-6: deep prior lows — these set min(low_arr[-8:-3]) low enough
+    for i in range(-8, -5):
+        p = resistance_level * 0.975
+        close[i] = p
+        high[i]  = p * 1.001
+        low[i]   = p * 0.999
+        vol[i]   = avg_vol * 0.75
+
+    # Bars -5..-4: still in prior group [-8:-3] but at high level;
+    # also in 5-bar swing-low window [-5:] — keep close to entry for tight stop
+    for i in (-5, -4):
+        p = resistance_level * 0.989
+        close[i] = p
+        high[i]  = p * 1.001
+        low[i]   = p * 0.999
+        vol[i]   = avg_vol * 0.82
+
+    # Bar -3: first bar of recent window (low_arr[-3:]) — higher low than prior min
+    p3 = resistance_level * 0.990
+    close[-3] = p3
+    high[-3]  = p3 * 1.001
+    low[-3]   = p3 * 0.999
+    vol[-3]   = avg_vol * 0.85
+
+    # Bar -2: prior bar whose high today's close must exceed
+    prior_high_price = resistance_level * 0.991
+    close[-2] = prior_high_price * 0.999
+    high[-2]  = prior_high_price
+    low[-2]   = prior_high_price * 0.999
+    vol[-2]   = avg_vol * 0.85
+
+    # Bar -1 (today): breakout — close above yesterday's high, volume at/above avg
+    p = prior_high_price * 1.003   # 0.3% above prior high — within 3% of resistance
     close[-1] = p
-    high[-1]  = p * 1.003
-    low[-1]   = p * 0.997
-    vol[-1]   = 600_000.0 if vol_contraction else 1_200_000.0
+    high[-1]  = p * 1.001
+    low[-1]   = p * 0.999
+    vol[-1]   = avg_vol * 1.1 if vol_breakout else avg_vol * 0.5
 
     df["Close"]  = close
     df["High"]   = high
@@ -85,13 +111,13 @@ def test_valid_lce_returns_setup():
     """Valid LCE conditions return a setup dict with correct fields."""
     df = make_uptrend_df(n=120, end_price=98.0)
     resistance = 100.0
-    inject_lce_conditions(df, resistance, vol_contraction=True)
+    inject_lce_conditions(df, resistance, vol_breakout=True)
     zones = [make_resistance_zone(resistance)]
 
     result = scan_lce("TEST", df, zones=zones)
     assert result is not None, "Expected setup dict, got None"
     assert result["setup_type"] == "LCE"
-    assert result["signal"] == "CHEAT"
+    assert result["signal"] == "BRK"
     assert result["entry"] > 0
     assert result["stop_loss"] < result["entry"]
     assert result["take_profit"] > result["entry"]
@@ -101,7 +127,7 @@ def test_valid_lce_returns_setup():
 def test_no_zones_returns_none():
     """Without resistance zones, LCE returns None."""
     df = make_uptrend_df(n=120, end_price=98.0)
-    inject_lce_conditions(df, 100.0)
+    inject_lce_conditions(df, 100.0, vol_breakout=True)
     assert scan_lce("TEST", df, zones=[]) is None
     assert scan_lce("TEST", df, zones=None) is None
 
@@ -116,20 +142,29 @@ def test_price_too_far_from_resistance_returns_none():
     assert scan_lce("TEST", df, zones=zones) is None
 
 
-def test_volume_expansion_rejected():
-    """Volume expansion (not contraction) returns None."""
+def test_volume_below_average_rejected():
+    """Volume below 1x 20-day average returns None (breakout needs volume)."""
     df = make_uptrend_df(n=120, end_price=98.0)
-    inject_lce_conditions(df, 100.0, vol_contraction=False)
+    inject_lce_conditions(df, 100.0, vol_breakout=False)
     zones = [make_resistance_zone(100.0)]
-    # With vol_contraction=False, vol_avg_5 = 1_200_000 > 0.8 × 900_000 = 720_000 → rejected
-    result = scan_lce("TEST", df, zones=zones)
-    assert result is None
+    assert scan_lce("TEST", df, zones=zones) is None
+
+
+def test_close_below_prior_high_rejected():
+    """If today's close does not exceed prior bar's high, LCE returns None."""
+    df = make_uptrend_df(n=120, end_price=98.0)
+    inject_lce_conditions(df, 100.0, vol_breakout=True)
+    # Force today's close below prior bar's high
+    prior_high = float(df["High"].iloc[-2])
+    df.iloc[-1, df.columns.get_loc("Close")] = prior_high * 0.995
+    zones = [make_resistance_zone(100.0)]
+    assert scan_lce("TEST", df, zones=zones) is None
 
 
 def test_return_dict_has_required_fields():
     """Setup dict includes all required fields."""
     df = make_uptrend_df(n=120, end_price=98.0)
-    inject_lce_conditions(df, 100.0, vol_contraction=True)
+    inject_lce_conditions(df, 100.0, vol_breakout=True)
     zones = [make_resistance_zone(100.0)]
     result = scan_lce("TEST", df, zones=zones)
     if result is None:
@@ -143,7 +178,7 @@ def test_return_dict_has_required_fields():
 def test_pivot_zones_accepted():
     """Pivot-sourced zones are accepted (source-agnostic)."""
     df = make_uptrend_df(n=120, end_price=98.0)
-    inject_lce_conditions(df, 100.0, vol_contraction=True)
+    inject_lce_conditions(df, 100.0, vol_breakout=True)
     pivot_zone = {
         "level": 100.0, "upper": 100.5, "lower": 99.5,
         "type": "RESISTANCE", "source": "pivot",

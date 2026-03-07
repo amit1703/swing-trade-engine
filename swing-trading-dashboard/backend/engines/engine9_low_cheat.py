@@ -1,15 +1,15 @@
 """
 Engine 9: Low Cheat Entry (LCE) Scanner
 ==========================================
-Detects early entries just below a resistance level before the official breakout.
+Detects mini-breakout entries just below a resistance level.
 
 Conditions:
-  1. RESISTANCE ZONE    — KDE cluster or pivot point above current price
-  2. PROXIMITY          — close within 3% below resistance
-  3. RANGE CONTRACTION  — last 5-bar avg range < prior 5-bar avg range
-  4. HIGHER LOW         — recent 3-bar low > prior 5-bar low (bars -8 to -3)
-  5. TREND              — close > EMA20
-  6. VOLUME CONTRACTION — 5-bar avg volume ≤ 80% of 20-day avg
+  1. RESISTANCE ZONE  — KDE cluster or pivot point above current price
+  2. PROXIMITY        — close within 3% below resistance
+  3. HIGHER LOW       — recent 3-bar low > prior 5-bar low (bars -8 to -3)
+  4. TREND            — close >= SMA50
+  5. MINI-BREAKOUT    — close > prior bar's high (micro-resistance break)
+  6. VOLUME EXPANSION — today's volume >= LCE_BREAKOUT_VOL_RATIO x 20-day avg
 
 Risk math:
   Entry      = current close
@@ -24,15 +24,14 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from indicators import atr as _atr, ema as _ema
+from indicators import atr as _atr, sma as _sma
 from constants import (
     ATR_STOP_MULTIPLIER,
     TR_WINDOW,
-    EMA_LONG,
+    SMA_LONG,
     LCE_MAX_DISTANCE_PCT,
-    LCE_VOL_CONTRACTION_RATIO,
     LCE_MAX_RISK_PCT,
-    LCE_TIGHT_RANGE_CONTRACTION,
+    LCE_BREAKOUT_VOL_RATIO,
 )
 
 
@@ -94,19 +93,9 @@ def scan_lce(
                 print(f"Engine 9 LCE {ticker}: REJECTED — distance {dist:.1%} not in (0, {LCE_MAX_DISTANCE_PCT:.0%}]")
             return None
 
-        # ── 3. Range contraction ──────────────────────────────────────────────
+        # ── 3. Higher low ─────────────────────────────────────────────────────
         if n < 11:
             return None
-        ranges_recent = high_arr[-5:] - low_arr[-5:]
-        ranges_prior  = high_arr[-10:-5] - low_arr[-10:-5]
-        avg_recent    = float(np.mean(ranges_recent))
-        avg_prior     = float(np.mean(ranges_prior))
-        if avg_prior <= 0 or avg_recent >= avg_prior:
-            if debug:
-                print(f"Engine 9 LCE {ticker}: REJECTED — no range contraction ({avg_recent:.3f} >= {avg_prior:.3f})")
-            return None
-
-        # ── 4. Higher low ─────────────────────────────────────────────────────
         recent_low = float(np.min(low_arr[-3:]))
         prior_low  = float(np.min(low_arr[-8:-3]))
         if recent_low <= prior_low:
@@ -114,25 +103,34 @@ def scan_lce(
                 print(f"Engine 9 LCE {ticker}: REJECTED — no higher low ({recent_low:.2f} ≤ {prior_low:.2f})")
             return None
 
-        # ── 5. Trend: close > EMA20 ───────────────────────────────────────────
-        ema20_s   = _ema(close_s, EMA_LONG)
-        ema20_val = ema20_s.iloc[-1]
-        ema20     = float(ema20_val.item() if hasattr(ema20_val, "item") else ema20_val)
-        if np.isnan(ema20) or lc < ema20:
+        # ── 4. Trend: close >= SMA50 ──────────────────────────────────────────
+        sma50_s   = _sma(close_s, SMA_LONG)
+        sma50_val = sma50_s.iloc[-1]
+        sma50     = float(sma50_val.item() if hasattr(sma50_val, "item") else sma50_val)
+        if np.isnan(sma50) or lc < sma50:
             if debug:
-                print(f"Engine 9 LCE {ticker}: REJECTED — below EMA20 ({lc:.2f} < {ema20:.2f})")
+                print(f"Engine 9 LCE {ticker}: REJECTED — below SMA50 ({lc:.2f} < {sma50:.2f})")
             return None
 
-        # ── 6. Volume contraction ─────────────────────────────────────────────
+        # ── 5. Mini-breakout: close > prior bar's high ────────────────────────
+        if n < 2:
+            return None
+        prev_bar_high = float(high_arr[-2])
+        if lc <= prev_bar_high:
+            if debug:
+                print(f"Engine 9 LCE {ticker}: REJECTED — close {lc:.2f} not above prior bar high {prev_bar_high:.2f}")
+            return None
+
+        # ── 6. Volume expansion: >= LCE_BREAKOUT_VOL_RATIO x 20-day avg ──────
         vol_lookback = min(21, n - 1)
         vol_avg_20   = float(np.mean(volume_arr[-vol_lookback - 1:-1])) if vol_lookback > 0 else 0.0
         if vol_avg_20 <= 0:
             return None
-        vol_avg_5 = float(np.mean(volume_arr[-6:-1]))
-        vol_ratio = vol_avg_5 / vol_avg_20
-        if vol_ratio > LCE_VOL_CONTRACTION_RATIO:
+        lvol_today = float(volume_arr[-1])
+        vol_ratio  = lvol_today / vol_avg_20
+        if vol_ratio < LCE_BREAKOUT_VOL_RATIO:
             if debug:
-                print(f"Engine 9 LCE {ticker}: REJECTED — vol ratio {vol_ratio:.2f} > {LCE_VOL_CONTRACTION_RATIO:.2f}")
+                print(f"Engine 9 LCE {ticker}: REJECTED — vol ratio {vol_ratio:.2f} < {LCE_BREAKOUT_VOL_RATIO:.2f} (need expansion)")
             return None
 
         # ── Risk Math ─────────────────────────────────────────────────────────
@@ -157,7 +155,7 @@ def scan_lce(
         return {
             "ticker":                     ticker,
             "setup_type":                 "LCE",
-            "signal":                     "CHEAT",
+            "signal":                     "BRK",
             "entry":                      entry,
             "stop_loss":                  stop_loss,
             "take_profit":                take_profit,
@@ -165,9 +163,8 @@ def scan_lce(
             "resistance_level":           round(resistance_level, 2),
             "distance_to_resistance_pct": round(dist * 100, 2),
             "volume_ratio":               round(vol_ratio, 2),
-            "is_vol_surge":               False,
+            "is_vol_surge":               vol_ratio >= 1.5,
             "zone_source":                nearest.get("source", "kde"),
-            "tight_range_5d":             avg_recent / avg_prior < LCE_TIGHT_RANGE_CONTRACTION if avg_prior > 0 else False,
             "rs_vs_spy":                  0.0,
             "rs_improving":               False,
             "rs_near_high":               False,
