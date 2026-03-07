@@ -30,6 +30,8 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(__file__))
 from constants import (
     MIN_SETUP_SCORE,
+    RS_TIER1_MULTIPLIER,
+    RS_TIER1_THRESHOLD,
     SCORE_SELECTIVE_REGIME_FACTOR,
     SCORE_WEIGHT_QUALITY,
     SCORE_WEIGHT_REGIME,
@@ -38,6 +40,9 @@ from constants import (
     SCORE_WEIGHT_RR,
     SCORE_WEIGHT_SECTOR,
     SCORE_WEIGHT_VOL,
+    SECTOR_OUT_OF_TOP_FACTOR,
+    SECTOR_TIER1_N,
+    SECTOR_TIER2_FACTOR,
     TOP_SECTORS_N,
 )
 
@@ -374,7 +379,10 @@ def compute_setup_score(
     int  0–100
     """
     # ── 1. RS Rank (0 – SCORE_WEIGHT_RS_RANK pts) ────────────────────────────
-    rs_pts = min(float(SCORE_WEIGHT_RS_RANK), rs_rank / 100.0 * SCORE_WEIGHT_RS_RANK)
+    rs_pts = rs_rank / 100.0 * SCORE_WEIGHT_RS_RANK
+    if rs_rank >= RS_TIER1_THRESHOLD:
+        rs_pts *= RS_TIER1_MULTIPLIER
+    rs_pts = min(float(SCORE_WEIGHT_RS_RANK), rs_pts)
 
     # ── 2. Reward-to-Risk (0 – SCORE_WEIGHT_RR pts) ──────────────────────────
     rr     = float(setup.get("rr") or 0.0)
@@ -391,9 +399,14 @@ def compute_setup_score(
     else:  # DEFENSIVE
         reg_pts = 0.0
 
-    # ── 5. Sector Strength (0 or SCORE_WEIGHT_SECTOR pts) ────────────────────
-    sector     = setup.get("sector", "Unknown")
-    sector_pts = float(SCORE_WEIGHT_SECTOR) if sector in top_sectors else 0.0
+    # ── 5. Sector Strength (0 – SCORE_WEIGHT_SECTOR pts, 3-tier) ─────────────
+    sector = setup.get("sector", "Unknown")
+    if sector in top_sectors[:SECTOR_TIER1_N]:
+        sector_pts = float(SCORE_WEIGHT_SECTOR)                             # 10 pts
+    elif sector in top_sectors:
+        sector_pts = float(SCORE_WEIGHT_SECTOR) * SECTOR_TIER2_FACTOR      # 8 pts
+    else:
+        sector_pts = float(SCORE_WEIGHT_SECTOR) * SECTOR_OUT_OF_TOP_FACTOR  # 4 pts
 
     # ── 6. Pattern Quality (0 – SCORE_WEIGHT_QUALITY pts) ────────────────────
     qual_pts = _quality_component(setup)

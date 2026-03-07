@@ -198,3 +198,77 @@ def test_ticker_not_in_rs_rank_map_is_excluded():
         setups, {}, {"regime": "AGGRESSIVE", "regime_score": 80}, []
     )
     assert result == [], "Ticker with no RS rank must be excluded"
+
+
+# ── RS tier scoring ────────────────────────────────────────────────────────────
+
+def test_rs_tier1_multiplier_creates_bigger_gap():
+    """RS 88 (Tier 1) should gap from RS 80 more than the linear 8-rank diff would give.
+    Linear: 88/100*30=26.4 vs 80/100*30=24.0 → diff=2.4
+    With multiplier on 88: min(30, 26.4*1.15)=30 vs 24.0 → diff=6.0
+    """
+    setup = _vcp()
+    score_88 = compute_setup_score(setup, 88, 75, "AGGRESSIVE", [])
+    score_80 = compute_setup_score(setup, 80, 75, "AGGRESSIVE", [])
+    assert score_88 - score_80 > 4   # multiplier makes gap bigger than linear
+
+
+def test_rs_tier1_capped_at_weight():
+    """RS rank=95: 95/100*30*1.15=32.8 → capped at 30. Same score as rank=100."""
+    setup = _vcp()
+    score_95  = compute_setup_score(setup, 95,  75, "AGGRESSIVE", ["Technology"])
+    score_100 = compute_setup_score(setup, 100, 75, "AGGRESSIVE", ["Technology"])
+    assert score_95 == score_100   # both hit the 30-pt RS cap
+
+
+def test_rs_tier2_no_multiplier():
+    """RS rank=80 (below threshold 85) gets no multiplier — linear scoring."""
+    setup = _vcp()
+    # rank=85 is threshold: min(30, 85/100*30*1.15)=29.3; rank=84: 84/100*30=25.2
+    # The jump at 85 should be bigger than the 1-rank linear increment of 0.3
+    score_84 = compute_setup_score(setup, 84, 75, "AGGRESSIVE", [])
+    score_85 = compute_setup_score(setup, 85, 75, "AGGRESSIVE", [])
+    assert score_85 - score_84 >= 3   # big jump at tier boundary
+
+
+# ── Sector tier scoring ────────────────────────────────────────────────────────
+
+def _top8():
+    """8 sector names sorted best→worst (as compute_top_sectors returns)."""
+    return [
+        "Technology", "Healthcare", "Financials", "Energy",
+        "Industrials",               # index 4 → tier 1 boundary (SECTOR_TIER1_N=5)
+        "Consumer Discretionary",    # index 5 → tier 2
+        "Materials",                 # index 6 → tier 2
+        "Utilities",                 # index 7 → tier 2
+    ]
+
+
+def test_sector_tier1_gets_full_points():
+    """Sectors at ranks 1-5 should all get the same (full) sector pts."""
+    top8 = _top8()
+    s1 = _vcp(); s1["sector"] = "Technology"   # rank 1
+    s5 = _vcp(); s5["sector"] = "Industrials"  # rank 5 (boundary)
+    score1 = compute_setup_score(s1, 90, 75, "AGGRESSIVE", top8)
+    score5 = compute_setup_score(s5, 90, 75, "AGGRESSIVE", top8)
+    assert score1 == score5   # both tier 1 → identical sector pts
+
+
+def test_sector_tier2_gets_reduced_points():
+    """Tier 2 (rank 6-8) → 8 pts vs tier 1 → 10 pts. Diff = 2."""
+    top8 = _top8()
+    s_t1 = _vcp(); s_t1["sector"] = "Technology"             # tier 1 = 10 pts
+    s_t2 = _vcp(); s_t2["sector"] = "Consumer Discretionary" # tier 2 = 8 pts
+    score_t1 = compute_setup_score(s_t1, 90, 75, "AGGRESSIVE", top8)
+    score_t2 = compute_setup_score(s_t2, 90, 75, "AGGRESSIVE", top8)
+    assert score_t1 - score_t2 == 2   # 10 - 8 = 2
+
+
+def test_sector_outside_top8_gets_minimum():
+    """Sector not in top 8 → 4 pts. Diff from tier 1 = 6."""
+    top8 = _top8()
+    s_t1  = _vcp(); s_t1["sector"]  = "Technology"   # tier 1 = 10 pts
+    s_out = _vcp(); s_out["sector"] = "Real Estate"   # outside top 8 = 4 pts
+    score_t1  = compute_setup_score(s_t1,  90, 75, "AGGRESSIVE", top8)
+    score_out = compute_setup_score(s_out, 90, 75, "AGGRESSIVE", top8)
+    assert score_t1 - score_out == 6   # 10 - 4 = 6
