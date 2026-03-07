@@ -75,6 +75,7 @@ ATR_STOP_MULTIPLIER = 0.8  # ATR × multiplier below swing low (widened to preve
 ENTRY_PRICE_MULTIPLIER = 1.001  # 0.1% above current price for entry orders
 MIN_RISK_REWARD_RATIO = 1.0  # Minimum acceptable R:R ratio for setups
 TARGET_RR             = 2.0  # Default take-profit multiplier (change to 3.0 for 3:1 target)
+TRAIL_ATR_MULT        = 1.5  # ATR multiplier for trailing stop ratchet (optimizable)
 
 # ──────────────────────────────────────────────────────────────────────────
 # VCP Volatility Contraction (Task 13)

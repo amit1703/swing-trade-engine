@@ -38,8 +38,9 @@ import pandas as pd
 import yfinance as yf
 
 sys.path.insert(0, os.path.dirname(__file__))
-from constants import EMA_LONG
-from indicators import ema as _ema
+from constants import EMA_LONG, RS_BLUE_DOT_TOLERANCE_PCT
+import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
+from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +271,7 @@ def _manage_open_trade(
     state : dict with keys:
         entry_price, trailing_stop, take_profit, entry_date
     bar : dict with keys:
-        date, open, high, low, close, ema20
+        date, open, high, low, close, ema20, atr14
 
     Returns
     -------
@@ -292,9 +293,13 @@ def _manage_open_trade(
     if high >= target:
         return True, target, "TARGET"
 
-    # 3. Update trailing stop: ratchet to EMA20 only when in profit
-    if close > entry and ema20 > stop:
-        state["trailing_stop"] = ema20
+    # 3. Update trailing stop: ratchet to max(EMA20, ATR-based trail) when in profit
+    if close > entry:
+        atr14 = bar.get("atr14", 0.0)
+        atr_trail = (close - _constants.TRAIL_ATR_MULT * atr14) if atr14 > 0 else ema20
+        new_trail = max(ema20, atr_trail)
+        if new_trail > stop:
+            state["trailing_stop"] = new_trail
 
     return False, None, None
 
@@ -308,6 +313,8 @@ def _detect_signals(
     df_slice: pd.DataFrame,
     spy_slice: pd.DataFrame,
     setup_types: List[str],
+    sr_zones: Optional[List] = None,
+    precomputed_rs: Optional[Dict] = None,
 ) -> Optional[Dict]:
     """
     Run the appropriate signal engine(s) on a lookahead-safe slice.
@@ -318,9 +325,17 @@ def _detect_signals(
     Parameters
     ----------
     ticker : str
-    df_slice : DataFrame — data up to and including day T (df.iloc[:T+1])
+    df_slice : DataFrame — data up to and including day T (df.iloc[:T+1]).
+               May contain pre-computed indicator columns (_EMA8, _EMA20,
+               _SMA50, _SMA200, _ATR14, _CCI20, _VOLSMA50) that engines will
+               use instead of recomputing from scratch.
     spy_slice : DataFrame — SPY data up to day T
     setup_types : list of "VCP" | "PULLBACK" | "BASE" | "RES_BREAKOUT" | "HTF" | "LCE"
+    sr_zones : pre-computed KDE zones (optional). If None, zones are computed
+               from df_slice on every call (expensive — avoid in tight loops).
+    precomputed_rs : dict with keys rs_ratio, rs_52w_high, rs_blue_dot,
+                     rs_score, spy_3m — pre-computed once per BacktestEngine run.
+                     When supplied, skips compute_indicators entirely.
 
     Returns
     -------
@@ -331,22 +346,34 @@ def _detect_signals(
         return None
 
     try:
-        from indicators.indicator_engine import compute_indicators
-        inds = compute_indicators(df_slice, spy_slice)
-        if inds is None:
-            return None
+        # ── RS scalars: use pre-computed rolling values when available ────
+        if precomputed_rs is not None:
+            rs_ratio    = precomputed_rs["rs_ratio"]
+            rs_52w_high = precomputed_rs["rs_52w_high"]
+            rs_blue_dot = precomputed_rs["rs_blue_dot"]
+            rs_score    = precomputed_rs["rs_score"]
+            spy_3m_return = precomputed_rs["spy_3m"]
+        else:
+            from indicators.indicator_engine import compute_indicators
+            inds = compute_indicators(df_slice, spy_slice)
+            if inds is None:
+                return None
+            rs_ratio    = inds.rs_ratio
+            rs_52w_high = inds.rs_52w_high
+            rs_blue_dot = inds.rs_blue_dot
+            rs_score    = inds.rs_score
 
-        # SPY 3m return for RS engine filters
-        spy_adj = "Adj Close" if "Adj Close" in spy_slice.columns else "Close"
-        n_spy = len(spy_slice)
-        spy_3m_return = 0.0
-        if n_spy > 63:
-            spy_vals = spy_slice[spy_adj].values
-            spy_3m_return = float(spy_vals[-1] / spy_vals[-64] - 1.0)
+            spy_adj = "Adj Close" if "Adj Close" in spy_slice.columns else "Close"
+            n_spy = len(spy_slice)
+            spy_3m_return = 0.0
+            if n_spy > 63:
+                spy_vals = spy_slice[spy_adj].values
+                spy_3m_return = float(spy_vals[-1] / spy_vals[-64] - 1.0)
 
-        # Compute KDE zones (lookahead-safe: only uses df_slice)
-        from engines.engine1 import calculate_sr_zones
-        sr_zones = calculate_sr_zones(ticker, df_slice)
+        # KDE zones: use caller-supplied cache when available (avoids per-bar KDE cost)
+        if sr_zones is None:
+            from engines.engine1 import calculate_sr_zones
+            sr_zones = calculate_sr_zones(ticker, df_slice)
 
         for stype in setup_types:
             setup = None
@@ -356,28 +383,28 @@ def _detect_signals(
                 setup = scan_vcp(
                     ticker, df_slice, sr_zones,
                     spy_3m_return=spy_3m_return,
-                    rs_ratio=inds.rs_ratio,
-                    rs_52w_high=inds.rs_52w_high,
-                    rs_blue_dot=inds.rs_blue_dot,
-                    rs_score=inds.rs_score,
+                    rs_ratio=rs_ratio,
+                    rs_52w_high=rs_52w_high,
+                    rs_blue_dot=rs_blue_dot,
+                    rs_score=rs_score,
                 )
 
             elif stype == "PULLBACK":
                 from engines.engine3 import scan_pullback, scan_relaxed_pullback
                 # trendline not computed during replay — ascending-TDL pullbacks will not fire
-                setup = scan_pullback(ticker, df_slice, sr_zones, rs_score=inds.rs_score)
+                setup = scan_pullback(ticker, df_slice, sr_zones, rs_score=rs_score)
                 if setup is None:
-                    setup = scan_relaxed_pullback(ticker, df_slice, sr_zones, rs_score=inds.rs_score)
+                    setup = scan_relaxed_pullback(ticker, df_slice, sr_zones, rs_score=rs_score)
 
             elif stype == "BASE":
                 from engines.engine5 import scan_base_pattern
                 setup = scan_base_pattern(
                     ticker, df_slice,
                     spy_3m_return=spy_3m_return,
-                    rs_ratio=inds.rs_ratio,
-                    rs_52w_high=inds.rs_52w_high,
-                    rs_blue_dot=inds.rs_blue_dot,
-                    rs_score=inds.rs_score,
+                    rs_ratio=rs_ratio,
+                    rs_52w_high=rs_52w_high,
+                    rs_blue_dot=rs_blue_dot,
+                    rs_score=rs_score,
                     sr_zones=sr_zones,
                 )
 
@@ -513,9 +540,61 @@ class BacktestEngine:
                 self.start_date, self.end_date, [], run_id,
             )
 
-        # ── 3. Pre-compute EMA20 series for trailing stop management ──────
-        adj_col    = "Adj Close" if "Adj Close" in ticker_df.columns else "Close"
-        ema20_full = _ema(ticker_df[adj_col], EMA_LONG)
+        # ── 3. Price column identification ─────────────────────────────────
+        adj_col = "Adj Close" if "Adj Close" in ticker_df.columns else "Close"
+
+        # ── 3b. Pre-compute SR zones ONCE for the entire window ───────────
+        # Zones represent structural price levels that are stable over the
+        # IS/OOS window.  Computing once from the pre-sliced df eliminates
+        # dozens of per-bar KDE calls (the single largest cost in replay).
+        from engines.engine1 import calculate_sr_zones as _calc_sr_zones
+        _sr_zones_cache: Optional[List] = _calc_sr_zones(self.ticker, ticker_df)
+
+        # ── 3c. Pre-compute indicator columns on ticker_df ────────────────
+        # When called from WFO, wfo_engine.py pre-computes these on the full
+        # DF; slices inherit the columns, so we skip the copy+compute here.
+        # For standalone backtests, compute now on a copy to avoid mutation.
+        if "_EMA8" not in ticker_df.columns:
+            ticker_df = ticker_df.copy()   # don't mutate caller's DF
+            _c = ticker_df[adj_col]
+            _h = ticker_df["High"]
+            _l = ticker_df["Low"]
+            ticker_df["_EMA8"]    = _ema(_c, 8)
+            ticker_df["_EMA20"]   = _ema(_c, 20)
+            ticker_df["_SMA50"]   = _sma(_c, 50)
+            ticker_df["_SMA200"]  = _sma(_c, 200)
+            ticker_df["_ATR14"]   = _atr(_h, _l, _c, 14)
+            ticker_df["_CCI20"]   = _cci(_h, _l, _c, 20)
+            if "Volume" in ticker_df.columns:
+                ticker_df["_VOLSMA50"] = ticker_df["Volume"].rolling(50, min_periods=10).mean()
+
+        _close_s  = ticker_df[adj_col]
+        _high_s   = ticker_df["High"]
+        _low_s    = ticker_df["Low"]
+        ema20_full = ticker_df["_EMA20"]   # reuse pre-computed column
+
+        # ── 3d. Pre-compute RS rolling series (O(1) per-bar lookup) ──────
+        _spy_adj     = "Adj Close" if "Adj Close" in spy_df.columns else "Close"
+        _spy_aligned = spy_df[_spy_adj].reindex(ticker_df.index, method="ffill").fillna(0.0)
+        _mask        = _spy_aligned > 0
+        _rs_ratio_s  = pd.Series(0.0, index=ticker_df.index)
+        _rs_ratio_s[_mask] = _close_s[_mask] / _spy_aligned[_mask]
+        _rs_52wh_s   = _rs_ratio_s.rolling(252, min_periods=1).max()
+
+        _PERIODS = [63, 126, 189, 252]
+        _WEIGHTS = [0.40, 0.20, 0.20, 0.20]
+        _rs_score_s = pd.Series(0.0, index=ticker_df.index)
+        _rs_wt_s    = pd.Series(0.0, index=ticker_df.index)
+        for _p, _w in zip(_PERIODS, _WEIGHTS):
+            _tk_ret  = _close_s / _close_s.shift(_p) - 1.0
+            _spy_ret = _spy_aligned / _spy_aligned.shift(_p) - 1.0
+            _valid   = ~(_tk_ret.isna() | _spy_ret.isna() | ~_mask)
+            _rs_score_s = _rs_score_s + _w * (_tk_ret.where(_valid, 0.0) - _spy_ret.where(_valid, 0.0))
+            _rs_wt_s    = _rs_wt_s    + _w * _valid.astype(float)
+        _rs_score_s = (_rs_score_s / _rs_wt_s.replace(0.0, np.nan)).fillna(0.0)
+
+        # SPY 63-day return series (used by VCP RS gate)
+        _spy_3m_s = (_spy_aligned / _spy_aligned.shift(63) - 1.0).fillna(0.0)
 
         # ── 4. Replay loop ────────────────────────────────────────────────
         completed_trades: List[TradeRecord] = []
@@ -527,6 +606,8 @@ class BacktestEngine:
             # ── 4a. Manage open trade ─────────────────────────────────────
             if open_trade is not None:
                 ema20_T = float(ema20_full.iloc[full_idx])
+                atr14_T = float(ticker_df["_ATR14"].iloc[full_idx]) \
+                    if "_ATR14" in ticker_df.columns else 0.0
                 bar = {
                     "date":  T_date.strftime("%Y-%m-%d"),
                     "open":  float(ticker_df["Open"].iloc[full_idx]),
@@ -534,6 +615,7 @@ class BacktestEngine:
                     "low":   float(ticker_df["Low"].iloc[full_idx]),
                     "close": float(ticker_df[adj_col].iloc[full_idx]),
                     "ema20": ema20_T if not np.isnan(ema20_T) else open_trade["trailing_stop"],
+                    "atr14": atr14_T if not np.isnan(atr14_T) else 0.0,
                 }
                 closed, exit_price, exit_reason = _manage_open_trade(open_trade, bar)
 
@@ -559,10 +641,24 @@ class BacktestEngine:
                 continue
 
             # ── 4b. Signal detection on lookahead-safe slice ──────────────
-            df_slice  = ticker_df.iloc[:full_idx + 1]
+            df_slice  = ticker_df.iloc[:full_idx + 1]   # pre-computed cols included
             spy_slice = spy_df.loc[spy_df.index <= T_date]
 
-            signal = _detect_signals(self.ticker, df_slice, spy_slice, self.setup_types)
+            # RS scalars for bar T — O(1) array index into pre-computed series
+            _rs_t = {
+                "rs_ratio":    float(_rs_ratio_s.iloc[full_idx]),
+                "rs_52w_high": float(_rs_52wh_s.iloc[full_idx]),
+                "rs_blue_dot": bool(_rs_ratio_s.iloc[full_idx] >= _rs_52wh_s.iloc[full_idx]
+                                    * (1.0 - RS_BLUE_DOT_TOLERANCE_PCT)),
+                "rs_score":    float(_rs_score_s.iloc[full_idx]),
+                "spy_3m":      float(_spy_3m_s.iloc[full_idx]),
+            }
+
+            signal = _detect_signals(
+                self.ticker, df_slice, spy_slice, self.setup_types,
+                sr_zones=_sr_zones_cache,
+                precomputed_rs=_rs_t,
+            )
             if signal is None:
                 continue
 
