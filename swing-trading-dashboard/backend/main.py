@@ -48,7 +48,18 @@ import pandas as pd
 import yfinance as yf
 from dotenv import load_dotenv
 
-load_dotenv()  # load .env file (EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO, etc.)
+load_dotenv()
+
+
+def _json_safe(obj):
+    """Convert numpy scalar types to native Python for json.dumps."""
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -83,6 +94,17 @@ from constants import (
     RS_RANK_MIN_PERCENTILE,
     MIN_SETUP_SCORE,
     TOP_SECTORS_N,
+    # Universe loader aging thresholds
+    UNIVERSE_MAX_AGE_DAYS,
+    UNIVERSE_WARN_AGE_DAYS,
+    UNIVERSE_MIN_SIZE,
+    UNIVERSE_MAX_SIZE,
+    # Discovery layer constants
+    DISCOVERY_RS_MIN,
+    DISCOVERY_RS_MAX,
+    DISCOVERY_52WK_HIGH_PCT,
+    DISCOVERY_VOL_RATIO,
+    DISCOVERY_MAX_PCT,
 )
 from database import (
     complete_scan_run,
@@ -102,7 +124,14 @@ from database import (
     get_closed_trades,
     save_backtest_result,
     get_backtest_results,
+    create_wfo_run,
+    update_wfo_progress,
+    save_wfo_result,
+    mark_wfo_error,
+    get_wfo_run,
 )
+from wfo_cache import download_and_cache, cache_exists as wfo_cache_exists
+from wfo_engine import run_wfo
 from engines.engine0 import check_market_regime
 from engines.engine1 import calculate_sr_zones
 from engines.engine2 import scan_vcp, detect_trendline, scan_near_breakout
@@ -134,30 +163,169 @@ logging.basicConfig(
 log = logging.getLogger("swing")
 
 # ────────────────────────────────────────────────────────────────────────────
-# Universe & Sector loading (active_universe.json with tickers.py fallback)
+# Universe & Sector loading (active_universe.json with age-check + tickers.py fallback)
 # ────────────────────────────────────────────────────────────────────────────
 
 ACTIVE_UNIVERSE = SCAN_UNIVERSE  # default fallback
 SECTORS = {}
 
-_universe_result = load_universe(UNIVERSE_FILE)
-if _universe_result is not None:
-    ACTIVE_UNIVERSE, SECTORS = _universe_result
-    if len(ACTIVE_UNIVERSE) > MAX_TICKERS_PER_SCAN:
+def _load_hybrid_universe() -> None:
+    """Load active_universe.json with age-check; fall back to SCAN_UNIVERSE on stale/missing file."""
+    global ACTIVE_UNIVERSE, SECTORS
+
+    # ── Attempt to open and parse the universe file directly ─────────────────
+    _raw_data = None
+    try:
+        with open(UNIVERSE_FILE, "r", encoding="utf-8") as _fh:
+            _raw_data = json.load(_fh)
+    except FileNotFoundError:
+        log.info("No active_universe.json found — using SCAN_UNIVERSE (%d tickers)", len(SCAN_UNIVERSE))
+    except Exception as _exc:
+        log.warning("Could not read universe file %s: %s — using SCAN_UNIVERSE", UNIVERSE_FILE, _exc)
+
+    if _raw_data is None:
+        # No file: fall back to SCAN_UNIVERSE + try sectors.json
+        try:
+            with open("sectors.json", "r") as _f:
+                SECTORS = json.load(_f)
+            log.info("Loaded %d sectors from sectors.json (fallback)", len(SECTORS))
+        except Exception as _e:
+            log.warning("Could not load sectors.json: %s", _e)
+        return
+
+    # ── Age check via metadata["generated_at"] ───────────────────────────────
+    _use_file = True
+    try:
+        _generated_at_str = _raw_data.get("metadata", {}).get("generated_at", "")
+        if _generated_at_str:
+            _generated_at = datetime.fromisoformat(_generated_at_str)
+            _age_days = (datetime.utcnow() - _generated_at).total_seconds() / 86400.0
+            if _age_days > UNIVERSE_MAX_AGE_DAYS:
+                log.warning(
+                    "Universe file is %.1f days old (> %d-day hard limit) — "
+                    "falling back to SCAN_UNIVERSE (%d tickers)",
+                    _age_days, UNIVERSE_MAX_AGE_DAYS, len(SCAN_UNIVERSE),
+                )
+                _use_file = False
+            elif _age_days > UNIVERSE_WARN_AGE_DAYS:
+                log.warning(
+                    "Universe file is %.1f days old (> %d-day soft limit) — "
+                    "consider rebuilding with POST /api/build-universe",
+                    _age_days, UNIVERSE_WARN_AGE_DAYS,
+                )
+        else:
+            log.warning("Universe file has no generated_at timestamp — age unknown, using file anyway")
+    except Exception as _age_exc:
+        log.warning("Could not parse universe age: %s — using file anyway", _age_exc)
+
+    if not _use_file:
+        # Stale: fall back to SCAN_UNIVERSE + try sectors.json
+        try:
+            with open("sectors.json", "r") as _f:
+                SECTORS = json.load(_f)
+            log.info("Loaded %d sectors from sectors.json (fallback)", len(SECTORS))
+        except Exception as _e:
+            log.warning("Could not load sectors.json: %s", _e)
+        return
+
+    # ── Load tickers and sectors from the file ────────────────────────────────
+    try:
+        _tickers = _raw_data["tickers"]
+        _sectors = _raw_data.get("sectors", {})
+    except (KeyError, TypeError) as _exc:
+        log.warning("Universe file missing tickers key: %s — using SCAN_UNIVERSE", _exc)
+        return
+
+    # ── Size sanity checks ────────────────────────────────────────────────────
+    if len(_tickers) < UNIVERSE_MIN_SIZE:
+        log.warning(
+            "Universe has only %d tickers (< %d minimum) — filter may be too tight",
+            len(_tickers), UNIVERSE_MIN_SIZE,
+        )
+    elif len(_tickers) > UNIVERSE_MAX_SIZE:
+        log.warning(
+            "Universe has %d tickers (> %d maximum) — filter may be too loose",
+            len(_tickers), UNIVERSE_MAX_SIZE,
+        )
+
+    # ── Cap to MAX_TICKERS_PER_SCAN ───────────────────────────────────────────
+    if len(_tickers) > MAX_TICKERS_PER_SCAN:
         log.warning(
             "Universe has %d tickers, capping to %d",
-            len(ACTIVE_UNIVERSE), MAX_TICKERS_PER_SCAN,
+            len(_tickers), MAX_TICKERS_PER_SCAN,
         )
-        ACTIVE_UNIVERSE = ACTIVE_UNIVERSE[:MAX_TICKERS_PER_SCAN]
+        _tickers = _tickers[:MAX_TICKERS_PER_SCAN]
+
+    ACTIVE_UNIVERSE = _tickers
+    SECTORS = _sectors
     log.info("Loaded active universe: %d tickers from %s", len(ACTIVE_UNIVERSE), UNIVERSE_FILE)
-else:
-    log.info("No active_universe.json, using SCAN_UNIVERSE (%d tickers)", len(SCAN_UNIVERSE))
-    try:
-        with open("sectors.json", "r") as f:
-            SECTORS = json.load(f)
-        log.info("Loaded %d sectors from sectors.json (fallback)", len(SECTORS))
-    except Exception as e:
-        log.warning("Could not load sectors.json: %s", e)
+
+
+_load_hybrid_universe()
+
+# ────────────────────────────────────────────────────────────────────────────
+# Discovery layer — RS 60-70 emerging leaders that bypass the RS >= 70 gate
+# ────────────────────────────────────────────────────────────────────────────
+
+def _build_discovery_tickers(
+    tickers: List[str],
+    rs_rank_map: Dict[str, float],
+    ticker_cache: dict,
+) -> set:
+    """Return a set of tickers with RS rank in [DISCOVERY_RS_MIN, DISCOVERY_RS_MAX),
+    close within DISCOVERY_52WK_HIGH_PCT of their 52-week high, AND 5-day average
+    volume >= DISCOVERY_VOL_RATIO × 50-day average volume.
+
+    The result is capped at int(len(tickers) * DISCOVERY_MAX_PCT) to prevent
+    the discovery layer from flooding the pipeline.
+    """
+    candidates: List[str] = []
+
+    for ticker in tickers:
+        # ── RS rank filter: [DISCOVERY_RS_MIN, DISCOVERY_RS_MAX) ─────────────
+        rs_rank = rs_rank_map.get(ticker)
+        if rs_rank is None:
+            continue
+        if not (DISCOVERY_RS_MIN <= rs_rank < DISCOVERY_RS_MAX):
+            continue
+
+        # ── Pull cached DataFrame ─────────────────────────────────────────────
+        cache_entry = ticker_cache.get(ticker)
+        if cache_entry is None:
+            continue
+        _ts, df = cache_entry
+        if df is None or len(df) < 55:  # need at least 50 bars for vol avg + 5 recent
+            continue
+
+        try:
+            close = df["Close"]
+
+            # ── 52-week high proximity ────────────────────────────────────────
+            high_52w = close.iloc[-252:].max() if len(close) >= 252 else close.max()
+            last_close = float(close.iloc[-1])
+            if high_52w <= 0:
+                continue
+            if (high_52w - last_close) / high_52w > DISCOVERY_52WK_HIGH_PCT:
+                continue  # more than DISCOVERY_52WK_HIGH_PCT below the 52wk high
+
+            # ── Volume expansion: 5-day avg >= DISCOVERY_VOL_RATIO × 50-day avg ──
+            vol = df["Volume"].astype(float)
+            avg_vol_50d = float(vol.iloc[-55:-5].mean())  # 50-day avg (exclude last 5)
+            avg_vol_5d  = float(vol.iloc[-5:].mean())
+            if avg_vol_50d <= 0:
+                continue
+            if avg_vol_5d < DISCOVERY_VOL_RATIO * avg_vol_50d:
+                continue
+
+            candidates.append(ticker)
+
+        except Exception:
+            continue  # skip silently; discovery is best-effort
+
+    # ── Cap at DISCOVERY_MAX_PCT of universe (minimum 1 to keep small test cases working) ──
+    max_count = max(1, int(len(tickers) * DISCOVERY_MAX_PCT))
+    return set(candidates[:max_count])
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # Shared state (single-process; safe with asyncio event loop)
@@ -209,6 +377,10 @@ _scan_state: Dict = {
 }
 _semaphore: Optional[asyncio.Semaphore] = None
 _ticker_cache: dict = {}  # ticker → (timestamp: float, df: Optional[pd.DataFrame])
+
+# WFO in-memory state
+_wfo_download_jobs: Dict[str, Dict] = {}   # job_id → progress dict
+_wfo_runs:          Dict[str, Dict] = {}   # run_id → progress dict
 
 # ── Email digest cache ────────────────────────────────────────────────────────
 # Populated by the 7:30 AM scheduler job; consumed by the 8:00 AM email job.
@@ -824,6 +996,14 @@ async def _run_scan(
                 "RS rank gate will be bypassed for all tickers this scan"
             )
 
+        # ── Discovery layer: RS 60-70 emerging leaders ────────────────────────
+        _discovery_tickers = _build_discovery_tickers(tickers, _rs_rank_map, _ticker_cache)
+        if _discovery_tickers:
+            log.info(
+                "Discovery layer: %d candidate(s) (RS 60-70, near-high, vol expansion)",
+                len(_discovery_tickers),
+            )
+
         # ── Engine 0: Multi-factor regime (computed after prefetch for breadth) ──
         regime_start = time.time()
         regime = await loop.run_in_executor(
@@ -925,16 +1105,19 @@ async def _run_scan(
                 #             regime is DEFENSIVE (Engines 2&3 already off; scoring gate
                 #             handles quality — applying RS gate here would kill all WL/Base)
                 #             force=True (dev mode, see everything)
+                #             ticker is a discovery candidate (RS 60-70, near-high, vol surge)
                 if _rs_rank_map and regime["is_bullish"] and not force:
                     _ticker_rs_rank = _rs_rank_map.get(ticker)
                     if _ticker_rs_rank is None or _ticker_rs_rank < RS_RANK_MIN_PERCENTILE:
-                        log.debug(
-                            "Skipped %s: RS rank %.1f < %.0f (threshold)",
-                            ticker,
-                            _ticker_rs_rank if _ticker_rs_rank is not None else 0.0,
-                            RS_RANK_MIN_PERCENTILE,
-                        )
-                        return
+                        if ticker not in _discovery_tickers:
+                            log.debug(
+                                "Skipped %s: RS rank %.1f < %.0f (threshold)",
+                                ticker,
+                                _ticker_rs_rank if _ticker_rs_rank is not None else 0.0,
+                                RS_RANK_MIN_PERCENTILE,
+                            )
+                            return
+                        # discovery candidate — bypass RS gate, fall through to engines
 
                 # ── Centralized Indicator Engine (Task 6) ────────────────────────
                 ind: Optional[TickerIndicators] = await loop.run_in_executor(
@@ -1222,6 +1405,12 @@ async def _run_scan(
         # Gather all ticker tasks; semaphore handles concurrency internally
         await asyncio.gather(*[_process(t, i) for i, t in enumerate(tickers)])
 
+        # ── Tag discovery candidates in collected setups ───────────────────────
+        if _discovery_tickers:
+            for _s in collected_setups:
+                if _s.get("ticker") in _discovery_tickers:
+                    _s["is_discovery"] = True
+
         process_time = time.time() - process_start_time
         _scan_state["engine_stats"]["timing"]["process_s"] = round(process_time, 2)
         log.info(
@@ -1470,6 +1659,21 @@ class BacktestRequest(BaseModel):
         return self
 
 
+class WFODownloadRequest(BaseModel):
+    tickers: List[str]
+
+
+class WFORunRequest(BaseModel):
+    tickers:     List[str]
+    setup_types: List[str] = Field(
+        default_factory=lambda: ["VCP", "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"]
+    )
+    is_months:   int = 24
+    oos_months:  int = 3
+    step_months: int = 3
+    min_trades:  int = 20
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Endpoints
 # ────────────────────────────────────────────────────────────────────────────
@@ -1516,6 +1720,207 @@ async def backtest_results(ticker: str):
     return {"ticker": ticker.upper(), "results": results}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# WFO Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/api/wfo/download")
+async def wfo_download(req: WFODownloadRequest, background_tasks: BackgroundTasks):
+    """
+    Start a background download of 10-year OHLCV data for the requested tickers.
+    SPY is added automatically. Returns {job_id} for polling.
+    """
+    tickers = [t.upper() for t in req.tickers]
+    if "SPY" not in tickers:
+        tickers = ["SPY"] + tickers
+
+    job_id = str(uuid.uuid4())
+    progress = {
+        "status":            "running",
+        "tickers_completed": 0,
+        "total_tickers":     len(tickers),
+    }
+    _wfo_download_jobs[job_id] = progress
+
+    def _run_download():
+        try:
+            download_and_cache(tickers, job_id, progress)
+        except Exception as exc:
+            progress["status"] = "error"
+            log.exception("WFO download job %s failed: %s", job_id, exc)
+
+    background_tasks.add_task(_run_download)
+    return {"job_id": job_id, "total_tickers": len(tickers)}
+
+
+@app.get("/api/wfo/download-status/{job_id}")
+async def wfo_download_status(job_id: str):
+    """Poll download job progress."""
+    job = _wfo_download_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@app.post("/api/wfo/run")
+async def wfo_run(req: WFORunRequest, background_tasks: BackgroundTasks):
+    """
+    Start a walk-forward validation run in the background.
+    Returns {run_id} for polling.
+    """
+    run_id = str(uuid.uuid4())
+    progress = {"windows_completed": 0, "total_windows": 0}
+    _wfo_runs[run_id] = progress
+
+    await create_wfo_run(DB_PATH, run_id)
+
+    async def _do_wfo():
+        try:
+            result = await run_wfo(
+                tickers=req.tickers,
+                setup_types=req.setup_types,
+                is_months=req.is_months,
+                oos_months=req.oos_months,
+                step_months=req.step_months,
+                min_trades=req.min_trades,
+                run_id=run_id,
+                progress=progress,
+            )
+            total = progress["total_windows"]
+            if total > 0:
+                await update_wfo_progress(
+                    DB_PATH, run_id, 100,
+                    progress["windows_completed"], total,
+                )
+            await save_wfo_result(DB_PATH, run_id, json.dumps(result.to_dict(), default=_json_safe))
+            log.info("WFO run %s complete: %d windows", run_id, len(result.windows))
+        except Exception as exc:
+            log.exception("WFO run %s failed: %s", run_id, exc)
+            try:
+                await mark_wfo_error(DB_PATH, run_id)
+            except Exception:
+                pass
+
+    background_tasks.add_task(_do_wfo)
+    return {"run_id": run_id, "status": "started"}
+
+
+@app.get("/api/wfo/status/{run_id}")
+async def wfo_status(run_id: str):
+    """Poll WFO run progress."""
+    row = await get_wfo_run(DB_PATH, run_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    mem = _wfo_runs.get(run_id, {})
+    return {
+        "status":            row["status"],
+        "progress_pct":      row["progress_pct"],
+        "windows_completed": mem.get("windows_completed", row["windows_completed"]),
+        "total_windows":     mem.get("total_windows",     row["total_windows"]),
+    }
+
+
+@app.get("/api/wfo/results/{run_id}")
+async def wfo_results(run_id: str):
+    """Return the full WFO result JSON."""
+    row = await get_wfo_run(DB_PATH, run_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if row["status"] != "done" or not row["result_json"]:
+        return {"status": row["status"], "result": None}
+    return {"status": "done", "result": json.loads(row["result_json"])}
+
+
+@app.get("/api/wfo/audit/{run_id}")
+async def wfo_audit(run_id: str, period: str = "oos"):
+    """
+    Run per-engine diagnostic audit on a completed WFO run.
+
+    Query param:
+      period : "oos" (default) | "is" | "all"
+        oos  — audit only OOS trades (unbiased, recommended)
+        is   — audit only IS trades (in-sample)
+        all  — combine IS + OOS trades
+    """
+    from engine_audit import run_audit as _run_audit
+
+    row = await get_wfo_run(DB_PATH, run_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if row["status"] != "done" or not row["result_json"]:
+        raise HTTPException(status_code=400, detail="Run not complete")
+
+    result   = json.loads(row["result_json"])
+    windows  = result.get("windows", [])
+
+    period = period.lower()
+    trades: list = []
+    for w in windows:
+        if period in ("oos", "all"):
+            trades.extend(w.get("oos_trades", []))
+        if period in ("is", "all"):
+            trades.extend(w.get("is_trades", []))
+
+    label = {"oos": "OOS", "is": "IS", "all": "IS+OOS"}.get(period, "OOS")
+    audit = _run_audit(trades, period_label=label)
+    return {"run_id": run_id, "period": label, "audit": audit}
+
+
+@app.get("/api/wfo/export/{run_id}")
+async def wfo_export(run_id: str):
+    """Export full trade-level CSV for a completed WFO run."""
+    from fastapi.responses import StreamingResponse
+    import csv
+    import io
+
+    row = await get_wfo_run(DB_PATH, run_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if row["status"] != "done" or not row["result_json"]:
+        raise HTTPException(status_code=400, detail="Run not complete")
+
+    result = json.loads(row["result_json"])
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "window_num", "period", "is_start", "is_end", "oos_start", "oos_end",
+        "ticker", "setup_type", "signal_date", "entry_date", "entry_price",
+        "initial_stop", "take_profit", "exit_date", "exit_price",
+        "exit_reason", "holding_days", "rr_achieved", "pnl_pct", "is_win",
+    ])
+
+    for win in result["windows"]:
+        base = [
+            win["window_num"], "", win["is_start"], win["is_end"],
+            win["oos_start"], win["oos_end"],
+        ]
+        for trade in win["is_trades"]:
+            writer.writerow(base[:1] + ["IS"] + base[2:] + [
+                trade["ticker"], trade["setup_type"], trade["signal_date"],
+                trade["entry_date"], trade["entry_price"], trade["initial_stop"],
+                trade["take_profit"], trade["exit_date"], trade["exit_price"],
+                trade["exit_reason"], trade["holding_days"],
+                trade["rr_achieved"], trade["pnl_pct"], trade["is_win"],
+            ])
+        for trade in win["oos_trades"]:
+            writer.writerow(base[:1] + ["OOS"] + base[2:] + [
+                trade["ticker"], trade["setup_type"], trade["signal_date"],
+                trade["entry_date"], trade["entry_price"], trade["initial_stop"],
+                trade["take_profit"], trade["exit_date"], trade["exit_price"],
+                trade["exit_reason"], trade["holding_days"],
+                trade["rr_achieved"], trade["pnl_pct"], trade["is_win"],
+            ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=wfo_{run_id}.csv"},
+    )
+
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
@@ -1557,6 +1962,38 @@ async def trigger_scan(
         "dry_run": dry_run,
         "message": f"Scanning {len(ticker_list)} tickers in background",
     }
+
+
+@app.post("/api/build-universe")
+async def trigger_build_universe(background_tasks: BackgroundTasks):
+    """Trigger a full universe rebuild in the background.
+    Operator-facing: rebuilds active_universe.json with tightened liquidity constants.
+    Returns immediately with a job_id (no polling endpoint needed).
+    """
+    job_id = str(uuid.uuid4())[:8]
+
+    async def _run_build():
+        loop = asyncio.get_event_loop()
+        log.info("[build-universe] Starting (job %s)", job_id)
+        try:
+            universe = await loop.run_in_executor(
+                None,
+                lambda: build_universe(
+                    min_avg_volume=LIQUIDITY_MIN_AVG_VOLUME,
+                    min_dollar_volume=LIQUIDITY_MIN_DOLLAR_VOLUME,
+                    min_atr_pct=MIN_ATR_PCT,
+                ),
+            )
+            save_universe(universe, UNIVERSE_FILE)
+            log.info(
+                "[build-universe] Done (job %s): %d tickers saved to %s",
+                job_id, len(universe["tickers"]), UNIVERSE_FILE,
+            )
+        except Exception as exc:
+            log.error("[build-universe] Failed (job %s): %s", job_id, exc)
+
+    background_tasks.add_task(_run_build)
+    return {"job_id": job_id, "status": "started"}
 
 
 @app.get("/api/scan-status")

@@ -83,3 +83,50 @@ export const runBacktest = (ticker, startDate, endDate, setupTypes = ['VCP', 'PU
 
 export const fetchBacktestResults = (ticker) =>
   fetch(`/api/backtest-results/${encodeURIComponent(ticker)}`).then(handleResponse)
+
+// ─── Walk-Forward Validation ─────────────────────────────────────────────────
+
+export async function wfoDownload(tickers) {
+  const res = await fetch('/api/wfo/download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tickers }),
+  })
+  return res.json()
+}
+
+export async function wfoDownloadStatus(jobId) {
+  const res = await fetch(`/api/wfo/download-status/${jobId}`)
+  return res.json()
+}
+
+export async function wfoRun(params) {
+  const res = await fetch('/api/wfo/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  return res.json()
+}
+
+export async function wfoStatus(runId) {
+  const res = await fetch(`/api/wfo/status/${runId}`)
+  return res.json()
+}
+
+export async function wfoResults(runId) {
+  const res = await fetch(`/api/wfo/results/${runId}`)
+  return res.json()
+}
+
+export function wfoExportUrl(runId) {
+  return `/api/wfo/export/${runId}`
+}
+
+export async function wfoAudit(runId, period = 'oos') {
+  const res = await fetch(`/api/wfo/audit/${runId}?period=${period}`)
+  return res.json()
+}
+
+export const buildUniverse = () =>
+  fetch('/api/build-universe', { method: 'POST' }).then(handleResponse)
