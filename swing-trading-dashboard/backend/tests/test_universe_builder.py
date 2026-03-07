@@ -431,3 +431,68 @@ class TestBuildUniverse:
         with patch("universe_builder.fetch_sec_tickers", return_value=pd.DataFrame(columns=["cik", "name", "ticker", "exchange"])):
             universe = build_universe()
             assert universe["tickers"] == []
+
+
+class TestFilterPriceVolumeDollarVolumeGate:
+    """min_dollar_volume param should exclude tickers below price*avg_volume threshold."""
+
+    def _make_flat_df(self, price: float, avg_vol: float, days: int = 60) -> pd.DataFrame:
+        """Minimal single-ticker DataFrame that filter_price_volume accepts."""
+        close = [price] * days
+        vol   = [int(avg_vol)] * days
+        idx   = pd.date_range(end="2026-03-07", periods=days, freq="B")
+        return pd.DataFrame({
+            "Open": close, "High": [price * 1.01] * days,
+            "Low": [price * 0.99] * days, "Close": close,
+            "Adj Close": close, "Volume": vol,
+        }, index=idx)
+
+    @patch("universe_builder.yf.download")
+    def test_ticker_below_dollar_volume_excluded(self, mock_dl):
+        """price=$10, avg_vol=1_000_000 → dollar_vol=$10M < $25M → excluded."""
+        mock_dl.return_value = self._make_flat_df(price=10.0, avg_vol=1_000_000)
+        result = filter_price_volume(
+            ["LOW"], min_avg_volume=500_000, min_dollar_volume=25_000_000
+        )
+        assert result == []
+
+    @patch("universe_builder.yf.download")
+    def test_ticker_above_dollar_volume_passes(self, mock_dl):
+        """price=$30, avg_vol=1_000_000 → dollar_vol=$30M >= $25M → passes."""
+        mock_dl.return_value = self._make_flat_df(price=30.0, avg_vol=1_000_000)
+        result = filter_price_volume(
+            ["HIGH"], min_avg_volume=500_000, min_dollar_volume=25_000_000
+        )
+        assert result == ["HIGH"]
+
+    @patch("universe_builder.yf.download")
+    def test_dollar_volume_gate_disabled_when_zero(self, mock_dl):
+        """min_dollar_volume=0.0 (default) → gate skipped entirely."""
+        mock_dl.return_value = self._make_flat_df(price=10.0, avg_vol=1_000_000)
+        result = filter_price_volume(
+            ["ANY"], min_avg_volume=500_000, min_dollar_volume=0.0
+        )
+        assert result == ["ANY"]
+
+
+class TestBuildUniverseMetadataFields:
+    """build_universe() must include ticker_count and min_dollar_volume in metadata."""
+
+    @patch("universe_builder.filter_price_volume", return_value=["AAPL", "MSFT"])
+    @patch("universe_builder.build_sector_map",
+           return_value={"AAPL": "Technology", "MSFT": "Technology"})
+    @patch("universe_builder.fetch_sec_tickers")
+    def test_metadata_has_ticker_count_and_dollar_volume(
+        self, mock_sec, mock_sector, mock_filter
+    ):
+        mock_sec.return_value = pd.DataFrame({
+            "cik": [1, 2], "name": ["Apple", "Microsoft"],
+            "ticker": ["AAPL", "MSFT"], "exchange": ["Nasdaq", "Nasdaq"],
+        })
+        result = build_universe(min_dollar_volume=25_000_000)
+        meta = result["metadata"]
+
+        assert "ticker_count" in meta
+        assert meta["ticker_count"] == len(result["tickers"])
+        assert "min_dollar_volume" in meta["filters"]
+        assert meta["filters"]["min_dollar_volume"] == 25_000_000

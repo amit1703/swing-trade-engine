@@ -179,6 +179,7 @@ def filter_price_volume(
     min_price: float = DEFAULT_MIN_PRICE,
     min_avg_volume: int = DEFAULT_MIN_AVG_VOLUME,
     min_atr_pct: float = 0.0,
+    min_dollar_volume: float = 0.0,
 ) -> List[str]:
     """Filter tickers by minimum price, average daily volume, and optional ATR%.
 
@@ -263,6 +264,12 @@ def filter_price_volume(
 
                 if avg_volume < min_avg_volume:
                     continue
+
+                # --- dollar volume gate (optional — skipped when min_dollar_volume == 0) ---
+                if min_dollar_volume > 0:
+                    dollar_volume = last_close * avg_volume
+                    if dollar_volume < min_dollar_volume:
+                        continue
 
                 # --- ATR% filter (optional — skipped when min_atr_pct == 0) ---
                 if min_atr_pct > 0:
@@ -375,6 +382,7 @@ def build_universe(
     min_price: float = DEFAULT_MIN_PRICE,
     min_avg_volume: int = DEFAULT_MIN_AVG_VOLUME,
     min_atr_pct: float = 0.0,
+    min_dollar_volume: float = 0.0,
 ) -> dict:
     """Orchestrate the full universe-building pipeline.
 
@@ -400,7 +408,7 @@ def build_universe(
     candidates = filter_ticker_patterns(sec_df["ticker"].tolist())
 
     # Step 3 — price / volume filter
-    filtered = filter_price_volume(candidates, min_price, min_avg_volume, min_atr_pct)
+    filtered = filter_price_volume(candidates, min_price, min_avg_volume, min_atr_pct, min_dollar_volume)
 
     # Step 4 — sector map
     sectors = build_sector_map(filtered)
@@ -422,6 +430,7 @@ def build_universe(
     return {
         "metadata": {
             "generated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"),
+            "ticker_count": len(final_tickers),
             "version": 1,
             "source": "SEC EDGAR + yfinance",
             "build_time_seconds": build_time,
@@ -429,6 +438,7 @@ def build_universe(
                 "min_price": min_price,
                 "min_avg_volume_50d": min_avg_volume,
                 "min_atr_pct": min_atr_pct,
+                "min_dollar_volume": min_dollar_volume,
                 "exchanges": ["NYSE", "Nasdaq"],
             },
             "counts": {
