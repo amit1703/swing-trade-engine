@@ -39,10 +39,17 @@ def _expanding_vol(n=252, base=1_000_000, last5_mult=2.0):
 
 
 def test_valid_discovery_candidate_included():
-    """RS 65, near high, vol expanding → should be in discovery set."""
+    """RS 65, near high, vol expanding → should be in discovery set.
+
+    Universe must be >=10 tickers so int(n * DISCOVERY_MAX_PCT=0.10) >= 1.
+    Uncached placeholders are skipped silently (best-effort discovery).
+    """
     from main import _build_discovery_tickers
+    # 10-ticker universe ensures cap = int(10 * 0.10) = 1; AAPL is the sole cached entry
+    universe = ["AAPL"] + [f"DUMMY{i}" for i in range(9)]
     cache  = {"AAPL": _make_cache_entry(_near_high_prices(), _expanding_vol())}
-    result = _build_discovery_tickers(["AAPL"], {"AAPL": 65.0}, cache)
+    rs_map = {"AAPL": 65.0}
+    result = _build_discovery_tickers(universe, rs_map, cache)
     assert "AAPL" in result
 
 

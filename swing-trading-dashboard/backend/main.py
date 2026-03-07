@@ -179,7 +179,7 @@ def _load_hybrid_universe() -> None:
         with open(UNIVERSE_FILE, "r", encoding="utf-8") as _fh:
             _raw_data = json.load(_fh)
     except FileNotFoundError:
-        log.info("No active_universe.json found — using SCAN_UNIVERSE (%d tickers)", len(SCAN_UNIVERSE))
+        log.warning("No active_universe.json found — using SCAN_UNIVERSE (%d tickers)", len(SCAN_UNIVERSE))
     except Exception as _exc:
         log.warning("Could not read universe file %s: %s — using SCAN_UNIVERSE", UNIVERSE_FILE, _exc)
 
@@ -322,8 +322,8 @@ def _build_discovery_tickers(
         except Exception:
             continue  # skip silently; discovery is best-effort
 
-    # ── Cap at DISCOVERY_MAX_PCT of universe (minimum 1 to keep small test cases working) ──
-    max_count = max(1, int(len(tickers) * DISCOVERY_MAX_PCT))
+    # ── Cap at DISCOVERY_MAX_PCT of universe ──
+    max_count = int(len(tickers) * DISCOVERY_MAX_PCT)
     return set(candidates[:max_count])
 
 
