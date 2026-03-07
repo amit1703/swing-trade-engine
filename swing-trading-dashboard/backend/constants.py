@@ -87,7 +87,7 @@ VCP_ATR_CONTRACTION_THRESHOLD = 0.6  # ATR today < ATR20_avg × 0.6 confirms com
 # ──────────────────────────────────────────────────────────────────────────
 
 RS_RANK_MIN_PERCENTILE  = 70    # gate: skip tickers with RS rank < 70
-TOP_SECTORS_N           = 5     # top N sectors by avg RS score
+TOP_SECTORS_N           = 8     # top N sectors by avg RS (raised from 5; scoring uses SECTOR_TIER1_N=5 for tier 1)
 MIN_SETUP_SCORE         = 70    # gate: discard setups with unified score < 70
 
 # Score component weights (must sum to 100)
@@ -175,8 +175,8 @@ MIN_ATR_PCT = 2.5           # ATR(14)/Close×100 minimum — filters low-vol sto
 # Liquidity Gate (Task 7) — enforced per-ticker before engines run
 # ──────────────────────────────────────────────────────────────────────────
 
-LIQUIDITY_MIN_AVG_VOLUME    = 500_000      # 50-day avg share volume minimum
-LIQUIDITY_MIN_DOLLAR_VOLUME = 20_000_000   # price × avg volume (daily $) minimum
+LIQUIDITY_MIN_AVG_VOLUME    = 750_000      # raised from 500K — tighter volume gate
+LIQUIDITY_MIN_DOLLAR_VOLUME = 25_000_000   # raised from 20M — tighter dollar volume gate
 
 # ──────────────────────────────────────────────────────────────────────────
 # Earnings Blackout (Task 1) — skip tickers with earnings within N days
@@ -219,3 +219,31 @@ BASE_BRK_MIN_VOL_RATIO = 1.5       # BASE BRK signal: raised from 1.2x to 1.5x
 RES_LAUNCHPAD_BARS         = 5     # Pre-breakout consolidation bars (was 3)
 RES_DECISIVE_MIN_PCT       = 0.007 # Decisive close minimum = 0.7% above zone
 RES_DECISIVE_ATR_FACTOR    = 0.25  # Decisive close = max(0.7%, 0.25 x ATR)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Universe & Pre-Scan Filtering (2026-03-07)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Universe loader aging thresholds
+UNIVERSE_MAX_AGE_DAYS  = 7     # hard cutoff: universe older than this → use tickers.py fallback
+UNIVERSE_WARN_AGE_DAYS = 5     # soft: log WARNING if universe is aging but still usable
+
+# Universe size sanity checks (logged as warnings, not hard stops)
+UNIVERSE_MIN_SIZE      = 800   # warn if universe smaller (filter may be too tight)
+UNIVERSE_MAX_SIZE      = 2_500 # warn if universe larger (filter may be too loose)
+
+# RS tier 1 scoring boost
+RS_TIER1_THRESHOLD  = 85    # RS rank >= 85 → Tier 1 (market leader)
+RS_TIER1_MULTIPLIER = 1.15  # multiply RS score component by 1.15 for Tier 1 tickers
+
+# Sector gate tiers (TOP_SECTORS_N=8 total; top SECTOR_TIER1_N=5 get full points)
+SECTOR_TIER1_N           = 5    # top N sectors → full SCORE_WEIGHT_SECTOR pts (10)
+SECTOR_TIER2_FACTOR      = 0.8  # sectors ranked 6–8 → 80% of sector points (8 pts)
+SECTOR_OUT_OF_TOP_FACTOR = 0.4  # sectors outside top 8 → 40% of sector points (4 pts)
+
+# Discovery layer — RS 60-70 emerging leaders bypass the RS >= 70 gate
+DISCOVERY_RS_MIN        = 60    # lower RS bound (inclusive) for discovery candidates
+DISCOVERY_RS_MAX        = 70    # upper RS bound (exclusive; 70 = regular gate floor)
+DISCOVERY_52WK_HIGH_PCT = 0.03  # close must be within 3% of 52-week high
+DISCOVERY_VOL_RATIO     = 1.5   # 5-day avg vol must be >= 1.5x 50-day avg
+DISCOVERY_MAX_PCT       = 0.10  # cap discovery candidates at 10% of universe size
