@@ -467,12 +467,16 @@ class BacktestEngine:
         end_date: str,
         setup_types: Optional[List[str]] = None,
         run_id: Optional[str] = None,
+        ticker_df: Optional[pd.DataFrame] = None,
+        spy_df: Optional[pd.DataFrame] = None,
     ):
         self.ticker      = ticker.upper()
         self.start_date  = start_date
         self.end_date    = end_date
         self.setup_types = setup_types or ["VCP", "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"]
         self.run_id      = run_id or str(uuid.uuid4())
+        self.ticker_df   = ticker_df
+        self.spy_df      = spy_df
 
     async def run(self) -> BacktestSummary:
         """Execute the backtest. Returns a BacktestSummary with all closed trades."""
@@ -482,14 +486,18 @@ class BacktestEngine:
             run_id, self.ticker, self.start_date, self.end_date,
         )
 
-        # ── 1. Fetch data ─────────────────────────────────────────────────
-        ticker_df, spy_df = await _fetch_data(self.ticker, self.start_date)
-        if ticker_df is None or spy_df is None:
-            logger.warning("Backtest: data fetch failed for %s", self.ticker)
-            return compute_metrics(
-                self.ticker, "+".join(self.setup_types),
-                self.start_date, self.end_date, [], run_id,
-            )
+        # ── 1. Fetch data (or use preloaded df for WFO) ───────────────────
+        if self.ticker_df is not None and self.spy_df is not None:
+            ticker_df = self.ticker_df
+            spy_df    = self.spy_df
+        else:
+            ticker_df, spy_df = await _fetch_data(self.ticker, self.start_date)
+            if ticker_df is None or spy_df is None:
+                logger.warning("Backtest: data fetch failed for %s", self.ticker)
+                return compute_metrics(
+                    self.ticker, "+".join(self.setup_types),
+                    self.start_date, self.end_date, [], run_id,
+                )
 
         # ── 2. Identify replay window ─────────────────────────────────────
         start = pd.Timestamp(self.start_date)
