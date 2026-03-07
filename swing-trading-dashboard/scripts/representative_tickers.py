@@ -3,7 +3,7 @@ Representative ticker basket for Optuna parameter optimization.
 
 ~35 tickers selected across sectors and market-cap ranges to expose
 the optimizer to diverse market behaviours without full-universe cost.
-Duplicates are stripped at import time.
+Raises AssertionError at import time if _RAW contains duplicates.
 """
 
 _RAW = [
@@ -25,4 +25,8 @@ _RAW = [
     "HD", "NKE", "SBUX",
 ]
 
-REPRESENTATIVE_TICKERS: list[str] = list(dict.fromkeys(_RAW))  # preserve order, deduplicate
+assert len(_RAW) == len(set(_RAW)), (
+    f"Duplicate tickers in _RAW: "
+    f"{[t for t in set(_RAW) if _RAW.count(t) > 1]}"
+)
+REPRESENTATIVE_TICKERS: list[str] = list(_RAW)
