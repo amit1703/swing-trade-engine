@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -24,6 +24,7 @@ from constants import (
     WFO_LOOKBACK_YEARS,
     WFO_MIN_HISTORY_YEARS,
     WFO_BULK_BATCH_SIZE,
+    TRADING_DAYS_IN_YEAR,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ def _integrity_check(df: pd.DataFrame, ticker: str) -> Optional[pd.DataFrame]:
     df = df.dropna(subset=ohlc_cols)
     df = df.sort_index()
 
-    min_rows = int(WFO_MIN_HISTORY_YEARS * 252)
+    min_rows = int(WFO_MIN_HISTORY_YEARS * TRADING_DAYS_IN_YEAR)
     if len(df) < min_rows:
         logger.warning(
             "wfo_cache: %s has only %d rows (need %d for %d years) — skipping",
@@ -95,13 +96,13 @@ def download_and_cache(
     Updates `progress` dict in-place for polling:
         progress["tickers_completed"]
         progress["total_tickers"]
-        progress["status"]  — "running" | "done" | "error"
+        progress["status"]  — "running" | "done"
 
     Returns dict of {ticker: success_bool}.
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    end_dt   = datetime.utcnow()
+    end_dt   = datetime.now(timezone.utc)
     start_dt = end_dt - timedelta(days=int(WFO_LOOKBACK_YEARS * 365.25))
     start_str = start_dt.strftime("%Y-%m-%d")
     end_str   = end_dt.strftime("%Y-%m-%d")
@@ -110,6 +111,8 @@ def download_and_cache(
     progress["total_tickers"] = len(tickers)
     progress["tickers_completed"] = 0
     progress["status"] = "running"
+
+    logger.info("wfo_cache [%s]: starting download of %d tickers", job_id, len(tickers))
 
     # Process in batches to avoid yfinance rate limits
     batches = [
@@ -125,9 +128,9 @@ def download_and_cache(
                 try:
                     cleaned.to_parquet(get_cache_path(ticker))
                     results[ticker] = True
-                    logger.info("wfo_cache: saved %s (%d rows)", ticker, len(cleaned))
+                    logger.info("wfo_cache [%s]: saved %s (%d rows)", job_id, ticker, len(cleaned))
                 except Exception as exc:
-                    logger.warning("wfo_cache: save failed for %s: %s", ticker, exc)
+                    logger.warning("wfo_cache [%s]: save failed for %s: %s", job_id, ticker, exc)
                     results[ticker] = False
             else:
                 results[ticker] = False
@@ -187,8 +190,8 @@ def _download_batch(
                 if df.columns.duplicated().any():
                     df = df.loc[:, ~df.columns.duplicated()]
                 result[ticker] = df
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("wfo_cache: error extracting %s from batch: %s", ticker, exc)
         return result
     except Exception as exc:
         logger.warning("wfo_cache: batch download failed: %s", exc)

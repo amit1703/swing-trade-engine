@@ -12,6 +12,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import wfo_cache
+from constants import WFO_MIN_HISTORY_YEARS
 
 
 def _make_df(years=6, base_price=100.0):
@@ -79,7 +80,7 @@ def test_integrity_check_drops_nan_rows():
 
 def test_integrity_check_rejects_short_history():
     """_integrity_check returns None when history < WFO_MIN_HISTORY_YEARS."""
-    df = _make_df(years=2)  # only 2 years, below 5-year minimum
+    df = _make_df(years=WFO_MIN_HISTORY_YEARS - 1)
     result = wfo_cache._integrity_check(df, "SHORT")
     assert result is None
 
