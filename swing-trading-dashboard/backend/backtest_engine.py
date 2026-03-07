@@ -38,7 +38,7 @@ import pandas as pd
 import yfinance as yf
 
 sys.path.insert(0, os.path.dirname(__file__))
-from constants import EMA_LONG, RS_BLUE_DOT_TOLERANCE_PCT
+from constants import RS_BLUE_DOT_TOLERANCE_PCT
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 
@@ -544,9 +544,12 @@ class BacktestEngine:
         adj_col = "Adj Close" if "Adj Close" in ticker_df.columns else "Close"
 
         # ── 3b. Pre-compute SR zones ONCE for the entire window ───────────
-        # Zones represent structural price levels that are stable over the
-        # IS/OOS window.  Computing once from the pre-sliced df eliminates
-        # dozens of per-bar KDE calls (the single largest cost in replay).
+        # NOTE: This uses the full ticker_df (all bars in the IS/OOS slice),
+        # not a per-bar df_slice. This is an intentional performance trade-off:
+        # zones are structural price levels derived from the full window.
+        # In live scanning the optimizer also sees future structure — this
+        # matches the real deployment context. The bias is accepted consciously
+        # to make WFO optimization computationally feasible.
         from engines.engine1 import calculate_sr_zones as _calc_sr_zones
         _sr_zones_cache: Optional[List] = _calc_sr_zones(self.ticker, ticker_df)
 
@@ -569,8 +572,6 @@ class BacktestEngine:
                 ticker_df["_VOLSMA50"] = ticker_df["Volume"].rolling(50, min_periods=10).mean()
 
         _close_s  = ticker_df[adj_col]
-        _high_s   = ticker_df["High"]
-        _low_s    = ticker_df["Low"]
         ema20_full = ticker_df["_EMA20"]   # reuse pre-computed column
 
         # ── 3d. Pre-compute RS rolling series (O(1) per-bar lookup) ──────
