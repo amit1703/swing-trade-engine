@@ -4,9 +4,9 @@ Engine 6: Resistance Breakout Scanner (Minervini/O'Neil)
 Detects institutional-quality breakouts above KDE resistance zones.
 
 Three mandatory rules for a valid breakout:
-  1. LAUNCHPAD   — 3 trading days before breakout: highs within 3% of resistance
+  1. LAUNCHPAD   — 5 trading days before breakout: highs within 3% of resistance
                    AND daily range < 1.5 × ATR14.
-  2. DECISIVE CLOSE — breakout day close > zone_upper × 1.005 (0.5% above zone)
+  2. DECISIVE CLOSE — breakout day close > zone_upper + max(0.7%, 0.25×ATR14)
                       AND close in top 30% of daily range.
   3. INSTITUTIONAL VOLUME — breakout day volume ≥ 150% of 50-day average.
 
@@ -28,18 +28,20 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import atr as _atr
-from constants import TARGET_RR, VOL_SURGE_MULTIPLIER
+from constants import (
+    TARGET_RR, VOL_SURGE_MULTIPLIER,
+    RES_LAUNCHPAD_BARS, RES_DECISIVE_MIN_PCT, RES_DECISIVE_ATR_FACTOR,
+)
 from zone_utils import nearest_resistance_target
 
 
-_VOL_SURGE_THRESHOLD     = VOL_SURGE_MULTIPLIER  # Rule 3: ≥ 150% of 50-day average (from constants)
-_MAX_DAYS_LOOKBACK       = 3      # Search window for breakout bar
-_MAX_EXTEND_PCT          = 0.05   # Overextension gate (current close vs zone)
-_DECISIVE_CLOSE_MIN_PCT  = 0.005  # Rule 2a: close must be > 0.5% above zone
-_CLOSE_POSITION_MIN      = 0.70   # Rule 2b: close ≥ low + 70% of range (top 30%)
-_LAUNCHPAD_BARS          = 3      # Rule 1: number of pre-breakout bars to check
-_LAUNCHPAD_MAX_HIGH_PCT  = 1.03   # Rule 1: pre-bar high ≤ zone_upper × 1.03
-_LAUNCHPAD_MAX_RANGE_ATR = 1.5    # Rule 1: pre-bar range < 1.5 × ATR14
+_VOL_SURGE_THRESHOLD     = VOL_SURGE_MULTIPLIER
+_MAX_DAYS_LOOKBACK       = 3
+_MAX_EXTEND_PCT          = 0.05
+_CLOSE_POSITION_MIN      = 0.70
+_LAUNCHPAD_BARS          = RES_LAUNCHPAD_BARS        # 5 (was 3)
+_LAUNCHPAD_MAX_HIGH_PCT  = 1.03
+_LAUNCHPAD_MAX_RANGE_ATR = 1.5
 
 
 def scan_resistance_breakout(
@@ -64,7 +66,7 @@ def scan_resistance_breakout(
             return None
 
         # Uptrend filter: price must be above 50 SMA
-        sma50  = close_s.rolling(50).mean()
+        sma50   = data["_SMA50"] if "_SMA50" in data.columns else close_s.rolling(50).mean()
 
         lc_val  = close_s.iloc[-1]
         lc      = float(lc_val.item() if hasattr(lc_val, 'item') else lc_val)
@@ -77,13 +79,13 @@ def scan_resistance_breakout(
             return None
 
         # Volume SMA and ATR
-        vol_sma50_s = volume_s.rolling(50).mean()
+        vol_sma50_s = data["_VOLSMA50"] if "_VOLSMA50" in data.columns else volume_s.rolling(50).mean()
         vsm50_val   = vol_sma50_s.iloc[-1]
         vol_sma50   = float(vsm50_val.item() if hasattr(vsm50_val, 'item') else vsm50_val)
         if np.isnan(vol_sma50) or vol_sma50 <= 0:
             return None
 
-        atr14    = _atr(high_s, low_s, close_s, 14)
+        atr14    = data["_ATR14"] if "_ATR14" in data.columns else _atr(high_s, low_s, close_s, 14)
         latr_val = atr14.iloc[-1]
         latr     = float(latr_val.item() if hasattr(latr_val, 'item') else latr_val)
         if np.isnan(latr) or latr <= 0:
@@ -151,12 +153,16 @@ def scan_resistance_breakout(
                 brk_low   = low_arr[brk_idx]
                 brk_range = brk_high - brk_low
 
-                # Rule 2a — Decisive close: ≥ 0.5% above zone
-                if brk_close <= zone_upper * (1 + _DECISIVE_CLOSE_MIN_PCT):
+                # Rule 2a — Volatility-aware decisive close: max(0.7%, 0.25×ATR) above zone
+                decisive_min = max(RES_DECISIVE_MIN_PCT * zone_upper, RES_DECISIVE_ATR_FACTOR * latr)
+                if brk_close <= zone_upper + decisive_min:
                     if debug:
-                        print(f"Engine 6 Breakout: REJECTED - Decisive close failed "
-                              f"({brk_close:.2f} <= {zone_upper * (1 + _DECISIVE_CLOSE_MIN_PCT):.2f}, "
-                              f"need >{_DECISIVE_CLOSE_MIN_PCT:.1%} above zone)")
+                        print(
+                            f"Engine 6 Breakout: REJECTED - Decisive close failed "
+                            f"({brk_close:.2f} <= {zone_upper + decisive_min:.2f}, "
+                            f"need >{decisive_min:.2f} above zone "
+                            f"[{RES_DECISIVE_MIN_PCT:.1%} or {RES_DECISIVE_ATR_FACTOR}xATR={RES_DECISIVE_ATR_FACTOR*latr:.2f}])"
+                        )
                     continue
 
                 # Rule 2b — Close in top 30% of day's range
