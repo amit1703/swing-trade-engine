@@ -169,7 +169,7 @@ VITALITY_MIN_RANGE_PCT = 0.02  # Minimum H-L range (2%) to pass vitality
 # Universe Pre-Filter
 # ──────────────────────────────────────────────────────────────────────────
 
-MIN_ATR_PCT = 2.0           # ATR(14)/Close×100 minimum — filters low-vol stocks
+MIN_ATR_PCT = 2.5           # ATR(14)/Close×100 minimum — filters low-vol stocks
 
 # ──────────────────────────────────────────────────────────────────────────
 # Liquidity Gate (Task 7) — enforced per-ticker before engines run
@@ -200,3 +200,22 @@ WFO_CACHE_DIR         = "data/price_cache"   # relative to backend/
 WFO_LOOKBACK_YEARS    = 10                   # years of history to download
 WFO_MIN_HISTORY_YEARS = 5                    # minimum usable years before rejecting
 WFO_BULK_BATCH_SIZE   = 100                  # tickers per yf.download() call
+
+# ──────────────────────────────────────────────────────────────────────────
+# Engine Hardening (2026-03-07)
+# ──────────────────────────────────────────────────────────────────────────
+
+# VCP contraction gates
+VCP_MIN_CONTRACTIONS_STRICT  = 3   # Path A (DRY): >=3 progressive contractions required
+VCP_MIN_CONTRACTIONS_RELAXED = 2   # Paths B/C/D (breakout): >=2 contractions required
+
+# LCE mini-breakout trigger
+LCE_BREAKOUT_VOL_RATIO = 1.0       # LCE: volume must be >= 1x 20-day avg on breakout bar
+
+# BASE breakout filter
+BASE_BRK_MIN_VOL_RATIO = 1.5       # BASE BRK signal: raised from 1.2x to 1.5x
+
+# RES_BREAKOUT tighter filters
+RES_LAUNCHPAD_BARS         = 5     # Pre-breakout consolidation bars (was 3)
+RES_DECISIVE_MIN_PCT       = 0.007 # Decisive close minimum = 0.7% above zone
+RES_DECISIVE_ATR_FACTOR    = 0.25  # Decisive close = max(0.7%, 0.25 x ATR)
