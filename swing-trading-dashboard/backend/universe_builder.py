@@ -465,6 +465,7 @@ if __name__ == "__main__":
     parser.add_argument("--min-price", type=float, default=DEFAULT_MIN_PRICE)
     parser.add_argument("--min-volume", type=int, default=DEFAULT_MIN_AVG_VOLUME)
     parser.add_argument("--min-atr-pct", type=float, default=0.0)
+    parser.add_argument("--min-dollar-volume", type=float, default=0.0)
     parser.add_argument("--output", type=str, default=UNIVERSE_FILE)
     args = parser.parse_args()
 
@@ -472,6 +473,7 @@ if __name__ == "__main__":
         min_price=args.min_price,
         min_avg_volume=args.min_volume,
         min_atr_pct=args.min_atr_pct,
+        min_dollar_volume=args.min_dollar_volume,
     )
     save_universe(universe, args.output)
 
