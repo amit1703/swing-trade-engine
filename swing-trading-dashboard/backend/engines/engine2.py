@@ -36,8 +36,20 @@ from scipy.signal import find_peaks
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, true_range as _tr
-from constants import TARGET_RR, ATR_STOP_MULTIPLIER, VCP_ATR_CONTRACTION_THRESHOLD, VCP_TIGHT_RANGE_5D_PCT
+from constants import (
+    TARGET_RR, ATR_STOP_MULTIPLIER, VCP_ATR_CONTRACTION_THRESHOLD,
+    VCP_TIGHT_RANGE_5D_PCT, VCP_MIN_CONTRACTIONS_STRICT, VCP_MIN_CONTRACTIONS_RELAXED,
+)
 from zone_utils import nearest_resistance_target
+
+# ── Per-process trendline / curve-fit caches ──────────────────────────────
+# Key: (ticker, last_bar_date_str, lookback_len)  →  result dict or None
+# Eliminates redundant scipy find_peaks / curve_fit calls across WFO windows
+# that share overlapping bars (same ticker + date = identical lookback data).
+_TDL_DESC_CACHE:  Dict[tuple, Optional[Dict]] = {}
+_TDL_ASC_CACHE:   Dict[tuple, Optional[Dict]] = {}
+# Key: (ticker, last_bar_date_str, lb) → bool (is_u)
+_CURVE_FIT_CACHE: Dict[tuple, bool] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +153,9 @@ def _detect_descending_trendline(
         dates = data.index
 
         lookback = min(120, len(high))
+        _cache_key = (ticker, str(data.index[-1].date()), lookback)
+        if _cache_key in _TDL_DESC_CACHE:
+            return _TDL_DESC_CACHE[_cache_key]
         highs      = high[-lookback:]
         date_slice = dates[-lookback:]
         adj_close  = data[adj].values[-lookback:]
@@ -193,6 +208,7 @@ def _detect_descending_trendline(
                 best_pair    = (pj_idx, pj_price, pj_date, slope)
 
         if best_pair is None or best_touches < 2:
+            _TDL_DESC_CACHE[_cache_key] = None
             return None
 
         p2_idx, p2_price, p2_date, slope = best_pair
@@ -211,6 +227,7 @@ def _detect_descending_trendline(
                 })
 
         if not series:
+            _TDL_DESC_CACHE[_cache_key] = None
             return None
 
         # ── Relevance filter ─────────────────────────────────────────────
@@ -218,15 +235,18 @@ def _detect_descending_trendline(
         lc      = float(lc_val.item() if hasattr(lc_val, 'item') else lc_val)
         tl_today = series[-1]["value"]
         if lc > 0 and tl_today > lc * 1.20:
+            _TDL_DESC_CACHE[_cache_key] = None
             return None
 
-        return {
+        _res = {
             "series": series,
             "peak1":  {"date": p1_date.strftime("%Y-%m-%d"), "price": round(p1_price, 2)},
             "peak2":  {"date": p2_date.strftime("%Y-%m-%d"), "price": round(p2_price, 2)},
             "slope":  round(slope, 6),
             "touches": best_touches,
         }
+        _TDL_DESC_CACHE[_cache_key] = _res
+        return _res
 
     except Exception as exc:  # noqa: BLE001
         print(f"[_detect_descending_trendline] {ticker}: {exc}")
@@ -267,6 +287,10 @@ def _detect_ascending_trendline(
         lows       = low[-lookback:]
         date_slice = dates[-lookback:]
         closes     = data[adj].values[-lookback:]
+
+        _cache_key = (ticker, str(data.index[-1].date()), lookback)
+        if _cache_key in _TDL_ASC_CACHE:
+            return _TDL_ASC_CACHE[_cache_key]
 
         # ── Fix 3: Macro anchor — always start from the global minimum ───
         global_min_idx = int(np.argmin(lows))
@@ -316,6 +340,7 @@ def _detect_ascending_trendline(
                 best_pair    = (tj_idx, tj_price, tj_date, slope)
 
         if best_pair is None or best_touches < 2:
+            _TDL_ASC_CACHE[_cache_key] = None
             return None
 
         t2_idx, t2_price, t2_date, slope = best_pair
@@ -334,6 +359,7 @@ def _detect_ascending_trendline(
                 })
 
         if not series:
+            _TDL_ASC_CACHE[_cache_key] = None
             return None
 
         # ── Relevance filter ─────────────────────────────────────────────
@@ -341,15 +367,18 @@ def _detect_ascending_trendline(
         lc      = float(lc_val.item() if hasattr(lc_val, 'item') else lc_val)
         tl_today = series[-1]["value"]
         if lc > 0 and tl_today < lc * 0.80:
+            _TDL_ASC_CACHE[_cache_key] = None
             return None
 
-        return {
+        _res = {
             "series":  series,
             "trough1": {"date": t1_date.strftime("%Y-%m-%d"), "price": round(t1_price, 2)},
             "trough2": {"date": t2_date.strftime("%Y-%m-%d"), "price": round(t2_price, 2)},
             "slope":   round(slope, 6),
             "touches": best_touches,
         }
+        _TDL_ASC_CACHE[_cache_key] = _res
+        return _res
 
     except Exception as exc:  # noqa: BLE001
         print(f"[_detect_ascending_trendline] {ticker}: {exc}")
@@ -711,12 +740,12 @@ def scan_vcp(
         if close.dropna().shape[0] < 55:
             return None
 
-        # ── Indicators ───────────────────────────────────────────────────
-        ema8  = _ema(close, 8)
-        ema20 = _ema(close, 20)
-        sma50 = _sma(close, 50)
-        sma200 = _sma(close, 200)  # Professional VCP: long-term trend filter
-        atr14 = _atr(high, low, close, 14)
+        # ── Indicators (use pre-computed columns from BacktestEngine when available) ──
+        ema8   = data["_EMA8"]   if "_EMA8"   in data.columns else _ema(close, 8)
+        ema20  = data["_EMA20"]  if "_EMA20"  in data.columns else _ema(close, 20)
+        sma50  = data["_SMA50"]  if "_SMA50"  in data.columns else _sma(close, 50)
+        sma200 = data["_SMA200"] if "_SMA200" in data.columns else _sma(close, 200)
+        atr14  = data["_ATR14"]  if "_ATR14"  in data.columns else _atr(high, low, close, 14)
 
         # Extract scalars and use .item() for numpy types to avoid Series comparison errors
         lc   = float(close.iloc[-1].item() if hasattr(close.iloc[-1], 'item') else close.iloc[-1])
@@ -754,7 +783,7 @@ def scan_vcp(
         is_above_200sma = (not np.isnan(l200)) and lc > l200
 
         # ── Shared: Volume SMA ────────────────────────────────────────────
-        vol_sma50 = volume.rolling(50).mean()
+        vol_sma50   = data["_VOLSMA50"] if "_VOLSMA50" in data.columns else volume.rolling(50).mean()
         vol_sma_val = vol_sma50.iloc[-1]
         if pd.isna(vol_sma_val):
             return None
@@ -804,7 +833,7 @@ def scan_vcp(
                     confirmed_breakout = True
                     bk_zone = candidate
 
-        if confirmed_breakout and bk_zone is not None:
+        if confirmed_breakout and bk_zone is not None and contraction_count >= VCP_MIN_CONTRACTIONS_RELAXED:
             entry      = round(lh * 1.001, 2)
             stop_base  = min(ll, bk_zone["lower"])
             stop_loss  = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
@@ -887,7 +916,7 @@ def scan_vcp(
                     is_trendline_breakout = True
                     trendline_data = trendline_result
 
-        if is_trendline_breakout and trendline_data is not None:
+        if is_trendline_breakout and trendline_data is not None and contraction_count >= VCP_MIN_CONTRACTIONS_RELAXED:
             entry      = round(lh * 1.001, 2)
             stop_base  = min(ll, 0.98 * desc_tl["series"][-1]["value"])
             stop_loss  = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
@@ -961,7 +990,7 @@ def scan_vcp(
                 lvol >= 1.15 * avg_vol
             )
 
-            if is_kde_breakout:
+            if is_kde_breakout and contraction_count >= VCP_MIN_CONTRACTIONS_RELAXED:
                 entry      = round(lh * 1.001, 2)
                 stop_base  = min(ll, nearest_res_above["lower"])
                 stop_loss  = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
@@ -1126,26 +1155,39 @@ def scan_vcp(
         # Note: atr20_clean always has ≥46 values when len(data)≥60, so the else
         # branch is unreachable in production — atr_compressed is always set above.
 
+        # Progressive contraction structure gate (Path A requires >=3 progressive contractions)
+        if not (contraction_count >= VCP_MIN_CONTRACTIONS_STRICT and is_progressive):
+            if debug:
+                print(
+                    f"Engine 2 VCP: REJECTED - Path A requires {VCP_MIN_CONTRACTIONS_STRICT} "
+                    f"progressive contractions "
+                    f"(got {contraction_count}, is_progressive={is_progressive})"
+                )
+            return None
+
         # ── A3. U-shape parabolic check ───────────────────────────────────
         lb      = min(15, len(close) - 5)
         recent  = close.values[-lb:].astype(float)
         if np.any(np.isnan(recent)):
             return None
 
-        xv             = np.arange(lb, dtype=float)
-        mean_p, std_p  = recent.mean(), recent.std()
-        if std_p < 1e-8:
-            return None
-
-        yn   = (recent - mean_p) / std_p
-        is_u = False
-        try:
-            popt, _ = curve_fit(_parabola, xv, yn, maxfev=2000)
-            a, b, _ = popt
-            vertex_x = -b / (2.0 * a) if abs(a) > 1e-8 else -1.0
-            is_u = a > 0.005 and 0.0 <= vertex_x <= float(lb)
-        except Exception:
+        _cf_key = (ticker, str(data.index[-1].date()), lb)
+        if _cf_key in _CURVE_FIT_CACHE:
+            is_u = _CURVE_FIT_CACHE[_cf_key]
+        else:
+            xv             = np.arange(lb, dtype=float)
+            mean_p, std_p  = recent.mean(), recent.std()
             is_u = False
+            if std_p >= 1e-8:
+                yn = (recent - mean_p) / std_p
+                try:
+                    popt, _ = curve_fit(_parabola, xv, yn, maxfev=2000)
+                    a, b, _ = popt
+                    vertex_x = -b / (2.0 * a) if abs(a) > 1e-8 else -1.0
+                    is_u = a > 0.005 and 0.0 <= vertex_x <= float(lb)
+                except Exception:
+                    is_u = False
+            _CURVE_FIT_CACHE[_cf_key] = is_u
 
         if not is_u:
             if debug:

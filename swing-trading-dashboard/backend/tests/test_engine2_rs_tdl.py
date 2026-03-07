@@ -10,12 +10,32 @@ from engines.engine2 import scan_vcp, scan_near_breakout
 
 
 def make_trending_df(n=300, base_price=100.0):
-    """Uptrending stock: 8 EMA > 20 EMA, close > 50 SMA, close > 200 SMA."""
+    """Uptrending stock: 8 EMA > 20 EMA, close > 50 SMA, close > 200 SMA.
+
+    Injects progressively contracting TR in the last 25 bars so that
+    _count_contractions returns contraction_count >= 2 (satisfying the
+    VCP_MIN_CONTRACTIONS_RELAXED gate on Paths B/C/D).
+    """
     dates = pd.date_range("2024-01-01", periods=n, freq="B")
     close = np.linspace(60.0, base_price, n)
     high  = close * 1.005
     low   = close * 0.995
     volume = np.full(n, 1_000_000.0)
+
+    # Inject three groups of progressively tighter bars in the last 25 bars:
+    # Group 1 (bars -25..-18): TR offset ±1.5% — wide consolidation
+    # Group 2 (bars -17..-10): TR offset ±0.9% — moderate tightening
+    # Group 3 (bars -9..-2):   TR offset ±0.4% — tight coiling
+    for i in range(n - 25, n - 18):
+        high[i] = close[i] * 1.015
+        low[i]  = close[i] * 0.985
+    for i in range(n - 17, n - 10):
+        high[i] = close[i] * 1.009
+        low[i]  = close[i] * 0.991
+    for i in range(n - 9, n - 2):
+        high[i] = close[i] * 1.004
+        low[i]  = close[i] * 0.996
+
     return pd.DataFrame(
         {"Close": close, "Adj Close": close, "High": high,
          "Low": low, "Open": close, "Volume": volume},
