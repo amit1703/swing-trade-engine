@@ -216,7 +216,7 @@ def scan_pullback(
 
         # ── 0. RS quality gate ────────────────────────────────────────────
         # Require stock not to be a persistent underperformer vs SPY.
-        # Loose floor (-0.05) allows stocks that are flat vs SPY to qualify.
+        # Loose floor (RS_REJECT_THRESHOLD) allows stocks that are flat vs SPY to qualify.
         if rs_score < RS_REJECT_THRESHOLD:
             if debug:
                 print(
