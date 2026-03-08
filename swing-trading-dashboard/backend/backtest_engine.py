@@ -38,8 +38,14 @@ import pandas as pd
 import yfinance as yf
 
 sys.path.insert(0, os.path.dirname(__file__))
-from constants import RS_BLUE_DOT_TOLERANCE_PCT
+from constants import (
+    RS_BLUE_DOT_TOLERANCE_PCT,
+    RISK_PER_TRADE_PCT,
+    MAX_POSITION_SIZE_PCT,
+    MAX_OPEN_POSITIONS,
+)
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
+from filters import compute_regime_series
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 
 logger = logging.getLogger(__name__)
@@ -74,9 +80,10 @@ class TradeRecord:
     holding_days:  int
 
     # Computed properties (derived in __post_init__)
-    rr_achieved:   float = field(init=False)
-    pnl_pct:       float = field(init=False)
-    is_win:        bool  = field(init=False)
+    rr_achieved:       float = field(init=False)
+    pnl_pct:           float = field(init=False)
+    portfolio_pnl_pct: float = field(init=False)  # position-sized portfolio impact (1% risk model)
+    is_win:            bool  = field(init=False)
 
     def __post_init__(self):
         risk = self.entry_price - self.initial_stop
@@ -87,22 +94,34 @@ class TradeRecord:
         self.pnl_pct = round((self.exit_price - self.entry_price) / self.entry_price * 100, 3)
         self.is_win  = self.exit_price > self.entry_price
 
+        # Position sizing: risk RISK_PER_TRADE_PCT% of equity, sized by stop distance.
+        # position_size = risk_pct / stop_distance_pct, capped at MAX_POSITION_SIZE_PCT.
+        # portfolio_pnl_pct = pnl_pct × position_size / 100
+        stop_dist_pct = (self.entry_price - self.initial_stop) / self.entry_price
+        if stop_dist_pct > 0:
+            raw_pos = RISK_PER_TRADE_PCT / stop_dist_pct
+            position_size_pct = min(raw_pos, MAX_POSITION_SIZE_PCT)
+            self.portfolio_pnl_pct = round(self.pnl_pct * position_size_pct / 100.0, 4)
+        else:
+            self.portfolio_pnl_pct = 0.0
+
     def to_dict(self) -> Dict:
         return {
-            "ticker":       self.ticker,
-            "setup_type":   self.setup_type,
-            "signal_date":  self.signal_date,
-            "entry_date":   self.entry_date,
-            "entry_price":  self.entry_price,
-            "initial_stop": self.initial_stop,
-            "take_profit":  self.take_profit,
-            "exit_date":    self.exit_date,
-            "exit_price":   self.exit_price,
-            "exit_reason":  self.exit_reason,
-            "holding_days": self.holding_days,
-            "rr_achieved":  self.rr_achieved,
-            "pnl_pct":      self.pnl_pct,
-            "is_win":       self.is_win,
+            "ticker":            self.ticker,
+            "setup_type":        self.setup_type,
+            "signal_date":       self.signal_date,
+            "entry_date":        self.entry_date,
+            "entry_price":       self.entry_price,
+            "initial_stop":      self.initial_stop,
+            "take_profit":       self.take_profit,
+            "exit_date":         self.exit_date,
+            "exit_price":        self.exit_price,
+            "exit_reason":       self.exit_reason,
+            "holding_days":      self.holding_days,
+            "rr_achieved":       self.rr_achieved,
+            "pnl_pct":           self.pnl_pct,
+            "portfolio_pnl_pct": self.portfolio_pnl_pct,
+            "is_win":            self.is_win,
         }
 
 
@@ -204,8 +223,10 @@ def compute_metrics(
     avg_win_r  = round(float(np.mean([t.rr_achieved for t in wins])),   3) if wins   else 0.0
     avg_loss_r = round(float(np.mean([t.rr_achieved for t in losses])), 3) if losses else 0.0
 
-    gross_profit = sum(t.pnl_pct for t in wins)
-    gross_loss   = sum(t.pnl_pct for t in losses)  # negative number
+    # Use portfolio_pnl_pct (position-sized) for all portfolio metrics.
+    # pnl_pct (raw price return) is preserved on TradeRecord for reference only.
+    gross_profit   = sum(t.portfolio_pnl_pct for t in wins)
+    gross_loss     = sum(t.portfolio_pnl_pct for t in losses)  # negative number
     net_profit_pct = round(gross_profit + gross_loss, 3)
 
     if gross_loss == 0:
@@ -215,12 +236,14 @@ def compute_metrics(
 
     avg_holding_days = round(float(np.mean([t.holding_days for t in trades])), 1)
 
-    # Compound equity curve starting at $1 (normalized)
+    # Compound equity curve using portfolio_pnl_pct (position-sized returns).
+    # Each trade risks at most RISK_PER_TRADE_PCT% of equity, so the equity
+    # curve reflects realistic portfolio drawdown rather than raw price swings.
     equity   = 1.0
     peak     = 1.0
     max_dd   = 0.0
     for t in trades:
-        equity *= (1.0 + t.pnl_pct / 100.0)
+        equity *= (1.0 + t.portfolio_pnl_pct / 100.0)
         if equity > peak:
             peak = equity
         dd = (peak - equity) / peak * 100.0
@@ -599,13 +622,18 @@ class BacktestEngine:
 
         # ── 4. Replay loop ────────────────────────────────────────────────
         completed_trades: List[TradeRecord] = []
-        open_trade: Optional[Dict]          = None   # in-flight trade state
+        open_trades: List[Dict]             = []   # up to MAX_OPEN_POSITIONS concurrent
+
+        # Pre-compute regime series from SPY data (empty Series if no spy_df)
+        _regime_series: pd.Series = pd.Series(dtype=bool)
+        if self.spy_df is not None and len(self.spy_df) > 0:
+            _regime_series = compute_regime_series(self.spy_df)
 
         for T_date in replay_dates:
             full_idx = all_dates.get_loc(T_date)
 
-            # ── 4a. Manage open trade ─────────────────────────────────────
-            if open_trade is not None:
+            # ── 4a. Manage all open trades ────────────────────────────────
+            if open_trades:
                 ema20_T = float(ema20_full.iloc[full_idx])
                 atr14_T = float(ticker_df["_ATR14"].iloc[full_idx]) \
                     if "_ATR14" in ticker_df.columns else 0.0
@@ -615,33 +643,46 @@ class BacktestEngine:
                     "high":  float(ticker_df["High"].iloc[full_idx]),
                     "low":   float(ticker_df["Low"].iloc[full_idx]),
                     "close": float(ticker_df[adj_col].iloc[full_idx]),
-                    "ema20": ema20_T if not np.isnan(ema20_T) else open_trade["trailing_stop"],
+                    "ema20": ema20_T if not np.isnan(ema20_T) else 0.0,
                     "atr14": atr14_T if not np.isnan(atr14_T) else 0.0,
                 }
-                closed, exit_price, exit_reason = _manage_open_trade(open_trade, bar)
+                still_open: List[Dict] = []
+                for trade_state in open_trades:
+                    closed, exit_price, exit_reason = _manage_open_trade(trade_state, bar)
+                    if closed:
+                        entry_dt     = pd.Timestamp(trade_state["entry_date"])
+                        holding_days = max(1, (T_date - entry_dt).days)
+                        completed_trades.append(TradeRecord(
+                            ticker=self.ticker,
+                            setup_type=trade_state["setup_type"],
+                            signal_date=trade_state["signal_date"],
+                            entry_date=trade_state["entry_date"],
+                            entry_price=trade_state["entry_price"],
+                            initial_stop=trade_state["initial_stop"],
+                            take_profit=trade_state["take_profit"],
+                            exit_date=T_date.strftime("%Y-%m-%d"),
+                            exit_price=exit_price,
+                            exit_reason=exit_reason,
+                            holding_days=holding_days,
+                        ))
+                    else:
+                        still_open.append(trade_state)
+                open_trades = still_open
 
-                if closed:
-                    entry_dt     = pd.Timestamp(open_trade["entry_date"])
-                    holding_days = max(1, (T_date - entry_dt).days)
-                    completed_trades.append(TradeRecord(
-                        ticker=self.ticker,
-                        setup_type=open_trade["setup_type"],
-                        signal_date=open_trade["signal_date"],
-                        entry_date=open_trade["entry_date"],
-                        entry_price=open_trade["entry_price"],
-                        initial_stop=open_trade["initial_stop"],
-                        take_profit=open_trade["take_profit"],
-                        exit_date=T_date.strftime("%Y-%m-%d"),
-                        exit_price=exit_price,
-                        exit_reason=exit_reason,
-                        holding_days=holding_days,
-                    ))
-                    open_trade = None
-
-                # Skip signal detection while a trade is open
+            # ── 4b. Signal detection — skip when at max concurrent positions
+            if len(open_trades) >= MAX_OPEN_POSITIONS:
                 continue
 
-            # ── 4b. Signal detection on lookahead-safe slice ──────────────
+            # Regime gate: skip new signals if SPY is in a defensive regime
+            if len(_regime_series) > 0:
+                spy_dates_before = _regime_series.index[_regime_series.index <= T_date]
+                if len(spy_dates_before) > 0:
+                    is_bullish_bar = bool(_regime_series.loc[spy_dates_before[-1]])
+                else:
+                    is_bullish_bar = False
+                if not is_bullish_bar:
+                    continue
+
             df_slice  = ticker_df.iloc[:full_idx + 1]   # pre-computed cols included
             spy_slice = spy_df.loc[spy_df.index <= T_date]
 
@@ -680,7 +721,7 @@ class BacktestEngine:
             if take_profit <= entry_price:
                 continue
 
-            open_trade = {
+            open_trades.append({
                 "setup_type":    signal.get("setup_type", self.setup_types[0]),
                 "signal_date":   T_date.strftime("%Y-%m-%d"),
                 "entry_date":    next_date.strftime("%Y-%m-%d"),
@@ -688,28 +729,29 @@ class BacktestEngine:
                 "initial_stop":  stop_loss,
                 "trailing_stop": stop_loss,
                 "take_profit":   take_profit,
-            }
+            })
 
-        # ── 5. Close any still-open trade at end of period ────────────────
-        if open_trade is not None:
-            last_date    = replay_dates[-1]
+        # ── 5. Close any still-open trades at end of period ───────────────
+        if open_trades:
+            last_date     = replay_dates[-1]
             last_full_idx = all_dates.get_loc(last_date)
-            exit_price   = float(ticker_df[adj_col].iloc[last_full_idx])
-            entry_dt     = pd.Timestamp(open_trade["entry_date"])
-            holding_days = max(1, (last_date - entry_dt).days)
-            completed_trades.append(TradeRecord(
-                ticker=self.ticker,
-                setup_type=open_trade["setup_type"],
-                signal_date=open_trade["signal_date"],
-                entry_date=open_trade["entry_date"],
-                entry_price=open_trade["entry_price"],
-                initial_stop=open_trade["initial_stop"],
-                take_profit=open_trade["take_profit"],
-                exit_date=last_date.strftime("%Y-%m-%d"),
-                exit_price=exit_price,
-                exit_reason="EOD",
-                holding_days=holding_days,
-            ))
+            exit_price    = float(ticker_df[adj_col].iloc[last_full_idx])
+            for trade_state in open_trades:
+                entry_dt     = pd.Timestamp(trade_state["entry_date"])
+                holding_days = max(1, (last_date - entry_dt).days)
+                completed_trades.append(TradeRecord(
+                    ticker=self.ticker,
+                    setup_type=trade_state["setup_type"],
+                    signal_date=trade_state["signal_date"],
+                    entry_date=trade_state["entry_date"],
+                    entry_price=trade_state["entry_price"],
+                    initial_stop=trade_state["initial_stop"],
+                    take_profit=trade_state["take_profit"],
+                    exit_date=last_date.strftime("%Y-%m-%d"),
+                    exit_price=exit_price,
+                    exit_reason="EOD",
+                    holding_days=holding_days,
+                ))
 
         # ── 6. Compute and return metrics ─────────────────────────────────
         setup_label = "+".join(self.setup_types)

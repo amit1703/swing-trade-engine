@@ -137,18 +137,19 @@ def test_compute_metrics_win_rate():
 
 
 def test_compute_metrics_profit_factor():
-    """profit_factor = gross_profit / abs(gross_loss)."""
+    """profit_factor = portfolio_gross_profit / abs(portfolio_gross_loss)."""
     from backtest_engine import compute_metrics
     trades = [
-        _make_trade(100, 110, 95),  # +10 pnl_pct
-        _make_trade(100, 95, 95),   # -5 pnl_pct
+        _make_trade(100, 110, 95),  # stop_dist=5%, pos=20%, portfolio +2%
+        _make_trade(100, 95, 95),   # stop_dist=5%, pos=20%, portfolio -1%
     ]
     summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
+    # profit_factor = 2% / 1% = 2.0 (same ratio as raw, same stop used)
     assert abs(summary.profit_factor - 2.0) < 0.05
-    # avg_rr = mean of ALL trades: win rr=2.0, loss rr=-1.0 → avg = 0.5
+    # avg_rr = mean of ALL trades (still raw R): win rr=2.0, loss rr=-1.0 → avg = 0.5
     assert abs(summary.avg_rr - 0.5) < 0.01
-    # net_profit_pct = 10 + (-5) = 5.0
-    assert abs(summary.net_profit_pct - 5.0) < 0.1
+    # net_profit_pct is portfolio-based: 2% + (-1%) = 1.0%
+    assert abs(summary.net_profit_pct - 1.0) < 0.1
 
 
 def test_compute_metrics_no_trades():
@@ -165,16 +166,17 @@ def test_compute_metrics_no_trades():
 
 
 def test_compute_metrics_max_drawdown():
-    """max_drawdown_pct is peak-to-trough of cumulative pnl."""
+    """max_drawdown_pct is peak-to-trough of portfolio equity curve (position-sized)."""
     from backtest_engine import compute_metrics
-    # +10%, -15%, +5% → cumulative: 10, -5, 0 → peak 10, trough -5 = drawdown 15%
+    # +10%, -15%, +5% raw → stop_dist=5%, pos=20% → portfolio +2%, -3%, +1%
+    # equity: 1.0 → 1.02 → 0.9894 → 0.9993; peak=1.02; dd=(1.02-0.9894)/1.02 ≈ 3.0%
     trades = [
-        _make_trade(100, 110, 95, days=5),   # +10%
-        _make_trade(100, 85, 95, days=5),    # -15%
-        _make_trade(100, 105, 95, days=5),   # +5%
+        _make_trade(100, 110, 95, days=5),   # portfolio +2%
+        _make_trade(100, 85, 95, days=5),    # portfolio -3%
+        _make_trade(100, 105, 95, days=5),   # portfolio +1%
     ]
     summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
-    assert abs(summary.max_drawdown_pct - 15.0) < 0.5
+    assert abs(summary.max_drawdown_pct - 3.0) < 0.5
 
 
 def test_manage_trade_stop_hit():
@@ -290,23 +292,144 @@ def test_avg_rr_is_all_trades():
 
 
 def test_peak_equity_compound():
-    """peak_equity tracks the peak of the compound equity curve."""
+    """peak_equity tracks the peak of the portfolio equity curve (position-sized)."""
     from backtest_engine import compute_metrics
-    # +10%, -5%: equity 1.0 → 1.10 → 1.045; peak=1.10 so peak_equity=10.0%
+    # +10%, -5% raw → stop_dist=5%, pos=20% → portfolio +2%, -1%
+    # equity: 1.0 → 1.02 → 1.0098; peak=1.02 → peak_equity=2.0%
     trades = [
-        _make_trade(100, 110, 95, days=5),  # +10%
-        _make_trade(100, 95, 95, days=5),   # -5%
+        _make_trade(100, 110, 95, days=5),  # portfolio +2%
+        _make_trade(100, 95, 95, days=5),   # portfolio -1%
     ]
     summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
-    assert abs(summary.peak_equity - 10.0) < 0.5
+    assert abs(summary.peak_equity - 2.0) < 0.2
 
 
 def test_net_profit_pct():
-    """net_profit_pct = gross_profit + gross_loss (wins + losses)."""
+    """net_profit_pct reflects portfolio-sized returns (1% risk model)."""
     from backtest_engine import compute_metrics
     trades = [
-        _make_trade(100, 110, 95),  # pnl_pct = +10%
-        _make_trade(100, 95, 95),   # pnl_pct = -5%
+        _make_trade(100, 110, 95),  # stop_dist=5%, pos=20%, portfolio=+2%
+        _make_trade(100, 95, 95),   # stop_dist=5%, pos=20%, portfolio=-1%
     ]
     summary = compute_metrics("AAPL", "VCP", "2024-01-01", "2024-12-31", trades)
-    assert abs(summary.net_profit_pct - 5.0) < 0.1
+    assert abs(summary.net_profit_pct - 1.0) < 0.1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Position sizing tests (1% risk model)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_trade_record_portfolio_pnl_pct_on_stop():
+    """portfolio_pnl_pct caps loss at 1% of equity when stopped out at 5% stop distance."""
+    from backtest_engine import TradeRecord
+    trade = TradeRecord(
+        ticker="TEST", setup_type="VCP",
+        signal_date="2024-01-01", entry_date="2024-01-02",
+        entry_price=100.0, initial_stop=95.0,   # 5% stop distance
+        take_profit=110.0, exit_date="2024-01-12",
+        exit_price=95.0, exit_reason="STOP", holding_days=10,
+    )
+    # stop_dist=5%, position=1%/5%=20%, pnl=-5%, portfolio=-5%*20/100=-1%
+    assert hasattr(trade, "portfolio_pnl_pct")
+    assert abs(trade.portfolio_pnl_pct - (-1.0)) < 0.01
+
+
+def test_trade_record_portfolio_pnl_pct_on_win():
+    """portfolio_pnl_pct scales win return with position size."""
+    from backtest_engine import TradeRecord
+    trade = TradeRecord(
+        ticker="TEST", setup_type="VCP",
+        signal_date="2024-01-01", entry_date="2024-01-02",
+        entry_price=100.0, initial_stop=95.0,   # 5% stop distance → 20% position
+        take_profit=110.0, exit_date="2024-01-12",
+        exit_price=110.0, exit_reason="TARGET", holding_days=10,
+    )
+    # portfolio_pnl = 10% * 20% / 100 = 2%
+    assert abs(trade.portfolio_pnl_pct - 2.0) < 0.01
+
+
+def test_trade_record_portfolio_pnl_caps_position_at_20pct():
+    """Very tight stop (1%) → position capped at 20% — portfolio loss capped at 0.2%."""
+    from backtest_engine import TradeRecord
+    trade = TradeRecord(
+        ticker="TEST", setup_type="VCP",
+        signal_date="2024-01-01", entry_date="2024-01-02",
+        entry_price=100.0, initial_stop=99.0,   # 1% stop → raw position 100% → capped at 20%
+        take_profit=110.0, exit_date="2024-01-12",
+        exit_price=99.0, exit_reason="STOP", holding_days=10,
+    )
+    # position capped at 20%, portfolio_pnl = -1% * 20% / 100 = -0.2%
+    assert abs(trade.portfolio_pnl_pct - (-0.2)) < 0.01
+
+
+def test_compute_metrics_drawdown_portfolio_based():
+    """max_drawdown_pct uses portfolio_pnl_pct: 5 consecutive -15% raw losses → ~14% drawdown, not 50%+."""
+    from backtest_engine import compute_metrics
+    trades = [_make_trade(100, 85, 95, days=5)] * 5  # each: stop 5%, pnl -15%, portfolio -3%
+    summary = compute_metrics("TEST", "VCP", "2024-01-01", "2024-12-31", trades)
+    assert summary.max_drawdown_pct < 20.0
+
+
+def test_constants_position_sizing_values():
+    """RISK_PER_TRADE_PCT, MAX_POSITION_SIZE_PCT, MAX_OPEN_POSITIONS are defined."""
+    import constants
+    assert hasattr(constants, "RISK_PER_TRADE_PCT")
+    assert hasattr(constants, "MAX_POSITION_SIZE_PCT")
+    assert hasattr(constants, "MAX_OPEN_POSITIONS")
+    assert constants.RISK_PER_TRADE_PCT == 1.0
+    assert constants.MAX_POSITION_SIZE_PCT == 20.0
+    assert constants.MAX_OPEN_POSITIONS == 5
+
+
+def test_portfolio_pnl_in_trade_dict():
+    """TradeRecord.to_dict() includes portfolio_pnl_pct."""
+    from backtest_engine import TradeRecord
+    trade = TradeRecord(
+        ticker="TEST", setup_type="VCP",
+        signal_date="2024-01-01", entry_date="2024-01-02",
+        entry_price=100.0, initial_stop=95.0,
+        take_profit=110.0, exit_date="2024-01-12",
+        exit_price=110.0, exit_reason="TARGET", holding_days=10,
+    )
+    d = trade.to_dict()
+    assert "portfolio_pnl_pct" in d
+    assert abs(d["portfolio_pnl_pct"] - 2.0) < 0.01
+
+
+def test_backtest_skips_signals_in_defensive_regime():
+    """BacktestEngine should not open trades on bars marked as non-bullish."""
+    import asyncio
+    import numpy as np
+    import pandas as pd
+    from backtest_engine import BacktestEngine
+
+    n = 350
+    dates = pd.date_range("2015-01-01", periods=n, freq="B")
+
+    # Downtrending SPY → all bars will be DEFENSIVE
+    spy_close = np.linspace(200.0, 80.0, n)
+    spy_df = pd.DataFrame({
+        "Close": spy_close, "Open": spy_close, "Volume": np.full(n, 1_000_000),
+        "High": spy_close * 1.01, "Low": spy_close * 0.99,
+    }, index=dates)
+
+    # Ticker: strong bullish price (would normally generate VCP signals)
+    tick_close = np.linspace(80.0, 200.0, n)
+    tick_df = pd.DataFrame({
+        "Close": tick_close, "Open": tick_close * 0.99,
+        "High": tick_close * 1.02, "Low": tick_close * 0.98,
+        "Volume": np.full(n, 2_000_000), "Adj Close": tick_close,
+    }, index=dates)
+
+    engine = BacktestEngine(
+        ticker="TEST",
+        start_date=dates[250].strftime("%Y-%m-%d"),
+        end_date=dates[-1].strftime("%Y-%m-%d"),
+        setup_types=["VCP"],
+        ticker_df=tick_df,
+        spy_df=spy_df,
+    )
+    summary = asyncio.run(engine.run())
+    assert summary.total_trades == 0, (
+        f"Expected 0 trades in defensive regime, got {summary.total_trades}"
+    )
