@@ -88,7 +88,8 @@ def _get_close(ticker: str) -> pd.Series | None:
     if not isinstance(close.index, pd.DatetimeIndex):
         close.index = pd.to_datetime(close.index)
     # Drop timezone info for consistent comparison
-    close.index = close.index.tz_localize(None)
+    if close.index.tz is not None:
+        close.index = close.index.tz_convert(None)
     return close
 
 
@@ -97,28 +98,6 @@ def _period_return(close: pd.Series, n: int) -> float | None:
     if len(close) < n + 1:
         return None
     return float(close.iloc[-1] / close.iloc[-(n + 1)] - 1)
-
-
-def compute_rs_score(ticker: str, spy_close: pd.Series) -> float | None:
-    """
-    Compute O'Neil composite RS score relative to SPY.
-
-    Formula: (63d×40%) + (126d×20%) + (189d×20%) + (252d×20%)
-    Each component = stock_period_return - spy_period_return
-    """
-    stock_close = _get_close(ticker)
-    if stock_close is None:
-        return None
-
-    weights = [(63, 0.40), (126, 0.20), (189, 0.20), (252, 0.20)]
-    score = 0.0
-    for n, w in weights:
-        stock_ret = _period_return(stock_close, n)
-        spy_ret = _period_return(spy_close, n)
-        if stock_ret is None or spy_ret is None:
-            return None
-        score += w * (stock_ret - spy_ret)
-    return score
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +148,7 @@ def main() -> None:
     # ── 3. No-lookahead cutoff ─────────────────────────────────────────────
     cutoff_date = datetime.today() - timedelta(days=730)
     cutoff_str = cutoff_date.strftime("%Y-%m-%d")
-    print(f"\nRS cutoff date (today - 24 months): {cutoff_str}")
+    print(f"\nRS cutoff date (today - 730 days (≈ 2 years)): {cutoff_str}")
 
     # ── 4. Load SPY and truncate to cutoff ────────────────────────────────
     spy_close_full = _get_close("SPY")
@@ -191,10 +170,12 @@ def main() -> None:
             skipped.append(ticker)
             continue
         # Truncate stock data to cutoff (no-lookahead)
-        stock_close_full = _get_close(ticker)
-        if stock_close_full is None:
+        stock_close = _get_close(ticker)
+        if stock_close is None:
+            print(f"  WARN: {ticker} — loaded but no usable close data, skipping")
             skipped.append(ticker)
             continue
+        stock_close_full = stock_close
         # Monkey-patch: replace close with truncated version for scoring
         # We do this inline rather than modifying _get_close
         stock_close_truncated = stock_close_full[stock_close_full.index <= cutoff_date]
