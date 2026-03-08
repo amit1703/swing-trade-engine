@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import csv
 import importlib
 import json
 import math
@@ -138,6 +139,23 @@ def _compute_robustness_score(
         (expectancy * profit_factor * math.sqrt(total_trades))
         / (1.0 + max_drawdown_pct * 2.5)
     )
+
+
+def _log_trial(trial: "optuna.trial.FrozenTrial", log_path: str = "optuna_trial_log.csv") -> None:
+    """Append per-trial diagnostics to CSV for live monitoring."""
+    fieldnames = [
+        "trial_number", "value",
+        "ATR_MULTIPLIER", "VCP_TIGHTNESS_RANGE", "BREAKOUT_BUFFER_ATR",
+        "BREAKOUT_VOL_MULT", "TARGET_RR", "TRAIL_ATR_MULT", "REGIME_BULL_THRESHOLD",
+    ]
+    file_exists = os.path.exists(log_path)
+    with open(log_path, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        if not file_exists:
+            writer.writeheader()
+        row = {"trial_number": trial.number, "value": trial.value}
+        row.update(trial.params)
+        writer.writerow(row)
 
 
 # ── WFO configuration ─────────────────────────────────────────────────────────
@@ -280,6 +298,13 @@ def _export_best(study, suppress_output: bool = False) -> None:
         "oos_metrics": metrics,
     }
 
+    try:
+        import optuna as _optuna
+        importance = _optuna.importance.get_param_importances(study)
+    except Exception:
+        importance = {}
+    output["param_importance"] = importance
+
     _OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     _OUTPUT_PATH.write_text(json.dumps(output, indent=2))
 
@@ -329,6 +354,8 @@ def main(n_trials: int = _DEFAULT_TRIALS, suppress_output: bool = False) -> None
                     pbar.set_postfix({"best": round(study.best_value, 4)})
                 except Exception:
                     pass
+                _log_trial(trial)
+                print(f"Trial {trial.number}: score={trial.value:.4f}")
             study.optimize(objective, n_trials=remaining, callbacks=[_cb])
 
     try:

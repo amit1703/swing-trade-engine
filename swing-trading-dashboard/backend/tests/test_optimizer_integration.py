@@ -159,3 +159,55 @@ def test_v3_study_defaults():
     importlib.reload(optimizer)
     assert optimizer._STUDY_NAME == "trading_optimizer_v3"
     assert optimizer._DEFAULT_TRIALS == 300
+
+
+def test_log_trial_creates_csv(tmp_path):
+    """_log_trial appends a row to the CSV file."""
+    import os
+    import importlib
+    import optimize_parameters as optimizer
+    importlib.reload(optimizer)
+
+    log_path = str(tmp_path / "trial_log.csv")
+
+    # Create a minimal FrozenTrial-like object
+    import optuna
+    study = optuna.create_study(direction="maximize")
+    study.optimize(lambda t: t.suggest_float("ATR_MULTIPLIER", 1.2, 1.6), n_trials=1)
+    trial = study.trials[0]
+
+    optimizer._log_trial(trial, log_path=log_path)
+
+    assert os.path.exists(log_path)
+    with open(log_path) as f:
+        lines = f.readlines()
+    assert len(lines) == 2  # header + 1 data row
+    assert "trial_number" in lines[0]
+
+
+def test_export_best_includes_param_importance(tmp_path, monkeypatch):
+    """_export_best must include param_importance key in JSON output."""
+    import json
+    import importlib
+    import optimize_parameters as optimizer
+    importlib.reload(optimizer)
+
+    # Patch output path
+    monkeypatch.setattr(optimizer, "_OUTPUT_PATH", tmp_path / "best_parameters.json")
+
+    # Create a study with a few trials
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    study = optuna.create_study(direction="maximize", storage=None)
+    study.optimize(
+        lambda t: t.suggest_float("ATR_MULTIPLIER", 1.2, 1.6) - 1.3,
+        n_trials=3
+    )
+
+    optimizer._export_best(study)
+
+    with open(tmp_path / "best_parameters.json") as f:
+        data = json.load(f)
+
+    assert "param_importance" in data
+    assert isinstance(data["param_importance"], dict)
