@@ -63,6 +63,7 @@ def _json_safe(obj):
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from filters import in_earnings_blackout as _in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, cci as _cci, atr as _atr
 from indicators.indicator_engine import compute_indicators, TickerIndicators
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
@@ -454,18 +455,18 @@ def _check_earnings_blackout_sync(ticker: str) -> bool:
                 cal_dict = cal.to_dict("list")
                 dates = cal_dict.get("Earnings Date", [])
 
+            dates_to_check = []
             for d in dates:
                 try:
                     if hasattr(d, "to_pydatetime"):
                         d = d.to_pydatetime().replace(tzinfo=None)
                     elif isinstance(d, str):
                         d = datetime.fromisoformat(d)
-                    days_until = (d - now).days
-                    if -1 <= days_until <= EARNINGS_BLACKOUT_DAYS:
-                        blackout = True
-                        break
+                    dates_to_check.append(d.strftime("%Y-%m-%d"))
                 except Exception:
                     pass
+            today_str = now.strftime("%Y-%m-%d")
+            blackout = _in_earnings_blackout(today_str, dates_to_check)
     except Exception:
         pass  # Fail open — don't block tickers we can't check
 
