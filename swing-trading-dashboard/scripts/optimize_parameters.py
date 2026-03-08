@@ -131,3 +131,191 @@ def _compute_robustness_score(
         (expectancy * profit_factor * math.sqrt(total_trades))
         / (1.0 + max_drawdown_pct * 2.5)
     )
+
+
+# ── WFO configuration ─────────────────────────────────────────────────────────
+WFO_SETUP_TYPES = ["VCP", "PULLBACK", "BASE", "RES_BREAKOUT"]
+WFO_IS_MONTHS   = 36
+WFO_OOS_MONTHS  = 6
+WFO_STEP_MONTHS = 6
+
+# ── Paths (overridable in tests) ──────────────────────────────────────────────
+_OUTPUT_PATH = _PROJECT_DIR / "config" / "best_parameters.json"
+_STUDY_DB    = str(_PROJECT_DIR / "optuna_study.db")
+
+
+def _aggregate_oos_metrics(windows: list) -> dict:
+    """Compute aggregate metrics from OOS trades across all WFO windows."""
+    oos_trades = [t for w in windows for t in w.oos_trades]
+    total = len(oos_trades)
+    if total == 0:
+        return {
+            "total_trades": 0, "expectancy": 0.0, "profit_factor": 0.0,
+            "max_drawdown_pct": 0.0, "win_rate": 0.0, "net_profit_pct": 0.0,
+        }
+
+    wins   = [t for t in oos_trades if t["is_win"]]
+    losses = [t for t in oos_trades if not t["is_win"]]
+
+    win_rate   = len(wins) / total
+    loss_rate  = len(losses) / total
+    avg_win_r  = sum(t["rr_achieved"] for t in wins) / len(wins)     if wins   else 0.0
+    avg_loss_r = sum(abs(t["rr_achieved"]) for t in losses) / len(losses) if losses else 0.0
+    expectancy = win_rate * avg_win_r - loss_rate * avg_loss_r
+
+    gross_profit  = sum(t["pnl_pct"] for t in wins)
+    gross_loss    = abs(sum(t["pnl_pct"] for t in losses))
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else gross_profit
+    net_profit    = sum(t["pnl_pct"] for t in oos_trades)
+
+    equity = 1.0; peak = 1.0; max_dd = 0.0
+    for t in oos_trades:
+        equity *= 1.0 + t["pnl_pct"] / 100.0
+        if equity > peak:
+            peak = equity
+        dd = (peak - equity) / peak * 100.0
+        if dd > max_dd:
+            max_dd = dd
+
+    return {
+        "total_trades":     total,
+        "win_rate":         round(win_rate * 100, 2),
+        "expectancy":       round(expectancy, 4),
+        "profit_factor":    round(min(profit_factor, 9999.0), 4),
+        "max_drawdown_pct": round(max_dd, 2),
+        "net_profit_pct":   round(net_profit, 2),
+    }
+
+
+def objective(trial) -> float:
+    """Optuna objective: patch constants → run WFO → compute robustness score."""
+    import optuna
+
+    params = {
+        "ATR_MULTIPLIER":      trial.suggest_float("ATR_MULTIPLIER",      0.5,  1.5),
+        "VCP_TIGHTNESS_RANGE": trial.suggest_float("VCP_TIGHTNESS_RANGE", 0.015, 0.05),
+        "BREAKOUT_BUFFER_ATR": trial.suggest_float("BREAKOUT_BUFFER_ATR", 0.1,  0.5),
+        "BREAKOUT_VOL_MULT":   trial.suggest_float("BREAKOUT_VOL_MULT",   1.0,  2.0),
+        "TARGET_RR":           trial.suggest_float("TARGET_RR",           1.5,  3.5),
+        "TRAIL_ATR_MULT":      trial.suggest_float("TRAIL_ATR_MULT",      1.0,  3.0),
+    }
+
+    with _patch_constants(params):
+        result = asyncio.run(run_wfo(
+            tickers=REPRESENTATIVE_TICKERS,
+            setup_types=WFO_SETUP_TYPES,
+            is_months=WFO_IS_MONTHS,
+            oos_months=WFO_OOS_MONTHS,
+            step_months=WFO_STEP_MONTHS,
+            run_id=f"optuna_trial_{trial.number}",
+        ))
+
+    metrics = _aggregate_oos_metrics(result.windows)
+
+    score = _compute_robustness_score(
+        expectancy=metrics["expectancy"],
+        profit_factor=metrics["profit_factor"],
+        total_trades=metrics["total_trades"],
+        max_drawdown_pct=metrics["max_drawdown_pct"],
+    )
+
+    # Cache metrics on trial for export
+    trial.set_user_attr("metrics", metrics)
+
+    # Report for pruning
+    trial.report(score, step=0)
+    if trial.should_prune():
+        raise optuna.TrialPruned()
+
+    return score
+
+
+def _export_best(study, suppress_output: bool = False) -> None:
+    """Print summary and write config/best_parameters.json."""
+    best = study.best_trial
+    metrics = best.user_attrs.get("metrics", {})
+
+    output = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "study_name":   study.study_name,
+        "best_trial":   best.number,
+        "best_score":   round(best.value, 6),
+        "parameters":   {
+            k: round(v, 6) if isinstance(v, float) else v
+            for k, v in best.params.items()
+        },
+        "oos_metrics": metrics,
+    }
+
+    _OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _OUTPUT_PATH.write_text(json.dumps(output, indent=2))
+
+    if not suppress_output:
+        print("\n" + "="*55)
+        print("  BEST PARAMETERS")
+        print("="*55)
+        for k, v in best.params.items():
+            print(f"  {k:<25} {round(v, 4) if isinstance(v, float) else v}")
+        print("\n  OOS Performance:")
+        for k, v in metrics.items():
+            print(f"  {k:<25} {v}")
+        print(f"\n  Robustness Score:  {best.value:.4f}")
+        print(f"  Exported to:       {_OUTPUT_PATH}")
+        print("="*55)
+
+
+def main(n_trials: int = 200, suppress_output: bool = False) -> None:
+    import optuna
+    from optuna.samplers import TPESampler
+    from optuna.pruners import MedianPruner
+    from tqdm import tqdm
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    _preload_modules()
+
+    study = optuna.create_study(
+        study_name="trading_optimizer",
+        storage=f"sqlite:///{_STUDY_DB}",
+        direction="maximize",
+        sampler=TPESampler(seed=42),
+        pruner=MedianPruner(n_startup_trials=10, n_warmup_steps=2),
+        load_if_exists=True,
+    )
+
+    completed_before = len([t for t in study.trials if t.state.name == "COMPLETE"])
+    remaining = max(0, n_trials - completed_before)
+
+    if not suppress_output:
+        print(f"Study: {study.study_name}  |  Completed: {completed_before}  |  Running: {remaining}")
+
+    if remaining > 0:
+        with tqdm(total=remaining, desc="Optimizing", unit="trial", disable=suppress_output) as pbar:
+            def _cb(study, trial):
+                pbar.update(1)
+                try:
+                    pbar.set_postfix({"best": round(study.best_value, 4)})
+                except Exception:
+                    pass
+            study.optimize(objective, n_trials=remaining, callbacks=[_cb])
+
+    try:
+        _ = study.best_trial
+        _export_best(study, suppress_output=suppress_output)
+    except ValueError:
+        if not suppress_output:
+            print("No completed trials yet.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Optuna parameter optimizer for swing trading system")
+    parser.add_argument(
+        "--trials", type=int, default=200,
+        help="Total trials to run (default: 200). Study resumes automatically if DB exists.",
+    )
+    args = parser.parse_args()
+
+    # Late imports (avoids startup cost in unit tests that import only the helpers)
+    from wfo_engine import run_wfo                          # noqa: F811
+    from representative_tickers import REPRESENTATIVE_TICKERS  # noqa: F811
+
+    main(n_trials=args.trials)
