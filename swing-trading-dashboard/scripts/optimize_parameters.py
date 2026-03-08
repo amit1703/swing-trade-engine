@@ -146,6 +146,10 @@ WFO_IS_MONTHS   = 36
 WFO_OOS_MONTHS  = 6
 WFO_STEP_MONTHS = 6
 
+# ── Study defaults ────────────────────────────────────────────────────────────
+_STUDY_NAME     = "trading_optimizer_v3"
+_DEFAULT_TRIALS = 300
+
 # ── Paths (overridable in tests) ──────────────────────────────────────────────
 _OUTPUT_PATH = _PROJECT_DIR / "config" / "best_parameters.json"
 _STUDY_DB    = str(_PROJECT_DIR / "optuna_study.db")
@@ -293,7 +297,7 @@ def _export_best(study, suppress_output: bool = False) -> None:
         print("="*55)
 
 
-def main(n_trials: int = 200, suppress_output: bool = False) -> None:
+def main(n_trials: int = _DEFAULT_TRIALS, suppress_output: bool = False) -> None:
     import optuna
     from optuna.samplers import TPESampler
     from optuna.pruners import MedianPruner
@@ -303,7 +307,7 @@ def main(n_trials: int = 200, suppress_output: bool = False) -> None:
     _preload_modules()
 
     study = optuna.create_study(
-        study_name="trading_optimizer_v2",
+        study_name=_STUDY_NAME,
         storage=f"sqlite:///{_STUDY_DB}",
         direction="maximize",
         sampler=TPESampler(seed=42),
@@ -338,8 +342,8 @@ def main(n_trials: int = 200, suppress_output: bool = False) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Optuna parameter optimizer for swing trading system")
     parser.add_argument(
-        "--trials", type=int, default=200,
-        help="Total trials to run (default: 200). Study resumes automatically if DB exists.",
+        "--trials", type=int, default=_DEFAULT_TRIALS,
+        help="Total trials to run (default: 300). Study resumes automatically if DB exists.",
     )
     args = parser.parse_args()
 

@@ -150,3 +150,12 @@ def test_oos_metrics_empty_windows():
     metrics = _aggregate_oos_metrics([window])
     assert metrics["total_trades"] == 0
     assert metrics["expectancy"] == 0.0
+
+
+def test_v3_study_defaults():
+    """Optimizer must default to v3 study name and 300 trials."""
+    import importlib
+    import optimize_parameters as optimizer
+    importlib.reload(optimizer)
+    assert optimizer._STUDY_NAME == "trading_optimizer_v3"
+    assert optimizer._DEFAULT_TRIALS == 300
