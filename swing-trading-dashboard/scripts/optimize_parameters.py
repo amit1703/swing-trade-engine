@@ -202,7 +202,7 @@ def objective(trial) -> float:
 
     with _patch_constants(params):
         result = asyncio.run(run_wfo(
-            tickers=REPRESENTATIVE_TICKERS,
+            tickers=["SPY"] + REPRESENTATIVE_TICKERS,
             setup_types=WFO_SETUP_TYPES,
             is_months=WFO_IS_MONTHS,
             oos_months=WFO_OOS_MONTHS,
