@@ -42,6 +42,10 @@ except ImportError:
     run_wfo = None              # type: ignore[assignment]
     REPRESENTATIVE_TICKERS = [] # type: ignore[assignment]
 
+# Import portfolio sizing constants (available regardless of wfo_engine import)
+sys.path.insert(0, str(_BACKEND_DIR))
+from constants import MAX_OPEN_POSITIONS
+
 # ── Module patch map ──────────────────────────────────────────────────────────
 # Each entry: param_key → list of (module_name, attribute_name) to override.
 _MODULE_PATCHES: dict[str, list[tuple[str, str]]] = {
@@ -144,9 +148,30 @@ _OUTPUT_PATH = _PROJECT_DIR / "config" / "best_parameters.json"
 _STUDY_DB    = str(_PROJECT_DIR / "optuna_study.db")
 
 
+def _apply_portfolio_cap_dicts(trades: list, max_positions: int) -> list:
+    """
+    Portfolio-wide position cap for dict-based trade lists (from WFOWindowResult.oos_trades).
+    Mirrors wfo_engine._apply_portfolio_cap but operates on to_dict() output.
+    """
+    if not trades or max_positions <= 0:
+        return trades
+    sorted_trades = sorted(trades, key=lambda t: (t["entry_date"], t["ticker"]))
+    accepted: list = []
+    for trade in sorted_trades:
+        open_count = sum(
+            1 for t in accepted
+            if t["entry_date"] <= trade["entry_date"] < t["exit_date"]
+        )
+        if open_count < max_positions:
+            accepted.append(trade)
+    return accepted
+
+
 def _aggregate_oos_metrics(windows: list) -> dict:
     """Compute aggregate metrics from OOS trades across all WFO windows."""
-    oos_trades = [t for w in windows for t in w.oos_trades]
+    raw_trades = [t for w in windows for t in w.oos_trades]
+    # Enforce portfolio-wide position cap on combined OOS trade list
+    oos_trades = _apply_portfolio_cap_dicts(raw_trades, MAX_OPEN_POSITIONS)
     total = len(oos_trades)
     if total == 0:
         return {
@@ -163,14 +188,14 @@ def _aggregate_oos_metrics(windows: list) -> dict:
     avg_loss_r = sum(abs(t["rr_achieved"]) for t in losses) / len(losses) if losses else 0.0
     expectancy = win_rate * avg_win_r - loss_rate * avg_loss_r
 
-    gross_profit  = sum(t["pnl_pct"] for t in wins)
-    gross_loss    = abs(sum(t["pnl_pct"] for t in losses))
+    gross_profit  = sum(t["portfolio_pnl_pct"] for t in wins)
+    gross_loss    = abs(sum(t["portfolio_pnl_pct"] for t in losses))
     profit_factor = gross_profit / gross_loss if gross_loss > 0 else gross_profit
-    net_profit    = sum(t["pnl_pct"] for t in oos_trades)
+    net_profit    = sum(t["portfolio_pnl_pct"] for t in oos_trades)
 
     equity = 1.0; peak = 1.0; max_dd = 0.0
     for t in oos_trades:
-        equity *= 1.0 + t["pnl_pct"] / 100.0
+        equity *= 1.0 + t["portfolio_pnl_pct"] / 100.0
         if equity > peak:
             peak = equity
         dd = (peak - equity) / peak * 100.0
@@ -192,12 +217,12 @@ def objective(trial) -> float:
     import optuna
 
     params = {
-        "ATR_MULTIPLIER":      trial.suggest_float("ATR_MULTIPLIER",      0.8,  1.4),
-        "VCP_TIGHTNESS_RANGE": trial.suggest_float("VCP_TIGHTNESS_RANGE", 0.015, 0.05),
-        "BREAKOUT_BUFFER_ATR": trial.suggest_float("BREAKOUT_BUFFER_ATR", 0.1,  0.5),
-        "BREAKOUT_VOL_MULT":   trial.suggest_float("BREAKOUT_VOL_MULT",   1.0,  2.0),
-        "TARGET_RR":           trial.suggest_float("TARGET_RR",           1.8,  3.0),
-        "TRAIL_ATR_MULT":      trial.suggest_float("TRAIL_ATR_MULT",      1.0,  2.5),
+        "ATR_MULTIPLIER":      trial.suggest_float("ATR_MULTIPLIER",      1.20, 1.60),
+        "VCP_TIGHTNESS_RANGE": trial.suggest_float("VCP_TIGHTNESS_RANGE", 0.035, 0.070),
+        "BREAKOUT_BUFFER_ATR": trial.suggest_float("BREAKOUT_BUFFER_ATR", 0.30, 0.50),
+        "BREAKOUT_VOL_MULT":   trial.suggest_float("BREAKOUT_VOL_MULT",   0.80, 1.30),
+        "TARGET_RR":           trial.suggest_float("TARGET_RR",           2.20, 2.80),
+        "TRAIL_ATR_MULT":      trial.suggest_float("TRAIL_ATR_MULT",      1.80, 3.00),
     }
 
     with _patch_constants(params):

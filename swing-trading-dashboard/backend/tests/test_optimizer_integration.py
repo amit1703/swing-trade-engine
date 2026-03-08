@@ -21,17 +21,39 @@ sys.path.insert(0, str(_SCRIPTS_DIR))
 
 
 def _make_fake_windows(n_wins: int = 25, n_losses: int = 20) -> list:
-    """Build fake WFO windows with enough OOS trades to pass the 40-trade gate."""
-    wins = [
-        {"is_win": True,  "rr_achieved": 2.0, "pnl_pct": 2.0}
-        for _ in range(n_wins)
-    ]
-    losses = [
-        {"is_win": False, "rr_achieved": -1.0, "pnl_pct": -1.0}
-        for _ in range(n_losses)
-    ]
+    """Build fake WFO windows with enough OOS trades to pass the 40-trade gate.
+
+    Trades are sequential (non-overlapping) so the portfolio position cap
+    does not filter any of them out. Each dict matches TradeRecord.to_dict().
+    """
+    from datetime import date, timedelta
+    trades = []
+    # Alternate wins and losses; assign sequential non-overlapping dates
+    results = [(True, 2.0, 2.0, 0.4)] * n_wins + [(False, -1.0, -1.0, -0.2)] * n_losses
+    base = date(2024, 1, 2)
+    tickers = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]
+    for i, (is_win, rr, pnl, portfolio_pnl) in enumerate(results):
+        entry = base + timedelta(days=i * 11)   # 11-day gap → no overlap
+        exit_ = entry + timedelta(days=10)
+        trades.append({
+            "ticker":            tickers[i % len(tickers)],
+            "setup_type":        "VCP",
+            "signal_date":       entry.isoformat(),
+            "entry_date":        entry.isoformat(),
+            "exit_date":         exit_.isoformat(),
+            "entry_price":       100.0,
+            "initial_stop":      95.0,
+            "take_profit":       110.0,
+            "exit_price":        110.0 if is_win else 95.0,
+            "exit_reason":       "TARGET" if is_win else "STOP",
+            "holding_days":      10,
+            "rr_achieved":       rr,
+            "pnl_pct":           pnl,
+            "portfolio_pnl_pct": portfolio_pnl,
+            "is_win":            is_win,
+        })
     window = MagicMock()
-    window.oos_trades = wins + losses
+    window.oos_trades = trades
     return [window]
 
 
@@ -82,6 +104,14 @@ def test_main_creates_best_parameters_json(tmp_output):
         "BREAKOUT_VOL_MULT", "TARGET_RR", "TRAIL_ATR_MULT",
     }
     assert set(params.keys()) == expected_keys, f"Missing/extra keys: {set(params.keys()) ^ expected_keys}"
+
+    # v3: verify parameter values fall within the new narrower search bounds
+    assert 1.20 <= params["ATR_MULTIPLIER"]       <= 1.60, f"ATR_MULTIPLIER out of v3 range: {params['ATR_MULTIPLIER']}"
+    assert 1.80 <= params["TRAIL_ATR_MULT"]       <= 3.00, f"TRAIL_ATR_MULT out of v3 range: {params['TRAIL_ATR_MULT']}"
+    assert 0.80 <= params["BREAKOUT_VOL_MULT"]    <= 1.30, f"BREAKOUT_VOL_MULT out of v3 range: {params['BREAKOUT_VOL_MULT']}"
+    assert 0.035 <= params["VCP_TIGHTNESS_RANGE"] <= 0.070, f"VCP_TIGHTNESS_RANGE out of v3 range: {params['VCP_TIGHTNESS_RANGE']}"
+    assert 0.30 <= params["BREAKOUT_BUFFER_ATR"]  <= 0.50, f"BREAKOUT_BUFFER_ATR out of v3 range: {params['BREAKOUT_BUFFER_ATR']}"
+    assert 2.20 <= params["TARGET_RR"]            <= 2.80, f"TARGET_RR out of v3 range: {params['TARGET_RR']}"
 
 
 def test_main_zero_trials_no_crash(tmp_output):
