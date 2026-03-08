@@ -4,7 +4,7 @@ Optuna-based parameter optimizer for the swing trading system.
 Usage
 -----
     cd swing-trading-dashboard/backend
-    python ../scripts/optimize_parameters.py --trials 200
+    python ../scripts/optimize_parameters.py --trials 300
     python ../scripts/optimize_parameters.py --trials 50    # quick test
 
 The study persists in optuna_study.db (project root) and resumes automatically.
