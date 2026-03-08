@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from wfo_engine import _generate_windows, _compute_wfo_metrics, WFOMetrics
+from wfo_engine import _generate_windows, _compute_wfo_metrics, _apply_portfolio_cap, WFOMetrics
 from backtest_engine import TradeRecord
 
 
@@ -99,6 +99,69 @@ def test_compute_wfo_metrics_reliable_flag():
     assert m_yes.reliable is True
 
 
+def _make_trade_dated(ticker, entry_date, exit_date, rr=1.0):
+    """Create a TradeRecord with specific dates for portfolio cap testing."""
+    entry = 100.0
+    stop  = 95.0   # 5% stop
+    exit_p = entry + rr * (entry - stop) if rr > 0 else stop
+    return TradeRecord(
+        ticker=ticker, setup_type="VCP",
+        signal_date=entry_date, entry_date=entry_date,
+        entry_price=entry, initial_stop=stop,
+        take_profit=110.0, exit_date=exit_date,
+        exit_price=exit_p,
+        exit_reason="TARGET" if rr > 0 else "STOP",
+        holding_days=10,
+    )
+
+
+def test_apply_portfolio_cap_limits_concurrent_positions():
+    """10 trades all starting on same day → only MAX_OPEN_POSITIONS (5) accepted."""
+    trades = [
+        _make_trade_dated(f"TICK{i}", "2024-01-02", "2024-01-20", rr=2.0)
+        for i in range(10)
+    ]
+    result = _apply_portfolio_cap(trades, max_positions=5)
+    assert len(result) == 5
+
+
+def test_apply_portfolio_cap_allows_sequential_trades():
+    """Trades that don't overlap in time are all accepted regardless of count."""
+    # Each trade starts after the previous one exits
+    trades = [
+        _make_trade_dated("AAPL", "2024-01-02", "2024-01-10", rr=2.0),
+        _make_trade_dated("MSFT", "2024-01-11", "2024-01-20", rr=2.0),
+        _make_trade_dated("NVDA", "2024-01-21", "2024-01-30", rr=2.0),
+        _make_trade_dated("GOOGL", "2024-01-31", "2024-02-10", rr=2.0),
+        _make_trade_dated("AMZN", "2024-02-11", "2024-02-20", rr=2.0),
+        _make_trade_dated("TSLA", "2024-02-21", "2024-03-01", rr=2.0),
+    ]
+    result = _apply_portfolio_cap(trades, max_positions=5)
+    # All 6 are sequential — none overlap — all accepted
+    assert len(result) == 6
+
+
+def test_apply_portfolio_cap_partial_overlap():
+    """When 4 are open and 2 new ones start, only 1 of the 2 is accepted (cap=5)."""
+    # 4 long-running trades already open
+    long_running = [
+        _make_trade_dated(f"BASE{i}", "2024-01-01", "2024-02-28", rr=2.0)
+        for i in range(4)
+    ]
+    # 2 new trades start mid-way — only 1 slot remaining
+    new_trades = [
+        _make_trade_dated("NEW1", "2024-01-15", "2024-01-25", rr=2.0),
+        _make_trade_dated("NEW2", "2024-01-15", "2024-01-25", rr=2.0),
+    ]
+    result = _apply_portfolio_cap(long_running + new_trades, max_positions=5)
+    assert len(result) == 5   # 4 base + 1 new
+
+
+def test_apply_portfolio_cap_empty_list():
+    """Empty input returns empty list without error."""
+    assert _apply_portfolio_cap([], max_positions=5) == []
+
+
 @pytest.mark.asyncio
 async def test_run_wfo_returns_wfo_result():
     """run_wfo returns a WFOResult with the correct metadata."""
@@ -135,3 +198,46 @@ async def test_run_wfo_returns_wfo_result():
     assert result.tickers == ["AAPL"]
     assert result.is_months == 12
     assert len(result.windows) > 0
+
+
+@pytest.mark.asyncio
+async def test_run_wfo_passes_spy_df_to_backtest():
+    """run_wfo should load SPY data and pass it to BacktestEngine (regime gate active)."""
+    from wfo_engine import run_wfo
+    import numpy as np
+    import pandas as pd
+    from unittest.mock import patch
+
+    n = 500
+    dates = pd.date_range("2015-01-01", periods=n, freq="B")
+
+    # Downtrending SPY → defensive regime → expect 0 new-signal trades
+    spy_close = np.linspace(200.0, 50.0, n)
+    mock_spy_df = pd.DataFrame({
+        "Close": spy_close, "Open": spy_close,
+        "High": spy_close * 1.01, "Low": spy_close * 0.99,
+        "Volume": np.full(n, 10_000_000), "Adj Close": spy_close,
+    }, index=dates)
+
+    # Bullish liquid ticker (would generate signals WITHOUT the regime gate)
+    tick_close = np.linspace(100.0, 200.0, n)
+    mock_tick_df = pd.DataFrame({
+        "Close": tick_close, "Open": tick_close * 0.99,
+        "High": tick_close * 1.02, "Low": tick_close * 0.98,
+        "Volume": np.full(n, 5_000_000), "Adj Close": tick_close,
+    }, index=dates)
+
+    def load_either(ticker):
+        return mock_spy_df if ticker == "SPY" else mock_tick_df
+
+    with patch("wfo_engine.load_ticker", side_effect=load_either), \
+         patch("wfo_engine.cache_exists", return_value=True):
+        result = await run_wfo(
+            tickers=["AAPL"],
+            setup_types=["VCP"],
+            is_months=12, oos_months=3, step_months=6,
+            min_trades=1,
+        )
+
+    total_oos = sum(len(w.oos_trades) for w in result.windows)
+    assert total_oos == 0, f"Expected 0 OOS trades in defensive SPY regime, got {total_oos}"

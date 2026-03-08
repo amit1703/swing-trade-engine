@@ -32,6 +32,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(__file__))
 from backtest_engine import BacktestEngine, TradeRecord, WARMUP_BARS
+from constants import MAX_OPEN_POSITIONS
 from wfo_cache import load_ticker, cache_exists
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 
@@ -223,6 +224,39 @@ def _run_backtest_sync(
 # Metrics computation
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _apply_portfolio_cap(
+    trades: List[TradeRecord],
+    max_positions: int = MAX_OPEN_POSITIONS,
+) -> List[TradeRecord]:
+    """
+    Enforce a portfolio-wide concurrent position limit across all tickers.
+
+    Individual BacktestEngine instances cap positions per ticker, but when
+    multiple tickers run in parallel their trades are combined here without
+    any cross-ticker coordination. This function enforces the true portfolio
+    cap on the merged trade list.
+
+    Processes trades in entry-date order (FIFO). A trade is accepted only if
+    fewer than max_positions trades are currently open (entry_date ≤ T < exit_date)
+    when it enters. Ties at the same entry_date are broken by ticker name.
+    """
+    if not trades or max_positions <= 0:
+        return list(trades)
+
+    sorted_trades = sorted(trades, key=lambda t: (t.entry_date, t.ticker))
+    accepted: List[TradeRecord] = []
+
+    for trade in sorted_trades:
+        open_count = sum(
+            1 for t in accepted
+            if t.entry_date <= trade.entry_date < t.exit_date
+        )
+        if open_count < max_positions:
+            accepted.append(trade)
+
+    return accepted
+
+
 def _compute_wfo_metrics(trades: List[TradeRecord], min_trades: int) -> WFOMetrics:
     """
     Compute WFO-specific aggregate metrics from a list of TradeRecord objects.
@@ -250,10 +284,10 @@ def _compute_wfo_metrics(trades: List[TradeRecord], min_trades: int) -> WFOMetri
     loss_rate_frac = len(losses) / n
     expectancy = (win_rate_frac * avg_win_r) - (loss_rate_frac * avg_loss_r_abs)
 
-    gross_profit   = sum(t.pnl_pct for t in wins)
-    gross_loss     = abs(sum(t.pnl_pct for t in losses))
+    gross_profit   = sum(t.portfolio_pnl_pct for t in wins)
+    gross_loss     = abs(sum(t.portfolio_pnl_pct for t in losses))
     profit_factor  = gross_profit / gross_loss if gross_loss > 0 else float("inf")
-    net_profit_pct = sum(t.pnl_pct for t in trades)
+    net_profit_pct = sum(t.portfolio_pnl_pct for t in trades)
 
     return WFOMetrics(
         trades=n,
@@ -423,6 +457,12 @@ async def run_wfo(
                     is_trades_all.extend(summary.trades)
                 else:
                     oos_trades_all.extend(summary.trades)
+
+            # ── Enforce portfolio-wide position cap before aggregation ─────
+            # Each BacktestEngine caps per ticker; this enforces the global
+            # limit across all tickers combined (e.g. max 5 concurrent total).
+            is_trades_all  = _apply_portfolio_cap(is_trades_all)
+            oos_trades_all = _apply_portfolio_cap(oos_trades_all)
 
             # ── Compute aggregate metrics ──────────────────────────────────
             is_metrics  = _compute_wfo_metrics(is_trades_all,  min_trades)
