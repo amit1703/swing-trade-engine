@@ -78,6 +78,9 @@ _MODULE_PATCHES: dict[str, list[tuple[str, str]]] = {
     "TRAIL_ATR_MULT": [
         ("constants", "TRAIL_ATR_MULT"),
     ],
+    "REGIME_BULL_THRESHOLD": [
+        ("filters", "REGIME_SELECTIVE_THRESHOLD"),
+    ],
 }
 
 
@@ -223,6 +226,7 @@ def objective(trial) -> float:
         "BREAKOUT_VOL_MULT":   trial.suggest_float("BREAKOUT_VOL_MULT",   0.80, 1.30),
         "TARGET_RR":           trial.suggest_float("TARGET_RR",           2.20, 2.80),
         "TRAIL_ATR_MULT":      trial.suggest_float("TRAIL_ATR_MULT",      1.80, 3.00),
+        "REGIME_BULL_THRESHOLD": trial.suggest_int("REGIME_BULL_THRESHOLD", 20, 55),
     }
 
     with _patch_constants(params):

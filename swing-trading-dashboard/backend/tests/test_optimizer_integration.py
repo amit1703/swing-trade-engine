@@ -102,6 +102,7 @@ def test_main_creates_best_parameters_json(tmp_output):
     expected_keys = {
         "ATR_MULTIPLIER", "VCP_TIGHTNESS_RANGE", "BREAKOUT_BUFFER_ATR",
         "BREAKOUT_VOL_MULT", "TARGET_RR", "TRAIL_ATR_MULT",
+        "REGIME_BULL_THRESHOLD",
     }
     assert set(params.keys()) == expected_keys, f"Missing/extra keys: {set(params.keys()) ^ expected_keys}"
 
@@ -112,6 +113,7 @@ def test_main_creates_best_parameters_json(tmp_output):
     assert 0.035 <= params["VCP_TIGHTNESS_RANGE"] <= 0.070, f"VCP_TIGHTNESS_RANGE out of v3 range: {params['VCP_TIGHTNESS_RANGE']}"
     assert 0.30 <= params["BREAKOUT_BUFFER_ATR"]  <= 0.50, f"BREAKOUT_BUFFER_ATR out of v3 range: {params['BREAKOUT_BUFFER_ATR']}"
     assert 2.20 <= params["TARGET_RR"]            <= 2.80, f"TARGET_RR out of v3 range: {params['TARGET_RR']}"
+    assert 20 <= params["REGIME_BULL_THRESHOLD"] <= 55, f"REGIME_BULL_THRESHOLD out of range: {params['REGIME_BULL_THRESHOLD']}"
 
 
 def test_main_zero_trials_no_crash(tmp_output):
