@@ -36,7 +36,7 @@ _RS_RANKED_FILE = _SCRIPTS_DIR / "rs_ranked_tickers.json"
 _OUTPUT_FILE = _PROJECT_DIR / "docs" / "universe-sweep-results.json"
 
 # ── Universe sizes ─────────────────────────────────────────────────────────────
-_ALL_SIZES = [35, 80, 120, 141]  # 141 = "all ranked"; clipped to available
+_ALL_SIZES = [35, 80, 150, 300]  # 300 = "all ranked"; clipped to available
 
 # ── Lazy imports (avoid startup cost, same pattern as optimize_parameters.py) ──
 try:
@@ -71,8 +71,8 @@ def _load_best_params(params_file: Path) -> dict:
     """
     if not params_file.exists():
         raise FileNotFoundError(
-            f"Best parameters not found: {params_file}\n"
-            "Run optimize_parameters.py first to generate this file."
+            f"Best parameters not found at {params_file}. "
+            "Run optimize_parameters.py first to generate best_parameters.json."
         )
     with params_file.open() as f:
         data = json.load(f)

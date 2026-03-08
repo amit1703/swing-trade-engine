@@ -29,7 +29,7 @@ def test_load_best_params_missing_raises(tmp_path):
     from universe_sweep import _load_best_params
 
     missing = tmp_path / "nonexistent_best_parameters.json"
-    with pytest.raises(FileNotFoundError, match="Best parameters not found"):
+    with pytest.raises(FileNotFoundError, match="best_parameters.json"):
         _load_best_params(missing)
 
 
