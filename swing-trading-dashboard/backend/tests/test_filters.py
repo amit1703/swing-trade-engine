@@ -47,6 +47,14 @@ def test_regime_series_short_history_returns_false():
     assert series.all() == False or not series.any()
 
 
+def test_regime_series_none_input_returns_empty():
+    """compute_regime_series(None) should return an empty Series, not crash."""
+    from filters import compute_regime_series
+    result = compute_regime_series(None)
+    assert isinstance(result, pd.Series)
+    assert len(result) == 0
+
+
 def _make_df_with_volume(avg_vol: float, n: int = 60) -> pd.DataFrame:
     dates = pd.date_range("2024-01-01", periods=n, freq="B")
     close = np.full(n, 100.0)
