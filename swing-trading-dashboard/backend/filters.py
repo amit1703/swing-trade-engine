@@ -50,27 +50,21 @@ def compute_regime_series(spy_df: pd.DataFrame) -> pd.Series:
     sma200 = close.rolling(200).mean()
     slope5 = ema20 - ema20.shift(5)
 
-    def _score(i: int) -> int:
-        if pd.isna(sma200.iloc[i]):
-            return 0
-        s = 0
-        if close.iloc[i] > ema20.iloc[i]:
-            s += REGIME_WEIGHT_EMA20
-        if close.iloc[i] > sma50.iloc[i]:
-            s += REGIME_WEIGHT_SMA50
-        if not pd.isna(sma50.iloc[i]) and sma50.iloc[i] > sma200.iloc[i]:
-            s += REGIME_WEIGHT_MA_STACK
-        if not pd.isna(slope5.iloc[i]):
-            norm = slope5.iloc[i] / (sma50.iloc[i] * 0.01 + 1e-9)
-            s += min(max(int(norm * REGIME_WEIGHT_SLOPE), 0), REGIME_WEIGHT_SLOPE)
-        return s
+    # Vectorized scoring — all operations stay in NumPy speed
+    score = pd.Series(0, index=spy_df.index, dtype=int)
+    score += (close > ema20).astype(int) * REGIME_WEIGHT_EMA20
+    score += (close > sma50).astype(int) * REGIME_WEIGHT_SMA50
+    score += (sma50 > sma200).astype(int) * REGIME_WEIGHT_MA_STACK
 
-    scores = pd.Series(
-        [_score(i) for i in range(len(spy_df))],
-        index=spy_df.index,
-        dtype=int,
-    )
-    return scores >= REGIME_SELECTIVE_THRESHOLD
+    # f4: EMA20 slope scaled to 0..REGIME_WEIGHT_SLOPE, then clipped
+    slope_norm = (slope5 / (sma50 * 0.01 + 1e-9)).fillna(0.0)
+    slope_pts  = (slope_norm * REGIME_WEIGHT_SLOPE).clip(0, REGIME_WEIGHT_SLOPE).astype(int)
+    score += slope_pts
+
+    # Zero out any bars where SMA200 is NaN (insufficient history)
+    score = score.where(sma200.notna(), other=0)
+
+    return score >= REGIME_SELECTIVE_THRESHOLD
 
 
 def passes_liquidity(
@@ -84,8 +78,8 @@ def passes_liquidity(
         and requires sustained liquidity, not just a few high-volume days)
       - last_close × median_volume_50d >= min_dollar_volume
 
-    Uses only data already in df. Safe to call inside the backtest replay loop.
-    Returns False on empty or insufficient input.
+    Uses the most recent min(len(df), 50) bars for the volume computation.
+    Returns False on empty input (len < 2).
     """
     if df is None or len(df) < 2:
         return False
