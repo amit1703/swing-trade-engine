@@ -328,13 +328,13 @@ def scan_relaxed_pullback(
     Relaxed tactical pullback: triggers when no strict pullback found.
     Structural support broadened to 4 layers (KDE, consolidation low, demand zone, ascending TDL).
 
-    Criteria:
-    1. Trend: 8 EMA > 20 EMA AND Close > 50 SMA
-    2. Buffer Zone: Close within 2% of EMA-8 OR EMA-20
-    3. CCI Early Signal: CCI[today] > CCI[yesterday] AND CCI[yesterday] < -30
-    4. Low Volume: 3-day avg volume <= 100% of 50-day SMA
-    5. Structural Support: Low or Close must touch a structural support (KDE zone /
-       consolidation low / demand zone / ascending trendline) via _find_structural_support().
+    Criteria (upgraded):
+    1. Trend   : 8 EMA > 20 EMA  AND  Close > SMA50 × 0.97 (allows SMA50 test setups)
+    2. Value zone: Low penetrates EMA8/EMA20  OR  Close within 4% of EMA8/EMA20
+    3. CCI hook: CCI[yesterday] < CCI_RLX_FLOOR (-20) AND CCI[today] > CCI[yesterday]
+    4. Volume  : Computed for scoring only — no hard gate (allows shakeout reversals)
+    5. Structural support: low/close touches KDE zone / consolidation low /
+       demand zone / ascending trendline via _find_structural_support() — REQUIRED.
 
     Flags ascending trendline touches as is_ascending_tdl for display purposes.
     """
@@ -360,60 +360,56 @@ def scan_relaxed_pullback(
                 )
             return None
 
-        # ── 1. Trend filter ───────────────────────────────────────────────
-        if not (l8 > l20 and lc > l50):
+        # ── 1. Trend filter (relaxed) ─────────────────────────────────────
+        # Require short-term trend (8 EMA > 20 EMA) AND close within 3% of
+        # SMA50 (allows SMA50 test setups where stock has pulled back to the MA).
+        if not (l8 > l20 and lc > l50 * 0.97):
             if debug:
                 print(
                     f"Engine 3 RLX Pullback: REJECTED - Trend filter failed "
-                    f"(EMA8 {l8:.2f} vs EMA20 {l20:.2f}, Close {lc:.2f} vs SMA50 {l50:.2f})"
+                    f"(EMA8 {l8:.2f} vs EMA20 {l20:.2f}, Close {lc:.2f} vs SMA50×0.97 {l50*0.97:.2f})"
                 )
             return None
 
-        # ── 2. Buffer Zone: within 2% of EMA-8 OR EMA-20 ────────────────
-        dist_to_8 = abs(lc - l8) / l8 if l8 > 0 else float("inf")
+        # ── 2. Value Zone: low penetrates EMA8/20 OR close within 4% ────
+        # Two ways to qualify: classic value-zone penetration (strict-style)
+        # or proximity (close enough to count as a test of the zone).
+        penetrates = (ll <= l8 or ll <= l20)
+        dist_to_8  = abs(lc - l8)  / l8  if l8  > 0 else float("inf")
         dist_to_20 = abs(lc - l20) / l20 if l20 > 0 else float("inf")
+        near_ema   = (dist_to_8 <= 0.04 or dist_to_20 <= 0.04)
 
-        near_8 = dist_to_8 <= 0.02
-        near_20 = dist_to_20 <= 0.02
-
-        if not (near_8 or near_20):
+        if not (penetrates or near_ema):
             if debug:
                 print(
-                    f"Engine 3 RLX Pullback: REJECTED - Not within buffer of EMA8 or EMA20 "
-                    f"(Close {lc:.2f}, EMA8 {l8:.2f} [{dist_to_8*100:.1f}%], "
-                    f"EMA20 {l20:.2f} [{dist_to_20*100:.1f}%], required: ≤2%)"
+                    f"Engine 3 RLX Pullback: REJECTED - Not in value zone "
+                    f"(Close {lc:.2f}, Low {ll:.2f}, EMA8 {l8:.2f} [{dist_to_8*100:.1f}%], "
+                    f"EMA20 {l20:.2f} [{dist_to_20*100:.1f}%], required: penetration OR ≤4%)"
                 )
             return None
 
-        # ── 3. CCI Early Signal: turning from deeply negative ────────────────────
+        # ── 3. CCI Early Signal: turning from oversold ───────────────────
+        # Floor raised from -30 to CCI_RLX_FLOOR (-20) to catch earlier-stage
+        # pullbacks before they reach deeply oversold territory.
         cci_turning = cci_today > cci_prev and cci_prev < CCI_RLX_FLOOR
         if not cci_turning:
             if debug:
                 print(
-                    f"Engine 3 RLX Pullback: REJECTED - CCI relaxation failed "
+                    f"Engine 3 RLX Pullback: REJECTED - CCI hook failed "
                     f"(yesterday: {cci_prev:.1f}, today: {cci_today:.1f}, "
                     f"required: < {CCI_RLX_FLOOR:.0f} and today rising)"
                 )
             return None
 
-        # ── 4. Low Volume: 3-day avg <= 100% of 50-day SMA ────────────────
+        # ── 4. Volume: compute for scoring, no gate ───────────────────────
+        # Dry-up is a quality signal (captured in scoring.py), not a hard filter.
+        # This allows shakeout reversals (elevated volume finding support) to qualify.
         vol_sma50 = volume.rolling(50).mean()
         vsm_val = vol_sma50.iloc[-1]
         vsm_scalar = float(vsm_val.item() if hasattr(vsm_val, 'item') else vsm_val)
         if pd.isna(vsm_scalar) or vsm_scalar <= 0:
             return None
-
         avg_vol = vsm_scalar
-        v3m_val = volume.iloc[-3:].mean()
-        last3_vol = float(v3m_val.item() if hasattr(v3m_val, 'item') else v3m_val)
-
-        if last3_vol > avg_vol:
-            if debug:
-                print(
-                    f"Engine 3 RLX Pullback: REJECTED - Volume not dry "
-                    f"(3d avg vol {last3_vol:.0f} > 50d SMA vol {avg_vol:.0f})"
-                )
-            return None
 
         # ── Structural support (KDE zone / consolidation low / demand zone / TDL) ──
         nearest_sup = _find_structural_support(
@@ -525,11 +521,13 @@ def _prepare_indicators(
     if close.dropna().shape[0] < 55:
         return None
 
-    ema8 = _ema(close, 8)
-    ema20 = _ema(close, 20)
-    sma50 = _sma(close, 50)
-    cci20 = _cci(high, low, close, 20)
-    atr14 = _atr(high, low, close, 14)
+    # Use pre-computed indicator columns when available (set by BacktestEngine
+    # before the replay loop) to avoid O(n) recomputation on every bar.
+    ema8  = data["_EMA8"]   if "_EMA8"  in data.columns else _ema(close, 8)
+    ema20 = data["_EMA20"]  if "_EMA20" in data.columns else _ema(close, 20)
+    sma50 = data["_SMA50"]  if "_SMA50" in data.columns else _sma(close, 50)
+    cci20 = data["_CCI20"]  if "_CCI20" in data.columns else _cci(high, low, close, 20)
+    atr14 = data["_ATR14"]  if "_ATR14" in data.columns else _atr(high, low, close, 14)
 
     cci_clean = cci20.dropna()
     if len(cci_clean) < 2:

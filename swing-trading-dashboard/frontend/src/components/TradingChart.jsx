@@ -90,7 +90,7 @@ const SHARED_CHART_OPTS = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function TradingChart({ ticker, chartData, loading }) {
+export default function TradingChart({ ticker, chartData, loading, setups = [] }) {
   const mainRef    = useRef(null)
   const cciRef     = useRef(null)
   const rsRef      = useRef(null)
@@ -103,6 +103,20 @@ export default function TradingChart({ ticker, chartData, loading }) {
 
   // Visibility toggles: ema / sma / tdl / sr / rs / vol
   const [vis, setVis] = useState({ ema: true, sma: true, tdl: true, sr: true, rs: true, vol: true })
+
+  // Active trade bubble (index into setups array, or null)
+  const [activeBubble, setActiveBubble] = useState(null)
+
+  // Close bubble on Escape key
+  useEffect(() => {
+    if (activeBubble === null) return
+    const handler = (e) => { if (e.key === 'Escape') setActiveBubble(null) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [activeBubble])
+
+  // Reset bubble when ticker changes
+  useEffect(() => { setActiveBubble(null) }, [ticker])
 
   // Chart creation effect must be defined BEFORE visibility effects so React
   // runs it first (effects execute in definition order), ensuring seriesRef is
@@ -857,6 +871,23 @@ export default function TradingChart({ ticker, chartData, loading }) {
             onClick={() => setVis(v => ({ ...v, vol: !v.vol }))} />
         </div>
 
+        {/* Trade setup bubbles — bottom-left of main chart */}
+        {setups.length > 0 && (
+          <div style={{
+            position: 'absolute', bottom: 8, left: 10, zIndex: 10,
+            display: 'flex', gap: 4, alignItems: 'flex-end',
+          }}>
+            {setups.map((setup, i) => (
+              <SetupBubble
+                key={`${setup.setup_type}-${i}`}
+                setup={setup}
+                open={activeBubble === i}
+                onToggle={() => setActiveBubble(activeBubble === i ? null : i)}
+              />
+            ))}
+          </div>
+        )}
+
         {/* AUTO reset button — bottom-right of main chart */}
         {chartData && (
           <button
@@ -918,6 +949,150 @@ export default function TradingChart({ ticker, chartData, loading }) {
         <div ref={cciRef} style={{ height: 'calc(100% - 24px)' }} />
       </div>
 
+    </div>
+  )
+}
+
+// ── Setup Bubble ───────────────────────────────────────────────────────────
+
+const SETUP_COLORS = {
+  VCP:          '#4a9eff',
+  PULLBACK:     '#F5A623',
+  BASE:         '#4CAF50',
+  RES_BREAKOUT: '#4CAF50',
+  HTF:          '#9B6EFF',
+  LCE:          '#9B6EFF',
+  WATCHLIST:    '#aaaaaa',
+}
+
+function setupColor(type) {
+  if (!type) return '#aaaaaa'
+  for (const [k, v] of Object.entries(SETUP_COLORS)) {
+    if (type.includes(k)) return v
+  }
+  return '#aaaaaa'
+}
+
+function setupLabel(setup) {
+  if (setup.is_rs_lead)          return 'RS LEADER'
+  if (setup.is_trendline_breakout) return 'TDL BREAK'
+  if (setup.is_breakout)         return 'BREAKOUT'
+  if (setup.is_relaxed)          return 'RLX PULL'
+  return setup.setup_type?.replace('_', ' ') ?? 'SETUP'
+}
+
+function SetupBubble({ setup, open, onToggle }) {
+  const color  = setupColor(setup.setup_type)
+  const label  = setupLabel(setup)
+
+  const riskPct = setup.entry && setup.stop_loss
+    ? ((setup.entry - setup.stop_loss) / setup.entry * 100).toFixed(1)
+    : null
+  const gainPct = setup.entry && setup.take_profit
+    ? ((setup.take_profit - setup.entry) / setup.entry * 100).toFixed(1)
+    : null
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* Bubble card (pops upward) */}
+      {open && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 6px)', left: 0,
+          background: '#0a1018',
+          border: `1px solid ${color}`,
+          borderRadius: 4,
+          padding: '10px 12px',
+          minWidth: 180,
+          boxShadow: `0 4px 24px rgba(0,0,0,0.7), 0 0 12px ${color}22`,
+          zIndex: 20,
+          fontFamily: '"IBM Plex Mono", monospace',
+        }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <span style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
+              color, padding: '2px 6px', borderRadius: 2,
+              background: `${color}18`, border: `1px solid ${color}55`,
+            }}>
+              {label}
+            </span>
+            {setup.setup_score != null && (
+              <span style={{ fontSize: 9, color: 'var(--muted)' }}>
+                score&nbsp;<span style={{ color, fontWeight: 700 }}>{setup.setup_score}</span>
+              </span>
+            )}
+          </div>
+
+          {/* Entry / Stop / Target */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {setup.entry != null && (
+              <BubbleRow label="Entry" value={`$${setup.entry.toFixed(2)}`} valueColor="#ffffff" />
+            )}
+            {setup.stop_loss != null && (
+              <BubbleRow
+                label="Stop"
+                value={`$${setup.stop_loss.toFixed(2)}${riskPct ? `  −${riskPct}%` : ''}`}
+                valueColor={COLORS.halt}
+              />
+            )}
+            {setup.take_profit != null && (
+              <BubbleRow
+                label="Target"
+                value={`$${setup.take_profit.toFixed(2)}${gainPct ? `  +${gainPct}%` : ''}`}
+                valueColor={COLORS.go}
+              />
+            )}
+            {(setup.reward_risk ?? setup.rr) != null && (
+              <BubbleRow label="R:R" value={`${(setup.reward_risk ?? setup.rr).toFixed(2)}×`} valueColor={color} />
+            )}
+            {setup.support_source && (
+              <BubbleRow label="Support" value={setup.support_source.replace(/_/g, ' ')} valueColor="var(--muted)" />
+            )}
+            {setup.rs_score != null && (
+              <BubbleRow label="RS" value={setup.rs_score.toFixed(3)} valueColor="var(--muted)" />
+            )}
+          </div>
+
+          {/* Arrow pointer */}
+          <div style={{
+            position: 'absolute', bottom: -5, left: 14,
+            width: 8, height: 8,
+            background: '#0a1018',
+            border: `1px solid ${color}`,
+            borderTop: 'none', borderLeft: 'none',
+            transform: 'rotate(45deg)',
+          }} />
+        </div>
+      )}
+
+      {/* Trigger button */}
+      <button
+        onClick={onToggle}
+        style={{
+          fontFamily: '"IBM Plex Mono", monospace',
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+          padding: '3px 8px',
+          background: open ? `${color}22` : 'rgba(0,0,0,0.75)',
+          border: `1px solid ${open ? color : `${color}66`}`,
+          color: open ? color : `${color}aa`,
+          cursor: 'pointer',
+          backdropFilter: 'blur(4px)',
+          transition: 'all 0.15s',
+          userSelect: 'none',
+          borderRadius: 2,
+        }}
+      >
+        {label}
+      </button>
+    </div>
+  )
+}
+
+function BubbleRow({ label, value, valueColor }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ fontSize: 9, color: 'var(--muted)', width: 46, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 10, color: valueColor, fontWeight: 600 }}>{value}</span>
     </div>
   )
 }

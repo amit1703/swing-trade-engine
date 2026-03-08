@@ -7,7 +7,7 @@
  */
 import { useRef, useState } from 'react'
 
-export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, onOpenGuide, devMode, dryRun, onToggleDev, onToggleDryRun, onScanTicker }) {
+export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, onOpenGuide, devMode, dryRun, onToggleDev, onToggleDryRun }) {
   const isBullish = regime?.is_bullish
   const isNoData  = !regime || regime.regime === 'NO_DATA'
   const isHalt    = regime && !isBullish && regime.regime !== 'NO_DATA'
@@ -169,11 +169,6 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
             >
               DRY RUN
             </button>
-          )}
-
-          {/* Single-ticker debug scan — only visible when devMode active */}
-          {devMode && (
-            <TickerScan onScan={onScanTicker} disabled={scanStatus.in_progress} />
           )}
 
           {/* Email digest button */}

@@ -36,7 +36,6 @@ import WatchlistPanel from './components/WatchlistPanel.jsx'
 import SystemGuideModal from './components/SystemGuideModal.jsx'
 import EngineHealthPanel from './components/EngineHealthPanel.jsx'
 import DebugDrawer      from './components/DebugDrawer.jsx'
-import MarketOverview from './components/MarketOverview.jsx'
 import BacktestPanel from './components/BacktestPanel.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -301,10 +300,7 @@ export default function App() {
           }
         }}
         onToggleDryRun={() => setDryRun(v => !v)}
-        onScanTicker={handleScanTicker}
       />
-
-      <MarketOverview />
 
       {/* ── Tab bar ────────────────────────────────────────────────────── */}
       <div
@@ -356,28 +352,6 @@ export default function App() {
             </button>
           )
         })}
-        <button
-          onClick={() => setActiveTab('options')}
-          style={{
-            fontFamily: 'Barlow Condensed, sans-serif',
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
-            padding: '0 18px',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: activeTab === 'options' ? '2px solid #a855f7' : '2px solid transparent',
-            color: activeTab === 'options' ? '#a855f7' : 'var(--muted)',
-            cursor: 'pointer',
-            transition: 'color 0.12s, border-color 0.12s',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          OPTIONS
-        </button>
         {devMode && (
           <button
             onClick={() => setActiveTab('backtest')}
@@ -525,39 +499,13 @@ export default function App() {
                 ticker={selectedTicker}
                 chartData={chartData}
                 loading={loadingChart}
+                setups={selectedTicker ? [
+                  ...vcpSetups, ...pullbackSetups, ...baseSetups,
+                  ...resBreakoutSetups, ...htfSetups, ...lceSetups,
+                ].filter(s => s.ticker === selectedTicker) : []}
               />
             </main>
           </>
-        )}
-
-        {activeTab === 'options' && (
-          <div className="flex flex-1 overflow-hidden">
-            <aside
-              className="flex flex-col overflow-y-auto flex-shrink-0"
-              style={{
-                width: 400,
-                borderRight: '1px solid var(--border)',
-                background: 'var(--panel)',
-              }}
-            >
-              <SetupTable
-                setups={optionsSetups}
-                title="Options Catalyst"
-                accentColor="purple"
-                onSelectTicker={(t) => handleTickerClick(t, false)}
-                selectedTicker={selectedTicker}
-                loading={loadingSetups}
-                livePrices={livePrices}
-              />
-            </aside>
-            <main className="flex-1 min-w-0 overflow-hidden" style={{ background: 'var(--bg)' }}>
-              <TradingChart
-                ticker={selectedTicker}
-                chartData={chartData}
-                loading={loadingChart}
-              />
-            </main>
-          </div>
         )}
 
         {activeTab === 'portfolio' && (

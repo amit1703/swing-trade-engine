@@ -110,6 +110,21 @@ CREATE TABLE IF NOT EXISTS backtest_results (
 
 _BACKTEST_INDEX = "CREATE INDEX IF NOT EXISTS idx_backtest_ticker ON backtest_results(ticker, setup_type);"
 
+_CREATE_WFO_RESULTS = """
+CREATE TABLE IF NOT EXISTS wfo_results (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id            TEXT    NOT NULL UNIQUE,
+    status            TEXT    NOT NULL DEFAULT 'running',
+    progress_pct      INTEGER NOT NULL DEFAULT 0,
+    windows_completed INTEGER NOT NULL DEFAULT 0,
+    total_windows     INTEGER NOT NULL DEFAULT 0,
+    result_json       TEXT,
+    created_at        TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+_WFO_INDEX = "CREATE INDEX IF NOT EXISTS idx_wfo_run_id ON wfo_results(run_id);"
+
 _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_setups_ts         ON scan_setups(scan_timestamp);",
     "CREATE INDEX IF NOT EXISTS idx_setups_type       ON scan_setups(scan_timestamp, setup_type);",
@@ -134,6 +149,8 @@ async def init_db(db_path: str) -> None:
         await db.execute(_CREATE_TRADES)
         await db.execute(_CREATE_BACKTEST_RESULTS)
         await db.execute(_BACKTEST_INDEX)
+        await db.execute(_CREATE_WFO_RESULTS)
+        await db.execute(_WFO_INDEX)
         for idx_sql in _INDEXES:
             await db.execute(idx_sql)
         await db.commit()
@@ -606,3 +623,72 @@ async def get_backtest_results(db_path: str, ticker: str) -> List[Dict]:
                     "created_at":       r[20],
                 })
             return results
+
+
+# ---------------------------------------------------------------------------
+# WFO Results CRUD
+# ---------------------------------------------------------------------------
+
+async def create_wfo_run(db_path: str, run_id: str) -> None:
+    """Insert initial wfo_results row with status='running'."""
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO wfo_results (run_id, status) VALUES (?, ?)",
+            (run_id, "running"),
+        )
+        await db.commit()
+
+
+async def update_wfo_progress(
+    db_path: str,
+    run_id: str,
+    progress_pct: int,
+    windows_completed: int,
+    total_windows: int,
+) -> None:
+    """Update progress columns on an existing wfo_results row."""
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            """
+            UPDATE wfo_results
+               SET progress_pct=?, windows_completed=?, total_windows=?
+             WHERE run_id=?
+            """,
+            (progress_pct, windows_completed, total_windows, run_id),
+        )
+        await db.commit()
+
+
+async def save_wfo_result(db_path: str, run_id: str, result_json: str) -> None:
+    """Save completed WFO result JSON and mark status='done'."""
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            """
+            UPDATE wfo_results
+               SET status='done', progress_pct=100, result_json=?
+             WHERE run_id=?
+            """,
+            (result_json, run_id),
+        )
+        await db.commit()
+
+
+async def mark_wfo_error(db_path: str, run_id: str) -> None:
+    """Mark a WFO run as failed so the frontend stops polling."""
+    async with aiosqlite.connect(db_path) as db:
+        await db.execute(
+            "UPDATE wfo_results SET status='error' WHERE run_id=?",
+            (run_id,),
+        )
+        await db.commit()
+
+
+async def get_wfo_run(db_path: str, run_id: str) -> Optional[Dict]:
+    """Fetch one wfo_results row. Returns None if not found."""
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM wfo_results WHERE run_id=?", (run_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
