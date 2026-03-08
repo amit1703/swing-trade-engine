@@ -89,11 +89,11 @@ def test_robustness_score_penalizes_few_trades():
 
 
 def test_robustness_score_penalizes_high_drawdown():
-    """Returns -10.0 when max_drawdown_pct > 20.0."""
+    """Returns -10.0 when max_drawdown_pct > 35.0."""
     from optimize_parameters import _compute_robustness_score
     score = _compute_robustness_score(
         expectancy=0.5, profit_factor=1.8,
-        total_trades=100, max_drawdown_pct=25.0,
+        total_trades=100, max_drawdown_pct=40.0,
     )
     assert score == -10.0
 
@@ -115,21 +115,21 @@ def test_robustness_score_formula():
     assert abs(score - expected) < 1e-9
 
 
-def test_robustness_score_boundary_exactly_30_trades():
-    """Exactly 30 trades should not be penalized."""
+def test_robustness_score_boundary_exactly_40_trades():
+    """Exactly 40 trades should not be penalized."""
     from optimize_parameters import _compute_robustness_score
     score = _compute_robustness_score(
         expectancy=0.3, profit_factor=1.5,
-        total_trades=30, max_drawdown_pct=8.0,
+        total_trades=40, max_drawdown_pct=8.0,
     )
     assert score > 0  # not penalized
 
 
-def test_robustness_score_boundary_exactly_20pct_drawdown():
-    """Exactly 20.0% drawdown is on the boundary — must NOT be penalized."""
+def test_robustness_score_boundary_exactly_35pct_drawdown():
+    """Exactly 35.0% drawdown is on the boundary — must NOT be penalized."""
     from optimize_parameters import _compute_robustness_score
     score = _compute_robustness_score(
         expectancy=0.3, profit_factor=1.5,
-        total_trades=50, max_drawdown_pct=20.0,
+        total_trades=50, max_drawdown_pct=35.0,
     )
     assert score > 0  # drawdown == 20.0 is allowed; penalty only for > 20

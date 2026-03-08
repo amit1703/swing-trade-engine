@@ -123,9 +123,9 @@ def _compute_robustness_score(
     Otherwise:
       score = (expectancy * profit_factor * sqrt(total_trades)) / (1 + drawdown * 2.5)
     """
-    if total_trades < 30:
+    if total_trades < 40:
         return -5.0
-    if max_drawdown_pct > 20.0:
+    if max_drawdown_pct > 35.0:
         return -10.0
     return (
         (expectancy * profit_factor * math.sqrt(total_trades))
@@ -192,12 +192,12 @@ def objective(trial) -> float:
     import optuna
 
     params = {
-        "ATR_MULTIPLIER":      trial.suggest_float("ATR_MULTIPLIER",      0.5,  1.5),
+        "ATR_MULTIPLIER":      trial.suggest_float("ATR_MULTIPLIER",      0.8,  1.4),
         "VCP_TIGHTNESS_RANGE": trial.suggest_float("VCP_TIGHTNESS_RANGE", 0.015, 0.05),
         "BREAKOUT_BUFFER_ATR": trial.suggest_float("BREAKOUT_BUFFER_ATR", 0.1,  0.5),
         "BREAKOUT_VOL_MULT":   trial.suggest_float("BREAKOUT_VOL_MULT",   1.0,  2.0),
-        "TARGET_RR":           trial.suggest_float("TARGET_RR",           1.5,  3.5),
-        "TRAIL_ATR_MULT":      trial.suggest_float("TRAIL_ATR_MULT",      1.0,  3.0),
+        "TARGET_RR":           trial.suggest_float("TARGET_RR",           1.8,  3.0),
+        "TRAIL_ATR_MULT":      trial.suggest_float("TRAIL_ATR_MULT",      1.0,  2.5),
     }
 
     with _patch_constants(params):
@@ -274,7 +274,7 @@ def main(n_trials: int = 200, suppress_output: bool = False) -> None:
     _preload_modules()
 
     study = optuna.create_study(
-        study_name="trading_optimizer",
+        study_name="trading_optimizer_v2",
         storage=f"sqlite:///{_STUDY_DB}",
         direction="maximize",
         sampler=TPESampler(seed=42),

@@ -20,8 +20,8 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
 
-def _make_fake_windows(n_wins: int = 20, n_losses: int = 15) -> list:
-    """Build fake WFO windows with enough OOS trades to pass the 30-trade gate."""
+def _make_fake_windows(n_wins: int = 25, n_losses: int = 20) -> list:
+    """Build fake WFO windows with enough OOS trades to pass the 40-trade gate."""
     wins = [
         {"is_win": True,  "rr_achieved": 2.0, "pnl_pct": 2.0}
         for _ in range(n_wins)
