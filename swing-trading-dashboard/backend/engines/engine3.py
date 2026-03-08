@@ -32,6 +32,9 @@ from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT, ATR_STOP_MULTIPLIER
 from zone_utils import nearest_resistance_target
 
+# RS gate: reject stocks that persistently underperform SPY.
+# Loose floor allows flat-vs-SPY stocks to qualify. Patchable by Optuna.
+RS_REJECT_THRESHOLD = -0.05
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -214,11 +217,11 @@ def scan_pullback(
         # ── 0. RS quality gate ────────────────────────────────────────────
         # Require stock not to be a persistent underperformer vs SPY.
         # Loose floor (-0.05) allows stocks that are flat vs SPY to qualify.
-        if rs_score < -0.05:
+        if rs_score < RS_REJECT_THRESHOLD:
             if debug:
                 print(
                     f"Engine 3 Pullback: REJECTED - RS score too weak "
-                    f"({rs_score:.3f} < -0.05 — persistent underperformer)"
+                    f"({rs_score:.3f} < {RS_REJECT_THRESHOLD:.2f} — persistent underperformer)"
                 )
             return None
 
@@ -352,11 +355,11 @@ def scan_relaxed_pullback(
         cci_prev     = ind.cci_prev
 
         # ── 0. RS quality gate ────────────────────────────────────────────
-        if rs_score < -0.05:
+        if rs_score < RS_REJECT_THRESHOLD:
             if debug:
                 print(
                     f"Engine 3 RLX Pullback: REJECTED - RS score too weak "
-                    f"({rs_score:.3f} < -0.05 — persistent underperformer)"
+                    f"({rs_score:.3f} < {RS_REJECT_THRESHOLD:.2f} — persistent underperformer)"
                 )
             return None
 

@@ -72,3 +72,35 @@ def test_rlx_rejects_mild_cci_above_minus_30():
     if result is not None:
         assert result.get("cci_yesterday", 0) < -30, \
             "RLX fired but cci_yesterday was not below -30 — CCI gate is broken"
+
+
+def test_rs_reject_threshold_is_patchable():
+    """RS_REJECT_THRESHOLD is a module constant patchable at runtime."""
+    import engines.engine3 as engine3
+    import io
+    from contextlib import redirect_stdout
+
+    # Confirm default value
+    assert engine3.RS_REJECT_THRESHOLD == -0.05
+
+    # Tighten threshold to -0.02; rs_score=-0.03 is below it → must be rejected
+    engine3.RS_REJECT_THRESHOLD = -0.02
+    try:
+        f = io.StringIO()
+        with redirect_stdout(f):
+            scan_relaxed_pullback("TEST", make_pullback_df(), [make_support_zone(99.0)],
+                                  rs_score=-0.03, debug=True)
+        assert "RS score too weak" in f.getvalue(), (
+            "With RS_REJECT_THRESHOLD=-0.02 and rs_score=-0.03, RS gate must fire"
+        )
+    finally:
+        engine3.RS_REJECT_THRESHOLD = -0.05
+
+    # Restored to -0.05: rs_score=-0.03 is above threshold → RS gate must NOT fire
+    f2 = io.StringIO()
+    with redirect_stdout(f2):
+        scan_relaxed_pullback("TEST", make_pullback_df(), [make_support_zone(99.0)],
+                              rs_score=-0.03, debug=True)
+    assert "RS score too weak" not in f2.getvalue(), (
+        "After restoring threshold to -0.05, rs_score=-0.03 must pass the RS gate"
+    )
