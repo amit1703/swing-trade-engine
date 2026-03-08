@@ -23,12 +23,13 @@ def test_patch_atr_multiplier_and_restore():
 
     original = e2.ATR_STOP_MULTIPLIER
     params = {
-        "ATR_MULTIPLIER":      0.6,
-        "VCP_TIGHTNESS_RANGE": 0.025,
-        "BREAKOUT_BUFFER_ATR": 0.25,
-        "BREAKOUT_VOL_MULT":   1.5,
-        "TARGET_RR":           2.0,
-        "TRAIL_ATR_MULT":      1.5,
+        "ATR_MULTIPLIER":        0.6,
+        "VCP_TIGHTNESS_RANGE":   0.025,
+        "BREAKOUT_BUFFER_ATR":   0.25,
+        "BREAKOUT_VOL_MULT":     1.5,
+        "TARGET_RR":             2.0,
+        "TRAIL_ATR_MULT":        1.5,
+        "REGIME_BULL_THRESHOLD": 40,
     }
     with _patch_constants(params):
         assert e2.ATR_STOP_MULTIPLIER == 0.6
@@ -42,12 +43,13 @@ def test_patch_breakout_vol_mult_sets_threshold():
 
     original_threshold = e6._VOL_SURGE_THRESHOLD
     params = {
-        "ATR_MULTIPLIER":      0.8,
-        "VCP_TIGHTNESS_RANGE": 0.025,
-        "BREAKOUT_BUFFER_ATR": 0.25,
-        "BREAKOUT_VOL_MULT":   1.8,
-        "TARGET_RR":           2.0,
-        "TRAIL_ATR_MULT":      1.5,
+        "ATR_MULTIPLIER":        0.8,
+        "VCP_TIGHTNESS_RANGE":   0.025,
+        "BREAKOUT_BUFFER_ATR":   0.25,
+        "BREAKOUT_VOL_MULT":     1.8,
+        "TARGET_RR":             2.0,
+        "TRAIL_ATR_MULT":        1.5,
+        "REGIME_BULL_THRESHOLD": 40,
     }
     with _patch_constants(params):
         assert e6._VOL_SURGE_THRESHOLD == 1.8
@@ -61,12 +63,13 @@ def test_patch_restores_on_exception():
 
     original = e2.ATR_STOP_MULTIPLIER
     params = {
-        "ATR_MULTIPLIER":      0.5,
-        "VCP_TIGHTNESS_RANGE": 0.025,
-        "BREAKOUT_BUFFER_ATR": 0.25,
-        "BREAKOUT_VOL_MULT":   1.5,
-        "TARGET_RR":           2.0,
-        "TRAIL_ATR_MULT":      1.5,
+        "ATR_MULTIPLIER":        0.5,
+        "VCP_TIGHTNESS_RANGE":   0.025,
+        "BREAKOUT_BUFFER_ATR":   0.25,
+        "BREAKOUT_VOL_MULT":     1.5,
+        "TARGET_RR":             2.0,
+        "TRAIL_ATR_MULT":        1.5,
+        "REGIME_BULL_THRESHOLD": 40,
     }
     try:
         with _patch_constants(params):

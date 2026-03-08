@@ -211,3 +211,32 @@ def test_export_best_includes_param_importance(tmp_path, monkeypatch):
 
     assert "param_importance" in data
     assert isinstance(data["param_importance"], dict)
+
+
+def test_regime_patch_mutates_and_restores():
+    """_patch_constants must patch filters.REGIME_SELECTIVE_THRESHOLD and restore it after."""
+    import importlib
+    import optimize_parameters as optimizer
+    importlib.reload(optimizer)
+    import filters
+
+    original = filters.REGIME_SELECTIVE_THRESHOLD
+    patched_value = original + 10
+
+    # _patch_constants requires ALL _MODULE_PATCHES keys; provide full param dict
+    full_params = {
+        "ATR_MULTIPLIER":       1.40,
+        "VCP_TIGHTNESS_RANGE":  0.05,
+        "BREAKOUT_BUFFER_ATR":  0.40,
+        "BREAKOUT_VOL_MULT":    1.00,
+        "TARGET_RR":            2.50,
+        "TRAIL_ATR_MULT":       2.00,
+        "REGIME_BULL_THRESHOLD": patched_value,
+    }
+
+    with optimizer._patch_constants(full_params):
+        assert filters.REGIME_SELECTIVE_THRESHOLD == patched_value, \
+            f"Expected {patched_value}, got {filters.REGIME_SELECTIVE_THRESHOLD}"
+
+    assert filters.REGIME_SELECTIVE_THRESHOLD == original, \
+        f"Expected restore to {original}, got {filters.REGIME_SELECTIVE_THRESHOLD}"
