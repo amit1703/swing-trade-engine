@@ -396,6 +396,46 @@ def test_portfolio_pnl_in_trade_dict():
     assert abs(d["portfolio_pnl_pct"] - 2.0) < 0.01
 
 
+def test_backtest_skips_signals_for_illiquid_ticker():
+    """BacktestEngine should not open trades when volume is below liquidity threshold."""
+    import asyncio
+    import numpy as np
+    import pandas as pd
+    from backtest_engine import BacktestEngine
+
+    n = 350
+    dates = pd.date_range("2015-01-01", periods=n, freq="B")
+
+    # Bullish SPY so regime gate passes
+    spy_close = np.linspace(100.0, 200.0, n)
+    spy_df = pd.DataFrame({
+        "Close": spy_close, "Open": spy_close, "Volume": np.full(n, 5_000_000),
+        "High": spy_close * 1.01, "Low": spy_close * 0.99,
+    }, index=dates)
+
+    # Ticker: bullish price BUT volume far below LIQUIDITY_MIN_AVG_VOLUME (750_000)
+    tick_close = np.linspace(80.0, 200.0, n)
+    tick_df = pd.DataFrame({
+        "Close": tick_close, "Open": tick_close * 0.99,
+        "High": tick_close * 1.02, "Low": tick_close * 0.98,
+        "Volume": np.full(n, 1_000),   # 1K shares — extremely illiquid
+        "Adj Close": tick_close,
+    }, index=dates)
+
+    engine = BacktestEngine(
+        ticker="ILLIQ",
+        start_date=dates[250].strftime("%Y-%m-%d"),
+        end_date=dates[-1].strftime("%Y-%m-%d"),
+        setup_types=["VCP"],
+        ticker_df=tick_df,
+        spy_df=spy_df,
+    )
+    summary = asyncio.run(engine.run())
+    assert summary.total_trades == 0, (
+        f"Expected 0 trades for illiquid ticker, got {summary.total_trades}"
+    )
+
+
 def test_backtest_skips_signals_in_defensive_regime():
     """BacktestEngine should not open trades on bars marked as non-bullish."""
     import asyncio

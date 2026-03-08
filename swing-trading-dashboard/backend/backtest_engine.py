@@ -45,7 +45,7 @@ from constants import (
     MAX_OPEN_POSITIONS,
 )
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
-from filters import compute_regime_series
+from filters import compute_regime_series, passes_liquidity
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 
 logger = logging.getLogger(__name__)
@@ -684,6 +684,11 @@ class BacktestEngine:
                     continue
 
             df_slice  = ticker_df.iloc[:full_idx + 1]   # pre-computed cols included
+
+            # Liquidity gate: skip signals when ticker lacks trading volume
+            if not passes_liquidity(df_slice):
+                continue
+
             spy_slice = spy_df.loc[spy_df.index <= T_date]
 
             # RS scalars for bar T — O(1) array index into pre-computed series
