@@ -61,13 +61,22 @@ from optimize_parameters import (
 )
 
 
+# ── Required parameter keys (must match _MODULE_PATCHES in optimize_parameters) ─
+_REQUIRED_PARAM_KEYS = {
+    "ATR_MULTIPLIER", "VCP_TIGHTNESS_RANGE", "BREAKOUT_BUFFER_ATR",
+    "BREAKOUT_VOL_MULT", "TARGET_RR", "TRAIL_ATR_MULT",
+    "REGIME_BULL_THRESHOLD", "ENGINE3_RS_THRESHOLD",
+}
+
+
 # ── Public helpers (tested independently) ─────────────────────────────────────
 
 def _load_best_params(params_file: Path) -> dict:
     """
     Load parameters dict from best_parameters.json.
 
-    Raises FileNotFoundError with a clear message if the file does not exist.
+    Raises FileNotFoundError if the file does not exist.
+    Raises ValueError if any of the 8 required parameter keys are absent.
     """
     if not params_file.exists():
         raise FileNotFoundError(
@@ -76,7 +85,14 @@ def _load_best_params(params_file: Path) -> dict:
         )
     with params_file.open() as f:
         data = json.load(f)
-    return data["parameters"]
+    params = data["parameters"]
+    missing = _REQUIRED_PARAM_KEYS - set(params.keys())
+    if missing:
+        raise ValueError(
+            f"best_parameters.json is missing required keys: {sorted(missing)}. "
+            "Re-run optimize_parameters.py with v3 study to regenerate."
+        )
+    return params
 
 
 def _load_rs_ranked_tickers(top_n: int | None = None) -> list[str]:
@@ -140,6 +156,10 @@ async def _run_one_universe(
     # Deduplicate; SPY must be first
     spy_prefixed = ["SPY"] + [t for t in tickers if t != "SPY"]
 
+    actual = len(spy_prefixed) - 1  # exclude SPY from count
+    if actual < size:
+        print(f"  WARNING: requested {size} tickers but only {actual} cached — proceeding with {actual}")
+
     with _patch_constants(params):
         result = await run_wfo(
             tickers=spy_prefixed,
@@ -163,7 +183,7 @@ async def _run_one_universe(
 
     return {
         "label": label,
-        "n_tickers": len(tickers),
+        "n_tickers": len(spy_prefixed),
         "score": round(score, 4),
         "total_trades": total_trades,
         "trades_per_year": trades_per_year,
@@ -234,13 +254,7 @@ async def main(sizes: list[int], params_file: Path) -> None:
 
     results = []
     for size in sizes:
-        # Determine label index based on _ALL_SIZES
-        if size in _ALL_SIZES:
-            idx = _ALL_SIZES.index(size) + 1
-            label = f"U{idx} ({size})"
-        else:
-            label = f"U ({size})"
-
+        label = _universe_label(size)
         print(f"Running {label} …")
         row = await _run_one_universe(size=size, params=params, label=label)
         results.append(row)

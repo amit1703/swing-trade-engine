@@ -64,6 +64,37 @@ def test_load_best_params_returns_parameters(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# 2b. _load_best_params — raises ValueError when a required key is missing
+# ---------------------------------------------------------------------------
+
+def test_load_best_params_raises_on_missing_key(tmp_path):
+    """ValueError raised when parameters dict is missing a required key."""
+    from universe_sweep import _load_best_params
+
+    # All 8 keys present except ENGINE3_RS_THRESHOLD
+    params = {
+        "ATR_MULTIPLIER": 1.4,
+        "VCP_TIGHTNESS_RANGE": 0.05,
+        "BREAKOUT_BUFFER_ATR": 0.4,
+        "BREAKOUT_VOL_MULT": 1.1,
+        "TARGET_RR": 2.5,
+        "TRAIL_ATR_MULT": 2.2,
+        "REGIME_BULL_THRESHOLD": 35,
+        # ENGINE3_RS_THRESHOLD intentionally omitted
+    }
+    payload = {
+        "generated_at": "2026-03-09T00:00:00Z",
+        "best_score": 0.1,
+        "parameters": params,
+    }
+    f = tmp_path / "best_parameters.json"
+    f.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="missing required keys"):
+        _load_best_params(f)
+
+
+# ---------------------------------------------------------------------------
 # 3. _load_rs_ranked_tickers — missing file raises FileNotFoundError
 # ---------------------------------------------------------------------------
 
