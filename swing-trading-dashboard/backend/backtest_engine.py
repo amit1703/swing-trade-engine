@@ -45,7 +45,7 @@ from constants import (
     MAX_OPEN_POSITIONS,
 )
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
-from filters import compute_regime_series, passes_liquidity
+from filters import compute_regime_series, passes_liquidity, in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 
 logger = logging.getLogger(__name__)
@@ -519,6 +519,7 @@ class BacktestEngine:
         run_id: Optional[str] = None,
         ticker_df: Optional[pd.DataFrame] = None,
         spy_df: Optional[pd.DataFrame] = None,
+        earnings_dates: Optional[Dict[str, List[str]]] = None,
     ):
         self.ticker      = ticker.upper()
         self.start_date  = start_date
@@ -527,6 +528,7 @@ class BacktestEngine:
         self.run_id      = run_id or str(uuid.uuid4())
         self.ticker_df   = ticker_df
         self.spy_df      = spy_df
+        self.earnings_dates: Dict[str, List[str]] = earnings_dates or {}
 
     async def run(self) -> BacktestSummary:
         """Execute the backtest. Returns a BacktestSummary with all closed trades."""
@@ -688,6 +690,13 @@ class BacktestEngine:
             # Liquidity gate: skip signals when ticker lacks trading volume
             if not passes_liquidity(df_slice):
                 continue
+
+            # Earnings blackout gate: skip signals near earnings dates (optional)
+            if self.earnings_dates:
+                ticker_earnings = self.earnings_dates.get(self.ticker, [])
+                bar_date_str = T_date.strftime("%Y-%m-%d")
+                if in_earnings_blackout(bar_date_str, ticker_earnings):
+                    continue
 
             spy_slice = spy_df.loc[spy_df.index <= T_date]
 

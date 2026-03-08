@@ -473,3 +473,84 @@ def test_backtest_skips_signals_in_defensive_regime():
     assert summary.total_trades == 0, (
         f"Expected 0 trades in defensive regime, got {summary.total_trades}"
     )
+
+
+def test_backtest_skips_signals_during_earnings_blackout():
+    """BacktestEngine should skip signals within earnings blackout window when dates provided."""
+    import asyncio
+    import numpy as np
+    import pandas as pd
+    from backtest_engine import BacktestEngine
+
+    n = 350
+    dates = pd.date_range("2015-01-01", periods=n, freq="B")
+
+    # Bullish SPY (regime passes)
+    spy_close = np.linspace(100.0, 200.0, n)
+    spy_df = pd.DataFrame({
+        "Close": spy_close, "Open": spy_close, "Volume": np.full(n, 5_000_000),
+        "High": spy_close * 1.01, "Low": spy_close * 0.99,
+    }, index=dates)
+
+    # Liquid bullish ticker
+    tick_close = np.linspace(80.0, 200.0, n)
+    tick_df = pd.DataFrame({
+        "Close": tick_close, "Open": tick_close * 0.99,
+        "High": tick_close * 1.02, "Low": tick_close * 0.98,
+        "Volume": np.full(n, 2_000_000),
+        "Adj Close": tick_close,
+    }, index=dates)
+
+    # Place earnings every 5 trading days through the whole OOS window → always in blackout
+    start_date = dates[250].strftime("%Y-%m-%d")
+    end_date   = dates[-1].strftime("%Y-%m-%d")
+    oos_dates  = dates[250:]
+    earnings   = [d.strftime("%Y-%m-%d") for d in oos_dates[::5]]
+
+    engine = BacktestEngine(
+        ticker="EARN",
+        start_date=start_date,
+        end_date=end_date,
+        setup_types=["VCP"],
+        ticker_df=tick_df,
+        spy_df=spy_df,
+        earnings_dates={"EARN": earnings},
+    )
+    summary = asyncio.run(engine.run())
+    assert summary.total_trades == 0, (
+        f"Expected 0 trades during earnings blackout, got {summary.total_trades}"
+    )
+
+
+def test_backtest_no_earnings_dates_no_crash():
+    """BacktestEngine without earnings_dates should run normally (backward compat)."""
+    import asyncio
+    import numpy as np
+    import pandas as pd
+    from backtest_engine import BacktestEngine
+
+    n = 350
+    dates = pd.date_range("2015-01-01", periods=n, freq="B")
+    spy_close = np.linspace(100.0, 200.0, n)
+    spy_df = pd.DataFrame({
+        "Close": spy_close, "Open": spy_close, "Volume": np.full(n, 5_000_000),
+        "High": spy_close * 1.01, "Low": spy_close * 0.99,
+    }, index=dates)
+    tick_close = np.linspace(80.0, 200.0, n)
+    tick_df = pd.DataFrame({
+        "Close": tick_close, "Open": tick_close * 0.99,
+        "High": tick_close * 1.02, "Low": tick_close * 0.98,
+        "Volume": np.full(n, 2_000_000), "Adj Close": tick_close,
+    }, index=dates)
+
+    engine = BacktestEngine(
+        ticker="SAFE",
+        start_date=dates[250].strftime("%Y-%m-%d"),
+        end_date=dates[-1].strftime("%Y-%m-%d"),
+        setup_types=["VCP"],
+        ticker_df=tick_df,
+        spy_df=spy_df,
+        # No earnings_dates — must not crash
+    )
+    summary = asyncio.run(engine.run())
+    assert summary is not None
