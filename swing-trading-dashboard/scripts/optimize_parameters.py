@@ -82,6 +82,9 @@ _MODULE_PATCHES: dict[str, list[tuple[str, str]]] = {
     "REGIME_BULL_THRESHOLD": [
         ("filters", "REGIME_SELECTIVE_THRESHOLD"),
     ],
+    "ENGINE3_RS_THRESHOLD": [
+        ("engines.engine3", "RS_REJECT_THRESHOLD"),
+    ],
 }
 
 
@@ -147,6 +150,7 @@ def _log_trial(trial: "optuna.trial.FrozenTrial", log_path: str = "optuna_trial_
         "trial_number", "value",
         "ATR_MULTIPLIER", "VCP_TIGHTNESS_RANGE", "BREAKOUT_BUFFER_ATR",
         "BREAKOUT_VOL_MULT", "TARGET_RR", "TRAIL_ATR_MULT", "REGIME_BULL_THRESHOLD",
+        "ENGINE3_RS_THRESHOLD",
     ]
     file_exists = os.path.exists(log_path)
     with open(log_path, "a", newline="") as f:
@@ -249,6 +253,7 @@ def objective(trial) -> float:
         "TARGET_RR":           trial.suggest_float("TARGET_RR",           2.20, 2.80),
         "TRAIL_ATR_MULT":      trial.suggest_float("TRAIL_ATR_MULT",      1.80, 3.00),
         "REGIME_BULL_THRESHOLD": trial.suggest_int("REGIME_BULL_THRESHOLD", 20, 55),
+        "ENGINE3_RS_THRESHOLD":    trial.suggest_float("ENGINE3_RS_THRESHOLD", -0.10, 0.00),
     }
 
     with _patch_constants(params):

@@ -102,7 +102,7 @@ def test_main_creates_best_parameters_json(tmp_output):
     expected_keys = {
         "ATR_MULTIPLIER", "VCP_TIGHTNESS_RANGE", "BREAKOUT_BUFFER_ATR",
         "BREAKOUT_VOL_MULT", "TARGET_RR", "TRAIL_ATR_MULT",
-        "REGIME_BULL_THRESHOLD",
+        "REGIME_BULL_THRESHOLD", "ENGINE3_RS_THRESHOLD",
     }
     assert set(params.keys()) == expected_keys, f"Missing/extra keys: {set(params.keys()) ^ expected_keys}"
 
@@ -114,6 +114,8 @@ def test_main_creates_best_parameters_json(tmp_output):
     assert 0.30 <= params["BREAKOUT_BUFFER_ATR"]  <= 0.50, f"BREAKOUT_BUFFER_ATR out of v3 range: {params['BREAKOUT_BUFFER_ATR']}"
     assert 2.20 <= params["TARGET_RR"]            <= 2.80, f"TARGET_RR out of v3 range: {params['TARGET_RR']}"
     assert 20 <= params["REGIME_BULL_THRESHOLD"] <= 55, f"REGIME_BULL_THRESHOLD out of range: {params['REGIME_BULL_THRESHOLD']}"
+    assert -0.10 <= params["ENGINE3_RS_THRESHOLD"] <= 0.00, \
+        f"ENGINE3_RS_THRESHOLD out of range: {params['ENGINE3_RS_THRESHOLD']}"
 
 
 def test_main_zero_trials_no_crash(tmp_output):
@@ -225,13 +227,14 @@ def test_regime_patch_mutates_and_restores():
 
     # _patch_constants requires ALL _MODULE_PATCHES keys; provide full param dict
     full_params = {
-        "ATR_MULTIPLIER":       1.40,
-        "VCP_TIGHTNESS_RANGE":  0.05,
-        "BREAKOUT_BUFFER_ATR":  0.40,
-        "BREAKOUT_VOL_MULT":    1.00,
-        "TARGET_RR":            2.50,
-        "TRAIL_ATR_MULT":       2.00,
+        "ATR_MULTIPLIER":        1.40,
+        "VCP_TIGHTNESS_RANGE":   0.05,
+        "BREAKOUT_BUFFER_ATR":   0.40,
+        "BREAKOUT_VOL_MULT":     1.00,
+        "TARGET_RR":             2.50,
+        "TRAIL_ATR_MULT":        2.00,
         "REGIME_BULL_THRESHOLD": patched_value,
+        "ENGINE3_RS_THRESHOLD":  -0.05,
     }
 
     with optimizer._patch_constants(full_params):
@@ -240,3 +243,32 @@ def test_regime_patch_mutates_and_restores():
 
     assert filters.REGIME_SELECTIVE_THRESHOLD == original, \
         f"Expected restore to {original}, got {filters.REGIME_SELECTIVE_THRESHOLD}"
+
+
+def test_engine3_rs_threshold_patch_works():
+    """_patch_constants must patch engines.engine3.RS_REJECT_THRESHOLD and restore it."""
+    import importlib
+    import optimize_parameters as optimizer
+    importlib.reload(optimizer)
+    import engines.engine3 as engine3
+
+    original = engine3.RS_REJECT_THRESHOLD
+    assert original == -0.05, f"Expected default -0.05, got {original}"
+
+    full_params = {
+        "ATR_MULTIPLIER":         1.40,
+        "VCP_TIGHTNESS_RANGE":    0.05,
+        "BREAKOUT_BUFFER_ATR":    0.40,
+        "BREAKOUT_VOL_MULT":      1.00,
+        "TARGET_RR":              2.50,
+        "TRAIL_ATR_MULT":         2.00,
+        "REGIME_BULL_THRESHOLD":  30,
+        "ENGINE3_RS_THRESHOLD":   -0.02,
+    }
+
+    with optimizer._patch_constants(full_params):
+        assert engine3.RS_REJECT_THRESHOLD == -0.02, \
+            f"Expected -0.02 during patch, got {engine3.RS_REJECT_THRESHOLD}"
+
+    assert engine3.RS_REJECT_THRESHOLD == original, \
+        f"Expected restore to {original}, got {engine3.RS_REJECT_THRESHOLD}"
