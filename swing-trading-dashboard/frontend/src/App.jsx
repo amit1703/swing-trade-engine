@@ -272,7 +272,7 @@ export default function App() {
       if (e.key === '?' && document.activeElement.tagName !== 'INPUT') {
         setShowGuide((v) => !v)
       }
-      if (e.key === 'f' || e.key === 'F') setChartFocus((v) => !v)
+      if ((e.key === 'f' || e.key === 'F') && document.activeElement.tagName !== 'INPUT') setChartFocus((v) => !v)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
