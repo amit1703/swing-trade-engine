@@ -57,6 +57,23 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
       ? 'var(--go)'
       : item.distance_pct < 0.8 ? 'var(--go)' : 'var(--accent)'
 
+    const rsRaw = item.rs_score ?? 0
+    const rsInt = Math.round(rsRaw * 100)
+    const rsLabel = rsInt === 0 ? 'RS±0'
+      : rsInt > 0 ? `RS+${rsInt}`
+      : `RS${rsInt}`
+    const rsColor = rsInt >= 5 ? 'var(--go)' : 'var(--muted)'
+
+    const statusLabel = hasRsBlueDot ? 'LEAD'
+      : (!isConfirmedBrk && (item.distance_pct ?? 99) < 1.0) ? 'NEAR'
+      : null
+    const statusColor = hasRsBlueDot
+      ? { color: '#00C8FF' }
+      : { color: 'var(--accent)' }
+    const statusBorder = hasRsBlueDot
+      ? '1px solid rgba(0,200,255,0.3)'
+      : '1px solid rgba(245,166,35,0.3)'
+
     return (
       <div
         onClick={() => onSelectTicker(item.ticker)}
@@ -70,40 +87,56 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
         onMouseLeave={e => e.currentTarget.style.background = isSelected ? 'rgba(245,166,35,0.06)' : isConfirmedBrk ? 'rgba(0,200,122,0.04)' : 'transparent'}
       >
-        <div className="flex items-center gap-1">
-          <span className="font-600 text-[10px] tracking-wide"
-                style={{ color: isSelected ? 'var(--accent)' : isConfirmedBrk ? 'var(--go)' : 'var(--text)' }}>
-            {item.ticker}
+        <div className="flex flex-col gap-0">
+          <div className="flex items-center gap-1">
+            <span className="font-600 text-[10px] tracking-wide"
+                  style={{ color: isSelected ? 'var(--accent)' : isConfirmedBrk ? 'var(--go)' : 'var(--text)' }}>
+              {item.ticker}
+            </span>
+            {hasRsBlueDot && (
+              <span style={{ color: 'var(--purple)', fontSize: '8px' }}
+                    aria-label="RS Blue Dot">⭐</span>
+            )}
+            <a
+              href={`https://www.tradingview.com/chart/?symbol=${item.ticker}&interval=D`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              title="Open in TradingView"
+              style={{
+                fontSize: 7,
+                padding: '1px 3px',
+                border: '1px solid rgba(245,166,35,0.3)',
+                color: 'rgba(245,166,35,0.55)',
+                borderRadius: 2,
+                fontFamily: '"IBM Plex Mono", monospace',
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                textDecoration: 'none',
+                userSelect: 'none',
+                flexShrink: 0,
+              }}
+            >
+              TV
+            </a>
+          </div>
+          <span className="font-mono tabular-nums" style={{ fontSize: 7, color: rsColor }}>
+            {rsLabel}
           </span>
-          {hasRsBlueDot && (
-            <span style={{ color: 'var(--purple)', fontSize: '8px' }}
-                  aria-label="RS Blue Dot">⭐</span>
-          )}
-          <a
-            href={`https://www.tradingview.com/chart/?symbol=${item.ticker}&interval=D`}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
-            title="Open in TradingView"
-            style={{
-              fontSize: 7,
-              padding: '1px 3px',
-              border: '1px solid rgba(245,166,35,0.3)',
-              color: 'rgba(245,166,35,0.55)',
-              borderRadius: 2,
-              fontFamily: '"IBM Plex Mono", monospace',
-              fontWeight: 700,
-              letterSpacing: '0.05em',
-              textDecoration: 'none',
-              userSelect: 'none',
-              flexShrink: 0,
-            }}
-          >
-            TV
-          </a>
         </div>
 
         <div className="flex items-center gap-1">
+          {statusLabel && (
+            <span className="font-mono text-[7px]" style={{
+              ...statusColor,
+              padding: '1px 3px',
+              border: statusBorder,
+              borderRadius: 2,
+              fontWeight: 700,
+            }}>
+              {statusLabel}
+            </span>
+          )}
           <span className="font-mono text-[9px] tabular-nums" style={{ color: distColor }}>
             {distLabel}
           </span>
