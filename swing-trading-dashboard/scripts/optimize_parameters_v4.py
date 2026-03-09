@@ -5,7 +5,8 @@ Changes from v3:
   - TRAIL_ATR_MULT expanded: 1.80–3.00 → 2.50–4.50 (was at ceiling)
   - REGIME_BULL_THRESHOLD expanded: 20–55 → 45–65 (was at ceiling)
   - BREAKOUT_BUFFER_ATR expanded: 0.30–0.50 → 0.30–0.55
-  - MAX_OPEN_POSITIONS added: int 3–8 (never optimized before)
+  - MAX_OPEN_POSITIONS added: int 3–5 (effective range; values >5 are frozen by
+    _apply_portfolio_cap's default argument — see _MODULE_PATCHES comment)
   - CCI_STRICT_FLOOR added: −80 to −20 (strict pullback depth)
   - CCI_RLX_FLOOR added: −40 to 0 (relaxed pullback depth)
   - Score formula: DD multiplier raised 2.5 → 4.0; hard DD cutoff 35% → 20%
@@ -100,6 +101,12 @@ _MODULE_PATCHES: dict[str, list[tuple[str, str]]] = {
         ("constants",       "CCI_RLX_FLOOR"),
         ("engines.engine3", "CCI_RLX_FLOOR"),
     ],
+    # NOTE: wfo_engine._apply_portfolio_cap has signature
+    #   def _apply_portfolio_cap(trades, max_positions=MAX_OPEN_POSITIONS)
+    # Python binds the default to the value at *definition* time (5), so patching
+    # wfo_engine.MAX_OPEN_POSITIONS does NOT update the frozen default argument.
+    # Values above 5 are therefore indistinguishable from 5 inside the WFO
+    # simulation. The search range is capped at 5 to reflect this limitation.
     "MAX_OPEN_POSITIONS": [
         ("constants",   "MAX_OPEN_POSITIONS"),
         ("wfo_engine",  "MAX_OPEN_POSITIONS"),
@@ -226,8 +233,11 @@ def _aggregate_oos_metrics_v4(windows: list, max_positions: int) -> dict:
         if dd > max_dd:
             max_dd = dd
 
-    # Calmar: annualised return (net_profit / 2yr OOS) / max_drawdown
-    calmar = (net_profit / 2.0) / max(max_dd, 0.01)
+    # Calmar: annualized return from compound equity curve (OOS ≈ 2 years) / max DD.
+    # Uses equity (compound) rather than additive net_profit sum, which is not a
+    # true return and would produce an inflated / misleading Calmar ratio.
+    annualized_return = (equity ** (1.0 / 2.0) - 1) * 100.0
+    calmar = annualized_return / max(max_dd, 0.01)
 
     return {
         "total_trades":     total,
@@ -280,7 +290,7 @@ V4_BOUNDS: dict[str, tuple] = {
     "TRAIL_ATR_MULT":        (2.50, 4.50),
     "REGIME_BULL_THRESHOLD": (45, 65),      # int
     "ENGINE3_RS_THRESHOLD":  (-0.10, 0.00),
-    "MAX_OPEN_POSITIONS":    (3, 8),        # int
+    "MAX_OPEN_POSITIONS":    (3, 5),        # int; capped at 5 (frozen WFO default)
     "CCI_STRICT_FLOOR":      (-80.0, -20.0),
     "CCI_RLX_FLOOR":         (-40.0, 0.0),
 }
@@ -299,7 +309,7 @@ def objective(trial) -> float:
         "TRAIL_ATR_MULT":        trial.suggest_float("TRAIL_ATR_MULT",        2.50,  4.50),
         "REGIME_BULL_THRESHOLD": trial.suggest_int(  "REGIME_BULL_THRESHOLD", 45,    65),
         "ENGINE3_RS_THRESHOLD":  trial.suggest_float("ENGINE3_RS_THRESHOLD",  -0.10, 0.00),
-        "MAX_OPEN_POSITIONS":    trial.suggest_int(  "MAX_OPEN_POSITIONS",    3,     8),
+        "MAX_OPEN_POSITIONS":    trial.suggest_int(  "MAX_OPEN_POSITIONS",    3,     5),
         "CCI_STRICT_FLOOR":      trial.suggest_float("CCI_STRICT_FLOOR",      -80.0, -20.0),
         "CCI_RLX_FLOOR":         trial.suggest_float("CCI_RLX_FLOOR",         -40.0,  0.0),
     }
