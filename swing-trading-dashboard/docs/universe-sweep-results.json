@@ -1,0 +1,65 @@
+{
+  "generated_at": "2026-03-09T07:17:16.764904+00:00",
+  "params_source": "/Users/amit/Documents/GitHub/superpowers/swing-trading-dashboard/config/best_parameters.json",
+  "parameters": {
+    "ATR_MULTIPLIER": 1.360049,
+    "VCP_TIGHTNESS_RANGE": 0.04259,
+    "BREAKOUT_BUFFER_ATR": 0.472535,
+    "BREAKOUT_VOL_MULT": 1.115481,
+    "TARGET_RR": 2.473563,
+    "TRAIL_ATR_MULT": 2.833954,
+    "REGIME_BULL_THRESHOLD": 54,
+    "ENGINE3_RS_THRESHOLD": -0.034124
+  },
+  "rs_ranked_source": "/Users/amit/Documents/GitHub/superpowers/swing-trading-dashboard/scripts/rs_ranked_tickers.json",
+  "results": [
+    {
+      "label": "U1 (35)",
+      "n_tickers": 36,
+      "score": 0.1491,
+      "total_trades": 79,
+      "trades_per_year": 39.5,
+      "win_rate": 45.57,
+      "expectancy": 0.1478,
+      "profit_factor": 1.8048,
+      "max_drawdown_pct": 5.96,
+      "net_profit_pct": 13.86
+    },
+    {
+      "label": "U2 (80)",
+      "n_tickers": 81,
+      "score": 0.1115,
+      "total_trades": 139,
+      "trades_per_year": 69.5,
+      "win_rate": 51.8,
+      "expectancy": 0.1466,
+      "profit_factor": 1.5116,
+      "max_drawdown_pct": 8.97,
+      "net_profit_pct": 18.29
+    },
+    {
+      "label": "U3 (150)",
+      "n_tickers": 142,
+      "score": 0.0053,
+      "total_trades": 136,
+      "trades_per_year": 68.0,
+      "win_rate": 36.76,
+      "expectancy": 0.0112,
+      "profit_factor": 1.1237,
+      "max_drawdown_pct": 10.61,
+      "net_profit_pct": 5.51
+    },
+    {
+      "label": "U4 (300)",
+      "n_tickers": 142,
+      "score": 0.0053,
+      "total_trades": 136,
+      "trades_per_year": 68.0,
+      "win_rate": 36.76,
+      "expectancy": 0.0112,
+      "profit_factor": 1.1237,
+      "max_drawdown_pct": 10.61,
+      "net_profit_pct": 5.51
+    }
+  ]
+}
