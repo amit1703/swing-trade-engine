@@ -8,23 +8,45 @@
 import { useRef, useState } from 'react'
 
 export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, onOpenGuide, devMode, dryRun, onToggleDev, onToggleDryRun }) {
+  const regimeType = regime?.regime  // "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE" | undefined
+  const isNoData   = !regime || !regimeType || regimeType === 'NO_DATA'
+  const isAggressive = regimeType === 'AGGRESSIVE'
+  const isSelective  = regimeType === 'SELECTIVE'
+  const isDefensive  = regimeType === 'DEFENSIVE' || (regime && !regime.is_bullish && !isNoData)
+
+  // Colors for 3 states
+  let bgClass   = ''
+  let textClass = ''
+  if (isAggressive) { bgClass = 'bg-t-goDim';     textClass = 'text-t-go'    }
+  if (isSelective)  { bgClass = 'bg-t-accentDim';  textClass = 'text-t-accent' }
+  if (isDefensive)  { bgClass = 'bg-t-haltDim';    textClass = 'text-t-halt'   }
+
+  const regimeLabel = isAggressive ? 'BULL'
+    : isSelective ? 'NEUTRAL'
+    : isDefensive ? 'HALT'
+    : 'NO DATA'
+
   const isBullish = regime?.is_bullish
-  const isNoData  = !regime || regime.regime === 'NO_DATA'
-  const isHalt    = regime && !isBullish && regime.regime !== 'NO_DATA'
-  const isError   = regime?.regime?.startsWith('ERROR')
+  const engines = [
+    { id: 2, label: 'VCP',  active: !!isBullish },
+    { id: 3, label: 'PB',   active: !!isBullish },
+    { id: 5, label: 'BASE', active: true },
+    { id: 6, label: 'BRK',  active: true },
+  ]
+
+  // Determine stripe color for the left indicator
+  let stripeClass = 'bg-t-muted'
+  if (isAggressive) { stripeClass = 'bg-t-go'   }
+  if (isSelective)  { stripeClass = 'bg-t-accent' }
+  if (isDefensive)  { stripeClass = 'bg-t-halt'   }
+
+  const isError = regimeType?.startsWith('ERROR')
 
   const fmtTime = (iso) => {
     if (!iso) return '—'
     const d = new Date(iso + 'Z')
     return d.toLocaleTimeString('en-US', { hour12: false })
   }
-
-  // Determine accent color for the left stripe and labels
-  let stripeClass = 'bg-t-muted'
-  let bgClass     = 'bg-t-surface'
-  let textClass   = 'text-t-muted'
-  if (isBullish) { stripeClass = 'bg-t-go';   bgClass = 'bg-t-goDim';  textClass = 'text-t-go'  }
-  if (isHalt)    { stripeClass = 'bg-t-halt';  bgClass = 'bg-t-haltDim'; textClass = 'text-t-halt' }
 
   return (
     <header className="relative flex flex-col border-b border-t-border select-none" style={{ background: 'var(--surface)' }}>
@@ -41,52 +63,80 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
       <div className="flex items-stretch h-[62px]">
 
         {/* Left stripe (regime colour indicator) */}
-        <div className={`w-1 flex-shrink-0 ${stripeClass} ${isHalt ? 'animate-pulse_halt' : ''}`} />
+        <div className={`w-1 flex-shrink-0 ${stripeClass} ${isDefensive ? 'animate-pulse_halt' : ''}`} />
 
         {/* REGIME STATUS — left block */}
-        <div className={`flex items-center gap-4 px-5 border-r border-t-border ${bgClass}`} style={{ minWidth: 340 }}>
+        <div
+          className={`flex flex-col justify-center px-4 border-r border-t-border ${bgClass}`}
+          style={{ minWidth: 380, gap: 2 }}
+        >
           {isNoData ? (
-            <div className="flex flex-col gap-0.5">
-              <span className="font-condensed text-[11px] font-700 tracking-widest uppercase text-t-muted">Market Status</span>
-              <span className="font-condensed text-[22px] font-700 tracking-tight text-t-muted">NO DATA</span>
-            </div>
-          ) : isError ? (
-            <div className="flex flex-col gap-0.5">
-              <span className="font-condensed text-[11px] font-700 tracking-widest uppercase text-t-halt">Engine 0 Error</span>
-              <span className="font-condensed text-[14px] font-600 text-t-muted truncate max-w-[280px]">{regime.regime}</span>
-            </div>
+            <span className="font-condensed text-[22px] font-700 tracking-tight text-t-muted">NO DATA</span>
           ) : (
-            <div className="flex flex-col gap-0.5">
-              <span className={`font-condensed text-[11px] font-700 tracking-widest uppercase ${textClass} opacity-70`}>
-                {isBullish ? 'REGIME STATUS' : 'REGIME STATUS'}
-              </span>
-              <span className={`font-condensed text-[26px] font-700 tracking-tight leading-none ${textClass} ${isHalt ? 'animate-pulse_halt' : ''} ${isBullish ? 'regime-go' : isHalt ? 'regime-halt' : ''}`}>
-                {isBullish ? 'MARKET GO' : 'MARKET HALT'}
-              </span>
-              {isHalt && (
-                <span className="text-[9px] font-400 tracking-widest text-t-halt uppercase opacity-80">
-                  SPY &lt; 20 EMA — ENGINES 2 &amp; 3 DISABLED
+            <>
+              {/* Row 1: label + score badge */}
+              <div className="flex items-center gap-3">
+                <span className="font-condensed text-[9px] font-700 tracking-widest uppercase text-t-muted opacity-60">REGIME</span>
+                <span className={`font-condensed text-[22px] font-700 tracking-tight leading-none ${textClass}`}>
+                  {regimeLabel}
                 </span>
-              )}
-              {isHalt && devMode && (
-                <span className="text-[9px] font-600 tracking-widest text-t-accent uppercase animate-pulse">
-                  ⚠ ENGINES FORCE-ENABLED
-                </span>
-              )}
-            </div>
-          )}
+                {regime.regime_score != null && (
+                  <span className="font-mono tabular-nums" style={{
+                    fontSize: 10,
+                    padding: '1px 6px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid var(--border-light)',
+                    color: isAggressive ? 'var(--go)' : isSelective ? 'var(--accent)' : 'var(--halt)',
+                    borderRadius: 2,
+                    letterSpacing: '0.04em',
+                  }}>
+                    {regime.regime_score}/100
+                  </span>
+                )}
+              </div>
 
-          {/* SPY metrics */}
-          {regime && !isNoData && !isError && (
-            <div className="flex gap-4 pl-2">
-              <MetricCell label="SPY" value={`$${regime.spy_close.toFixed(2)}`} color={textClass} />
-              <MetricCell label="EMA-20" value={`$${regime.spy_20ema.toFixed(2)}`} color="text-t-muted" />
-              <MetricCell
-                label="Δ"
-                value={`${regime.spy_close > regime.spy_20ema ? '+' : ''}${(regime.spy_close - regime.spy_20ema).toFixed(2)}`}
-                color={isBullish ? 'text-t-go' : 'text-t-halt'}
-              />
-            </div>
+              {/* Row 2: SPY + SMA50 + VIX + Breadth */}
+              <div className="flex items-center gap-3">
+                <span className="font-mono tabular-nums text-[10px]">
+                  <span className="text-t-muted text-[8px] mr-1">SPY</span>
+                  <span className={textClass}>${regime.spy_close?.toFixed(2)}</span>
+                </span>
+                {(regime.spy_sma50 ?? 0) > 0 && (
+                  <span className="font-mono text-[9px] tabular-nums">
+                    <span className="text-t-muted text-[8px] mr-0.5">SMA50</span>
+                    <span style={{ color: regime.spy_close > regime.spy_sma50 ? 'var(--go)' : 'var(--halt)' }}>
+                      {regime.spy_close > regime.spy_sma50 ? '✔' : '✖'}
+                    </span>
+                  </span>
+                )}
+                {(regime.vix ?? 0) > 0 && (
+                  <span className="font-mono text-[9px] tabular-nums">
+                    <span className="text-t-muted text-[8px] mr-0.5">VIX</span>
+                    <span style={{ color: 'var(--muted)' }}>{regime.vix.toFixed(1)}</span>
+                  </span>
+                )}
+                {regime.breadth_pct != null && (
+                  <span className="font-mono text-[9px] tabular-nums">
+                    <span className="text-t-muted text-[8px] mr-0.5">BRD</span>
+                    <span style={{ color: regime.breadth_pct > 0.6 ? 'var(--go)' : regime.breadth_pct > 0.4 ? 'var(--accent)' : 'var(--halt)' }}>
+                      {Math.round(regime.breadth_pct * 100)}%
+                    </span>
+                  </span>
+                )}
+              </div>
+
+              {/* Row 3: Engine status */}
+              <div className="flex items-center gap-2">
+                <span className="text-[8px] tracking-widest uppercase text-t-muted">ENG</span>
+                {engines.map(({ id, label, active }) => (
+                  <span key={id} className="font-mono text-[8px]"
+                    style={{ color: active ? 'var(--go)' : 'rgba(255,45,85,0.6)' }}
+                    title={`Engine ${id}: ${active ? 'active' : 'disabled'}`}>
+                    {label}{active ? '✔' : '✖'}
+                  </span>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
