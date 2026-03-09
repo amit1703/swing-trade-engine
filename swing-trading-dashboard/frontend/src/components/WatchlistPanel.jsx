@@ -149,8 +149,8 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
   }
 
   return (
-    <div className="flex flex-col flex-shrink-0 overflow-y-auto border-r border-t-border"
-         style={{ width: 190, background: 'var(--panel)' }}>
+    <div className="flex flex-col flex-shrink-0 overflow-y-auto"
+         style={{ width: 190, background: 'var(--panel)', borderRight: '2px solid var(--border-light)' }}>
 
       {/* Header */}
       <div className="section-label">

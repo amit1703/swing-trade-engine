@@ -397,8 +397,8 @@ export default function App() {
               className="flex flex-col overflow-y-auto flex-shrink-0"
               style={{
                 width: 400,
-                borderRight: '1px solid var(--border)',
-                background: 'var(--panel)',
+                borderRight: '2px solid var(--border-light)',
+                background: 'var(--surface)',
                 display: chartFocus ? 'none' : undefined,
               }}
             >
