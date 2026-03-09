@@ -40,8 +40,6 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
   if (isSelective)  { stripeClass = 'bg-t-accent' }
   if (isDefensive)  { stripeClass = 'bg-t-halt'   }
 
-  const isError = regimeType?.startsWith('ERROR')
-
   const fmtTime = (iso) => {
     if (!iso) return '—'
     const d = new Date(iso + 'Z')
