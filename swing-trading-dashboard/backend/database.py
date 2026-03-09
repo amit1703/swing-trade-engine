@@ -125,6 +125,15 @@ CREATE TABLE IF NOT EXISTS wfo_results (
 
 _WFO_INDEX = "CREATE INDEX IF NOT EXISTS idx_wfo_run_id ON wfo_results(run_id);"
 
+_REGIME_MIGRATIONS = [
+    "ALTER TABLE market_regime ADD COLUMN regime_score INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE market_regime ADD COLUMN spy_sma50    REAL    NOT NULL DEFAULT 0.0",
+    "ALTER TABLE market_regime ADD COLUMN vix          REAL    NOT NULL DEFAULT 0.0",
+    "ALTER TABLE market_regime ADD COLUMN breadth_pct  REAL    NOT NULL DEFAULT 0.5",
+    "ALTER TABLE market_regime ADD COLUMN hl_ratio     REAL    NOT NULL DEFAULT 0.5",
+    "ALTER TABLE market_regime ADD COLUMN factors_json TEXT    DEFAULT '{}'",
+]
+
 _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_setups_ts         ON scan_setups(scan_timestamp);",
     "CREATE INDEX IF NOT EXISTS idx_setups_type       ON scan_setups(scan_timestamp, setup_type);",
@@ -176,6 +185,13 @@ async def init_db(db_path: str) -> None:
                 await db.commit()
             except Exception:
                 pass  # column already exists — safe to ignore
+        # Migrate market_regime table (idempotent — ADD COLUMN fails silently if already exists)
+        for _migration in _REGIME_MIGRATIONS:
+            try:
+                await db.execute(_migration)
+            except Exception:
+                pass  # column already exists
+        await db.commit()
         # Migration: add net_profit_pct column to backtest_results if not exists
         try:
             await db.execute("ALTER TABLE backtest_results ADD COLUMN net_profit_pct REAL NOT NULL DEFAULT 0")
@@ -231,16 +247,25 @@ async def get_latest_scan_timestamp(db_path: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 async def save_regime(db_path: str, scan_timestamp: str, regime: Dict) -> None:
+    import json as _json
     async with aiosqlite.connect(db_path) as db:
         await db.execute(
-            """INSERT INTO market_regime (scan_timestamp, spy_close, spy_20ema, is_bullish, regime)
-               VALUES (?, ?, ?, ?, ?)""",
+            """INSERT INTO market_regime
+               (scan_timestamp, spy_close, spy_20ema, is_bullish, regime,
+                regime_score, spy_sma50, vix, breadth_pct, hl_ratio, factors_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 scan_timestamp,
                 regime["spy_close"],
                 regime["spy_20ema"],
                 1 if regime["is_bullish"] else 0,
                 regime["regime"],
+                regime.get("regime_score", 0),
+                regime.get("spy_sma50", 0.0),
+                regime.get("vix", 0.0),
+                regime.get("breadth_pct", 0.5),
+                regime.get("hl_ratio", 0.5),
+                _json.dumps(regime.get("factors", {})),
             ),
         )
         await db.commit()
@@ -325,23 +350,36 @@ async def save_sr_zones(
 # ---------------------------------------------------------------------------
 
 async def get_latest_regime(db_path: str) -> Optional[Dict]:
+    import json as _json
     scan_ts = await get_latest_scan_timestamp(db_path)
     if not scan_ts:
         return None
 
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(
-            """SELECT spy_close, spy_20ema, is_bullish, regime
+            """SELECT spy_close, spy_20ema, is_bullish, regime,
+                      regime_score, spy_sma50, vix, breadth_pct, hl_ratio, factors_json
                FROM market_regime WHERE scan_timestamp = ? LIMIT 1""",
             (scan_ts,),
         ) as cur:
             row = await cur.fetchone()
             if row:
+                factors = {}
+                try:
+                    factors = _json.loads(row[9]) if row[9] else {}
+                except Exception:
+                    pass
                 return {
-                    "spy_close": row[0],
-                    "spy_20ema": row[1],
-                    "is_bullish": bool(row[2]),
-                    "regime": row[3],
+                    "spy_close":    row[0],
+                    "spy_20ema":    row[1],
+                    "is_bullish":   bool(row[2]),
+                    "regime":       row[3],
+                    "regime_score": row[4] or 0,
+                    "spy_sma50":    row[5] or 0.0,
+                    "vix":          row[6] or 0.0,
+                    "breadth_pct":  row[7] if row[7] is not None else 0.5,
+                    "hl_ratio":     row[8] if row[8] is not None else 0.5,
+                    "factors":      factors,
                     "scan_timestamp": scan_ts,
                 }
     return None
