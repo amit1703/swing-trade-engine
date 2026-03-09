@@ -75,6 +75,7 @@ export default function App() {
   const [sortBy,         setSortBy        ] = useState('default')
   const [hotOnly,        setHotOnly       ] = useState(false)
   const [livePrices,     setLivePrices    ] = useState({})
+  const [chartFocus,     setChartFocus    ] = useState(false)
 
   const pollTimerRef = useRef(null)
 
@@ -271,6 +272,7 @@ export default function App() {
       if (e.key === '?' && document.activeElement.tagName !== 'INPUT') {
         setShowGuide((v) => !v)
       }
+      if (e.key === 'f' || e.key === 'F') setChartFocus((v) => !v)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -381,12 +383,14 @@ export default function App() {
         {activeTab === 'scanner' && (
           <>
             {/* Watchlist panel (narrow, leftmost) */}
-            <WatchlistPanel
-              items={watchlistItems}
-              selectedTicker={selectedTicker}
-              onSelectTicker={handleTickerClick}
-              loading={loadingSetups}
-            />
+            {!chartFocus && (
+              <WatchlistPanel
+                items={watchlistItems}
+                selectedTicker={selectedTicker}
+                onSelectTicker={handleTickerClick}
+                loading={loadingSetups}
+              />
+            )}
 
             {/* Left panel — setup tables (400px) */}
             <aside
@@ -395,6 +399,7 @@ export default function App() {
                 width: 400,
                 borderRight: '1px solid var(--border)',
                 background: 'var(--panel)',
+                display: chartFocus ? 'none' : undefined,
               }}
             >
               {/* Sort bar */}
@@ -494,7 +499,22 @@ export default function App() {
             </aside>
 
             {/* Right panel — chart */}
-            <main className="flex-1 min-w-0 overflow-hidden" style={{ background: 'var(--bg)' }}>
+            <main className="flex-1 min-w-0 overflow-hidden" style={{ background: 'var(--bg)', position: 'relative' }}>
+              {chartFocus && (
+                <div style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 12,
+                  zIndex: 10,
+                  fontSize: 8,
+                  color: 'rgba(245,166,35,0.5)',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  letterSpacing: '0.08em',
+                  pointerEvents: 'none',
+                }}>
+                  F — EXIT FOCUS
+                </div>
+              )}
               <TradingChart
                 ticker={selectedTicker}
                 chartData={chartData}
