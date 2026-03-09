@@ -57,6 +57,7 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>Ticker</th>
+                <th style={{ textAlign: 'right', width: 32 }}>Scr</th>
                 <th>Now $</th>
                 <th>Entry $</th>
                 <th>Stop $</th>
@@ -86,69 +87,95 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                   ? Math.floor((Date.now() - new Date(s.setup_date + 'T00:00:00').getTime()) / 86400000)
                   : null
 
-                // Row background: green tint for volume-surge rows
+                // Compute distForRow outside the live price IIFE so it's accessible in rowStyle and className
+                const livePrice = livePrices[s.ticker]
+                const distForRow = (livePrice && s.entry > 0) ? ((livePrice - s.entry) / s.entry) * 100 : null
+                const isNearEntry = distForRow !== null && distForRow > -3 && distForRow < 0
+
+                // Row background: green tint for volume-surge rows (isNearEntry is CSS-class-driven)
                 const rowStyle = isVolSurge
                   ? { background: 'rgba(0, 200, 122, 0.06)', borderLeft: '2px solid rgba(0,200,122,0.45)' }
-                  : isSelected
-                  ? {}
                   : {}
 
                 return (
                   <React.Fragment key={`${s.ticker}-${s.setup_type}`}>
                   <tr
-                    className={isSelected ? 'selected' : ''}
+                    className={`${isSelected ? 'selected' : ''} ${isNearEntry ? 'row-near-entry' : ''}`}
                     style={rowStyle}
                     onClick={() => onSelectTicker(s.ticker)}
                   >
                     {/* Ticker */}
                     <td>
-                      <span
-                        className="font-600 tracking-wide"
-                        style={{ color: isSelected ? 'var(--accent)' : color.dot }}
-                      >
-                        {s.ticker}
-                      </span>
-                      {s.hot_sector && (
-                        <span title={`Hot sector: ${s.sector ?? ''} (3+ setups)`} style={{ marginLeft: 3, fontSize: 10 }}>🔥</span>
-                      )}
-                      <a
-                        href={`https://www.tradingview.com/chart/?symbol=${s.ticker}&interval=D`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        title="Open in TradingView"
-                        style={{
-                          marginLeft: 5,
-                          fontSize: 8,
-                          padding: '1px 4px',
-                          border: '1px solid rgba(245,166,35,0.3)',
-                          color: 'rgba(245,166,35,0.55)',
-                          borderRadius: 2,
-                          fontFamily: '"IBM Plex Mono", monospace',
-                          fontWeight: 700,
-                          letterSpacing: '0.05em',
-                          textDecoration: 'none',
-                          userSelect: 'none',
-                        }}
-                      >
-                        TV
-                      </a>
+                      <div className="flex flex-col gap-0">
+                        <div className="flex items-center gap-1">
+                          <span className="font-600 tracking-wide" style={{ color: isSelected ? 'var(--accent)' : color.dot }}>
+                            {s.ticker}
+                          </span>
+                          {s.hot_sector && (
+                            <span title={`Hot sector: ${s.sector ?? ''} (3+ setups)`} style={{ marginLeft: 3, fontSize: 10 }}>🔥</span>
+                          )}
+                          <a href={`https://www.tradingview.com/chart/?symbol=${s.ticker}&interval=D`}
+                             target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                             title="Open in TradingView"
+                             style={{ marginLeft: 5, fontSize: 8, padding: '1px 4px', border: '1px solid rgba(245,166,35,0.3)',
+                                      color: 'rgba(245,166,35,0.55)', borderRadius: 2, fontFamily: '"IBM Plex Mono", monospace',
+                                      fontWeight: 700, letterSpacing: '0.05em', textDecoration: 'none', userSelect: 'none' }}>
+                            TV
+                          </a>
+                        </div>
+                        {daysOld != null && daysOld >= 1 && (
+                          <span style={{ fontSize: 7, color: daysOld >= 5 ? 'rgba(255,45,85,0.6)' : 'var(--muted)', letterSpacing: '0.04em' }}>
+                            {daysOld}d ago
+                          </span>
+                        )}
+                      </div>
                     </td>
 
-                    {/* Now $ — live price */}
+                    {/* Score */}
+                    {(() => {
+                      const sc = typeof s.setup_score === 'number' ? Math.round(s.setup_score) : null
+                      const scColor = sc === null ? 'var(--muted)'
+                        : sc >= 80 ? 'var(--go)'
+                        : sc >= 60 ? 'var(--accent)'
+                        : 'var(--muted)'
+                      return (
+                        <td style={{ textAlign: 'right' }}>
+                          <span className="font-mono text-[9px] tabular-nums" style={{ color: scColor }}>
+                            {sc !== null ? sc : '—'}
+                          </span>
+                        </td>
+                      )
+                    })()}
+
+                    {/* Now $ + distance */}
                     {(() => {
                       const price = livePrices[s.ticker]
-                      if (!price) return <td className="text-t-muted" style={{fontSize:9}}>—</td>
+                      if (!price) return <td className="text-t-muted" style={{ fontSize: 9 }}>—</td>
                       const dist = s.entry > 0 ? ((price - s.entry) / s.entry) * 100 : null
                       const priceColor = dist === null ? 'var(--muted)'
                         : price >= s.entry ? 'var(--go)'
                         : dist > -3 ? 'var(--accent)'
                         : 'var(--muted)'
+                      const distLabel = dist === null ? null
+                        : price >= s.entry
+                        ? `▲${Math.abs(dist).toFixed(1)}%`
+                        : `${Math.abs(dist).toFixed(1)}%↓`
+                      const distColor = dist === null ? 'var(--muted)'
+                        : price >= s.entry ? 'var(--go)'
+                        : dist > -3 ? 'var(--accent)'
+                        : 'var(--muted)'
                       return (
                         <td>
-                          <span className="font-mono text-[9px] tabular-nums" style={{color: priceColor}}>
-                            {price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                          </span>
+                          <div className="flex flex-col items-end gap-0">
+                            <span className="font-mono text-[9px] tabular-nums" style={{ color: priceColor }}>
+                              {price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            {distLabel && (
+                              <span className="font-mono tabular-nums" style={{ fontSize: 7, color: distColor }}>
+                                {distLabel}
+                              </span>
+                            )}
+                          </div>
                         </td>
                       )
                     })()}
@@ -391,23 +418,6 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                         </div>
                       )}
 
-                      {/* Age badge — shown when setup is ≥ 1 day old */}
-                      {daysOld != null && daysOld >= 1 && (
-                        <span
-                          className="badge"
-                          style={{
-                            fontSize: 7,
-                            background: 'transparent',
-                            color: daysOld >= 5 ? 'rgba(255,45,85,0.7)' : 'var(--muted)',
-                            border: `1px solid ${daysOld >= 5 ? 'rgba(255,45,85,0.3)' : 'var(--border)'}`,
-                            whiteSpace: 'nowrap',
-                          }}
-                          title={`Setup detected ${daysOld} day${daysOld !== 1 ? 's' : ''} ago`}
-                        >
-                          {daysOld}d
-                        </span>
-                      )}
-
                       {/* Narrative toggle — shown when narrative is available */}
                       {s.narrative && (
                         <button
@@ -461,7 +471,7 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
                   {expandedTicker === s.ticker && s.narrative && (
                     <tr key={`${s.ticker}-narrative`} style={{ background: 'rgba(0,200,255,0.03)' }}>
                       <td
-                        colSpan={devMode ? 8 : 7}
+                        colSpan={devMode ? 9 : 8}
                         style={{
                           padding: '8px 12px 10px 16px',
                           fontFamily: '"IBM Plex Mono", monospace',
