@@ -2462,7 +2462,7 @@ def _build_v5_analysis_fields(
 
     # ── detected setup ────────────────────────────────────────────────────
     detected_setup      = best_setup.get("setup_type")   if best_setup else None
-    setup_quality_score = int(best_setup.get("setup_score") or 0) if best_setup else None
+    setup_quality_score = int(best_setup.get("setup_score") or 0) if best_setup else 0
     rs_rank_raw         = best_setup.get("rs_rank")      if best_setup else None
     rs_rank             = float(rs_rank_raw) if rs_rank_raw is not None else None
 
@@ -2500,7 +2500,8 @@ def _build_v5_analysis_fields(
         regime_alignment = "WEAK"
 
     # ── entry quality ────────────────────────────────────────────────────
-    distance_pct = float(best_setup.get("distance_pct") or 999) if best_setup else 999
+    _d = best_setup.get("distance_pct") if best_setup else None
+    distance_pct = float(_d) if _d is not None else 999
     vol_ratio    = float(signals.get("vol_ratio") or 0)
     rs_blue_dot  = bool(best_setup.get("rs_blue_dot")) if best_setup else False
 
@@ -2555,6 +2556,7 @@ async def analyze_ticker(ticker: str):
                 "verdict": "NO DATA", "verdict_color": "halt",
                 "quality": "No Data", "narrative": "Insufficient price history to perform analysis.",
                 "signals": {},
+                **_build_v5_analysis_fields(None, {}, 50),
             }
 
         if isinstance(raw.columns, pd.MultiIndex):
@@ -2600,7 +2602,6 @@ async def analyze_ticker(ticker: str):
 
         # Fetch current regime score for V5 alignment fields
         try:
-            from database import get_latest_regime
             regime_data  = await get_latest_regime(DB_PATH)
             regime_score = int(regime_data.get("regime_score") or 50) if regime_data else 50
         except Exception:
@@ -2630,6 +2631,7 @@ async def analyze_ticker(ticker: str):
             "verdict": "ERROR", "verdict_color": "halt",
             "quality": "Error", "narrative": f"Analysis failed: {str(exc)[:120]}",
             "signals": {},
+            **_build_v5_analysis_fields(None, {}, 50),
         }
 
 
