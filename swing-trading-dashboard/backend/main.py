@@ -2711,6 +2711,7 @@ class TradeIn(BaseModel):
     targets:     List[float] = Field(..., min_length=1, max_length=3)
     entry_date:  str
     notes:       str = ""
+    setup_type:  str = ""
 
 
 class CloseTradeIn(BaseModel):
@@ -2765,7 +2766,8 @@ async def _enrich_trade(trade: Dict) -> Dict:
         pl_d = round((lc - ep) * qty, 2)
         pl_p = round((lc / ep - 1) * 100, 2) if ep > 0 else 0.0
 
-        atr14_s = _atr(high, low, close, 14)
+        raw_close = df["Close"] if "Close" in df.columns else close
+        atr14_s = _atr(high, low, raw_close, 14)
         current_atr = float(atr14_s.iloc[-1]) if pd.notna(atr14_s.iloc[-1]) else 0.0
 
         # V5 setup-specific trailing stop: max(ATR_trail, EMA20), never loosens.

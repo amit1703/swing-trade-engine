@@ -209,6 +209,12 @@ async def init_db(db_path: str) -> None:
                 await db.commit()
             except Exception:
                 pass  # column already exists — safe to ignore
+        # Migration: add setup_type to trades (existing rows get '' which maps to fallback multiplier)
+        try:
+            await db.execute("ALTER TABLE trades ADD COLUMN setup_type TEXT NOT NULL DEFAULT ''")
+            await db.commit()
+        except Exception:
+            pass  # column already exists — safe to ignore
 
 
 # ---------------------------------------------------------------------------
@@ -469,8 +475,8 @@ async def add_trade(db_path: str, trade: Dict) -> int:
     async with aiosqlite.connect(db_path) as db:
         cur = await db.execute(
             """INSERT INTO trades
-               (ticker, entry_price, quantity, stop_loss, target, targets_json, entry_date, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (ticker, entry_price, quantity, stop_loss, target, targets_json, entry_date, notes, setup_type)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 trade["ticker"].upper(),
                 trade["entry_price"],
@@ -480,6 +486,7 @@ async def add_trade(db_path: str, trade: Dict) -> int:
                 targets_json,
                 trade["entry_date"],
                 trade.get("notes", ""),
+                trade.get("setup_type", ""),
             ),
         )
         await db.commit()
@@ -491,7 +498,7 @@ async def get_trades(db_path: str, status: str = "active") -> List[Dict]:
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(
             """SELECT id, ticker, entry_price, quantity, stop_loss, target, targets_json,
-                      entry_date, notes, status, created_at
+                      entry_date, notes, status, created_at, setup_type
                FROM trades WHERE status = ? ORDER BY created_at DESC""",
             (status,),
         ) as cur:
@@ -511,6 +518,7 @@ async def get_trades(db_path: str, status: str = "active") -> List[Dict]:
                     "notes":       r[8],
                     "status":      r[9],
                     "created_at":  r[10],
+                    "setup_type":  r[11] if r[11] is not None else "",
                 })
             return result
 
