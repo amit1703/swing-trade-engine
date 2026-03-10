@@ -75,7 +75,18 @@ ATR_STOP_MULTIPLIER = 1.278  # Optuna v4 best (trial #951); was 1.360 (v3)
 ENTRY_PRICE_MULTIPLIER = 1.001  # 0.1% above current price for entry orders
 MIN_RISK_REWARD_RATIO = 1.0  # Minimum acceptable R:R ratio for setups
 TARGET_RR             = 2.785   # Optuna v4 best (trial #951); was 2.4736 (v3)
-TRAIL_ATR_MULT        = 4.162   # Optuna v4 best (trial #951); was 2.834 (v3)
+TRAIL_ATR_MULT        = 4.162   # Optuna v4 best (trial #951) — fallback/BASE default
+
+# V5: Setup-specific trailing ATR multipliers.
+# Each setup type trails differently based on observed behavior:
+#   VCP breakouts move fast → tight trail locks in gains quickly
+#   Pullbacks trend smoothly → moderate trail avoids premature exits
+#   ResBreakouts need room to develop → wide trail prevents shakeouts
+#   BASE patterns use the shared fallback until more data is collected
+VCP_TRAIL_ATR_MULT          = 2.0    # tight — VCP breakouts give profits early
+PULLBACK_TRAIL_ATR_MULT     = 3.0    # moderate — pullbacks trend but less explosive
+RES_BREAKOUT_TRAIL_ATR_MULT = 4.25   # wide — breakouts need room to trend
+BASE_TRAIL_ATR_MULT         = 4.162  # same as TRAIL_ATR_MULT — unchanged until more data
 
 # ── Position Sizing (risk model) ───────────────────────────────────────────────
 RISK_PER_TRADE_PCT    = 1.0   # % of equity to risk per trade (1R = 1% of equity)
@@ -94,6 +105,13 @@ VCP_ATR_CONTRACTION_THRESHOLD = 0.6  # ATR today < ATR20_avg × 0.6 confirms com
 
 RS_RANK_MIN_PERCENTILE  = 70    # gate: skip tickers with RS rank < 70
 TOP_SECTORS_N           = 8     # top N sectors by avg RS (raised from 5; scoring uses SECTOR_TIER1_N=5 for tier 1)
+# V5 note: Optuna diagnostics show a quality inflection near regime_score ≈ 59.
+# This is NOT enforced as a hard gate. Instead, SELECTIVE regime earns only
+# SCORE_SELECTIVE_REGIME_FACTOR (53%) of AGGRESSIVE regime points, which reduces
+# setup scores in the 40–69 regime band. MIN_SETUP_SCORE = 70 then filters these
+# lower-quality setups. The combination of these three constants produces the
+# effective quality drop observed near ~59 — keeping the behaviour as a soft
+# scoring effect preserves flexibility vs a hard cutoff.
 MIN_SETUP_SCORE         = 70    # gate: discard setups with unified score < 70
 
 # Score component weights (upper bounds; raw sum = 120, capped to 100 in compute_setup_score)
