@@ -583,6 +583,7 @@ async def get_closed_trades(db_path: str, limit: int = 50) -> List[Dict]:
                     "targets":     targets,
                     "entry_date":  r[7],
                     "notes":       r[8],
+                    "status":      "closed",
                     "exit_price":  exit_price_val,
                     "exit_date":   r[10],
                     "pl_dollar":   pl_dollar,

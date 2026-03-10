@@ -2838,26 +2838,29 @@ async def diagnostics_report():
       ticker_distribution — ranked ticker R contribution
       regime_performance  — metrics bucketed by market regime tier
     """
-    from database import get_closed_trades
-    raw_trades = await get_closed_trades(DB_PATH, limit=10000)
+    try:
+        raw_trades = await get_closed_trades(DB_PATH, limit=10000)
 
-    # Normalize DB field names to analytics.py contract:
-    #   exit_price  → close_price   (analytics uses close_price for R calculation)
-    #   regime_score: not stored on trades table → default None (→ UNKNOWN bucket)
-    normalized = []
-    for t in raw_trades:
-        normalized.append({
-            **t,
-            "close_price":  t.get("exit_price"),
-            "regime_score": t.get("regime_score"),  # None for all current trades
-        })
+        # Normalize DB field names to analytics.py contract:
+        #   exit_price  → close_price   (analytics uses close_price for R calculation)
+        #   regime_score: not stored on trades table → default None (→ UNKNOWN bucket)
+        normalized = []
+        for t in raw_trades:
+            normalized.append({
+                **t,
+                "close_price":  t.get("exit_price"),
+                "regime_score": t.get("regime_score"),  # None for all current trades
+            })
 
-    return {
-        "summary":              compute_live_diagnostics(normalized),
-        "setup_breakdown":      compute_setup_breakdown(normalized),
-        "ticker_distribution":  compute_ticker_distribution(normalized),
-        "regime_performance":   compute_regime_performance(normalized),
-    }
+        return {
+            "summary":              compute_live_diagnostics(normalized),
+            "setup_breakdown":      compute_setup_breakdown(normalized),
+            "ticker_distribution":  compute_ticker_distribution(normalized),
+            "regime_performance":   compute_regime_performance(normalized),
+        }
+    except Exception as exc:
+        log.error("diagnostics_report failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to generate diagnostics report")
 
 
 @app.delete("/api/trades/{trade_id}", status_code=200)
