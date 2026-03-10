@@ -153,6 +153,12 @@ from tickers import SCAN_UNIVERSE
 from validation import is_price_vital
 from universe_builder import build_universe, load_universe, save_universe, UNIVERSE_FILE
 from scoring import compute_rs_rank_map, compute_top_sectors, score_and_filter_setups
+from analytics import (
+    compute_live_diagnostics,
+    compute_setup_breakdown,
+    compute_ticker_distribution,
+    compute_regime_performance,
+)
 from email_digest import send_digest
 from services.macro_service import get_market_overview
 from services.narrative import generate_narrative
@@ -2818,6 +2824,40 @@ async def list_trades():
 
     enriched = await asyncio.gather(*[_enrich_trade(t) for t in trades])
     return {"trades": list(enriched), "count": len(enriched)}
+
+
+@app.get("/api/diagnostics/report")
+async def diagnostics_report():
+    """
+    Strategy-level performance diagnostics computed from closed trades.
+
+    Returns four sections:
+      summary             — overall portfolio metrics (total_trades, profit_factor,
+                            win_rate, avg_R, expectancy, max_drawdown, equity_curve_R)
+      setup_breakdown     — metrics per setup type (with low_sample flag)
+      ticker_distribution — ranked ticker R contribution
+      regime_performance  — metrics bucketed by market regime tier
+    """
+    from database import get_closed_trades
+    raw_trades = await get_closed_trades(DB_PATH, limit=10000)
+
+    # Normalize DB field names to analytics.py contract:
+    #   exit_price  → close_price   (analytics uses close_price for R calculation)
+    #   regime_score: not stored on trades table → default None (→ UNKNOWN bucket)
+    normalized = []
+    for t in raw_trades:
+        normalized.append({
+            **t,
+            "close_price":  t.get("exit_price"),
+            "regime_score": t.get("regime_score"),  # None for all current trades
+        })
+
+    return {
+        "summary":              compute_live_diagnostics(normalized),
+        "setup_breakdown":      compute_setup_breakdown(normalized),
+        "ticker_distribution":  compute_ticker_distribution(normalized),
+        "regime_performance":   compute_regime_performance(normalized),
+    }
 
 
 @app.delete("/api/trades/{trade_id}", status_code=200)
