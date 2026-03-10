@@ -1,0 +1,290 @@
+import { useEffect, useRef, useState } from 'react'
+import { createChart } from 'lightweight-charts'
+
+// ─── MetricCard ───────────────────────────────────────────────────────────────
+function MetricCard({ label, value, sub }) {
+  return (
+    <div style={{
+      background: 'var(--card)', border: '1px solid var(--card-border)',
+      borderRadius: 10, padding: '14px 16px', minWidth: 130,
+    }}>
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 26, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>
+        {value ?? '—'}
+      </div>
+      {sub && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+
+// ─── SectionHeader ────────────────────────────────────────────────────────────
+function SectionHeader({ title }) {
+  return (
+    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--muted)', marginBottom: 10, marginTop: 24 }}>
+      {title}
+    </div>
+  )
+}
+
+// ─── EmptyState ───────────────────────────────────────────────────────────────
+function EmptyState({ message = 'No closed trade data yet' }) {
+  return (
+    <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 11 }}>
+      {message}
+    </div>
+  )
+}
+
+// ─── EquityCurve ──────────────────────────────────────────────────────────────
+function EquityCurve({ data }) {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!ref.current || !data || data.length === 0) return
+
+    const chart = createChart(ref.current, {
+      width:  ref.current.clientWidth,
+      height: 160,
+      layout:      { background: { color: 'transparent' }, textColor: '#64748b' },
+      grid:        { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
+      timeScale:   { visible: false },
+      rightPriceScale: { borderColor: '#1e293b' },
+      crosshair:   { mode: 1 },
+      handleScroll: false,
+      handleScale:  false,
+    })
+
+    const series = chart.addLineSeries({
+      color:            data[data.length - 1] >= 0 ? '#00C87A' : '#FF2D55',
+      lineWidth:        2,
+      priceLineVisible: false,
+    })
+
+    series.setData(data.map((v, i) => ({ time: i + 1, value: v })))
+    chart.timeScale().fitContent()
+
+    return () => chart.remove()
+  }, [data])
+
+  if (!data || data.length === 0) return <EmptyState message="No equity curve data — close some trades first" />
+  return <div ref={ref} style={{ width: '100%', height: 160 }} />
+}
+
+// ─── SetupBreakdownTable ──────────────────────────────────────────────────────
+const SETUP_COLORS = {
+  VCP: 'var(--blue)', PULLBACK: 'var(--accent)', RES_BREAKOUT: 'var(--go)', BASE: 'var(--text)',
+}
+
+function SetupBreakdownTable({ breakdown }) {
+  const rows = Object.entries(breakdown || {})
+  if (rows.length === 0) return <EmptyState />
+
+  const headers = ['Setup', 'Trades', 'Win %', 'Prof.Factor', 'Avg R', 'Expectancy', 'Max DD']
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border)' }}>
+            {headers.map(h => (
+              <th key={h} style={{
+                textAlign: h === 'Setup' ? 'left' : 'right',
+                padding: '6px 10px', fontSize: 9, fontWeight: 700,
+                letterSpacing: '0.08em', color: 'var(--muted)',
+              }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([type, m]) => (
+            <tr key={type} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              <td style={{ padding: '8px 10px' }}>
+                <span style={{ fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700, color: SETUP_COLORS[type] ?? 'var(--text)', fontSize: 11 }}>
+                  {type}
+                </span>
+                {m?.low_sample && (
+                  <span title="Fewer than 20 trades — interpret with caution"
+                        style={{ marginLeft: 6, fontSize: 9, color: 'var(--accent)', cursor: 'help' }}>⚠</span>
+                )}
+              </td>
+              <td style={{ textAlign: 'right', padding: '8px 10px', fontFamily: '"IBM Plex Mono", monospace' }}>
+                {m?.total_trades ?? '—'}
+              </td>
+              <td style={{ textAlign: 'right', padding: '8px 10px', fontFamily: '"IBM Plex Mono", monospace',
+                           color: (m?.win_rate ?? 0) >= 0.5 ? 'var(--go)' : 'var(--halt)' }}>
+                {m?.win_rate != null ? `${(m.win_rate * 100).toFixed(1)}%` : '—'}
+              </td>
+              <td style={{ textAlign: 'right', padding: '8px 10px', fontFamily: '"IBM Plex Mono", monospace',
+                           color: (m?.profit_factor ?? 0) >= 1.5 ? 'var(--go)' : 'var(--muted)' }}>
+                {m?.profit_factor != null ? m.profit_factor.toFixed(2) : '—'}
+              </td>
+              <td style={{ textAlign: 'right', padding: '8px 10px', fontFamily: '"IBM Plex Mono", monospace',
+                           color: (m?.avg_R ?? 0) >= 0 ? 'var(--go)' : 'var(--halt)' }}>
+                {m?.avg_R != null ? `${m.avg_R >= 0 ? '+' : ''}${m.avg_R.toFixed(2)}R` : '—'}
+              </td>
+              <td style={{ textAlign: 'right', padding: '8px 10px', fontFamily: '"IBM Plex Mono", monospace',
+                           color: (m?.expectancy ?? 0) >= 0 ? 'var(--go)' : 'var(--halt)' }}>
+                {m?.expectancy != null ? `${m.expectancy >= 0 ? '+' : ''}${m.expectancy.toFixed(2)}R` : '—'}
+              </td>
+              <td style={{ textAlign: 'right', padding: '8px 10px', fontFamily: '"IBM Plex Mono", monospace',
+                           color: 'var(--halt)' }}>
+                {m?.max_drawdown != null ? `${m.max_drawdown.toFixed(2)}R` : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ─── TickerDistribution ───────────────────────────────────────────────────────
+function TickerDistribution({ rows }) {
+  if (!rows || rows.length === 0) return <EmptyState />
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r.total_pnl)), 0.001)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {rows.slice(0, 20).map(r => (
+        <div key={r.ticker} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{
+            fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700, fontSize: 11,
+            width: 60, flexShrink: 0, color: 'var(--text)',
+          }}>{r.ticker}</span>
+          <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 3,
+              width: `${(Math.abs(r.total_pnl) / maxAbs) * 100}%`,
+              background: r.total_pnl >= 0 ? 'var(--go)' : 'var(--halt)',
+            }} />
+          </div>
+          <span style={{
+            fontSize: 10, fontFamily: '"IBM Plex Mono", monospace',
+            color: r.total_pnl >= 0 ? 'var(--go)' : 'var(--halt)',
+            width: 70, textAlign: 'right', flexShrink: 0,
+          }}>
+            {r.total_pnl >= 0 ? '+' : ''}{r.total_pnl.toFixed(2)}R
+          </span>
+          <span style={{ fontSize: 9, color: 'var(--muted)', width: 40, textAlign: 'right', flexShrink: 0 }}>
+            {r.trade_count}t
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── RegimePerformance ────────────────────────────────────────────────────────
+const REGIME_COLORS = {
+  AGGRESSIVE: 'var(--go)', SELECTIVE: 'var(--accent)',
+  DEFENSIVE: 'var(--halt)', UNKNOWN: 'var(--muted)',
+}
+
+function RegimePerformance({ perf }) {
+  const entries = Object.entries(perf || {}).filter(([, v]) => v !== null)
+  if (entries.length === 0) return <EmptyState />
+
+  return (
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      {entries.map(([label, m]) => {
+        const c = REGIME_COLORS[label] ?? 'var(--muted)'
+        return (
+          <div key={label} style={{
+            flex: '1 1 160px', background: 'var(--card)',
+            border: `1px solid ${c}33`, borderRadius: 10, padding: '12px 14px',
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: c, marginBottom: 8 }}>
+              {label}
+            </div>
+            {[
+              ['Trades',     m.trades],
+              ['Win Rate',   `${(m.win_rate * 100).toFixed(1)}%`],
+              ['Avg R',      `${m.avg_R >= 0 ? '+' : ''}${m.avg_R.toFixed(2)}R`],
+              ['Expectancy', `${m.expectancy >= 0 ? '+' : ''}${m.expectancy.toFixed(2)}R`],
+            ].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 3 }}>
+                <span style={{ color: 'var(--muted)' }}>{k}</span>
+                <span style={{ fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700, color: 'var(--text)' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── DiagnosticsTab (main) ────────────────────────────────────────────────────
+export default function DiagnosticsTab() {
+  const [report, setReport]   = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+
+  useEffect(() => {
+    fetch('/api/diagnostics/report')
+      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+      .then(data => { setReport(data); setLoading(false) })
+      .catch(e  => { setError(String(e)); setLoading(false) })
+  }, [])
+
+  if (loading) return (
+    <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+      Loading diagnostics…
+    </div>
+  )
+  if (error) return (
+    <div style={{ padding: 40, textAlign: 'center', color: 'var(--halt)', fontSize: 13 }}>
+      Failed to load diagnostics: {error}
+    </div>
+  )
+
+  const s       = report?.summary ?? {}
+  const hasData = (s.total_trades ?? 0) > 0
+
+  return (
+    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+      {/* Page header */}
+      <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 22, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text)', marginBottom: 4 }}>
+        Strategy Diagnostics
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 20 }}>
+        Live trading performance from closed portfolio trades.
+        {!hasData && ' Close trades in the Portfolio tab to populate this report.'}
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <MetricCard label="TOTAL TRADES"  value={s.total_trades ?? 0} />
+        <MetricCard label="PROFIT FACTOR" value={s.profit_factor != null ? s.profit_factor.toFixed(2) : '—'} />
+        <MetricCard label="WIN RATE"      value={s.win_rate != null ? `${(s.win_rate * 100).toFixed(1)}%` : '—'} />
+        <MetricCard label="AVG R"         value={s.avg_R != null ? `${s.avg_R >= 0 ? '+' : ''}${s.avg_R.toFixed(2)}R` : '—'} />
+        <MetricCard label="EXPECTANCY"    value={s.expectancy != null ? `${s.expectancy >= 0 ? '+' : ''}${s.expectancy.toFixed(2)}R` : '—'} />
+        <MetricCard label="MAX DRAWDOWN"  value={s.max_drawdown != null ? `${s.max_drawdown.toFixed(2)}R` : '—'} sub="peak-to-trough" />
+      </div>
+
+      {/* Equity curve */}
+      <SectionHeader title="EQUITY CURVE (CUMULATIVE R)" />
+      <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+        <EquityCurve data={s.equity_curve_R} />
+      </div>
+
+      {/* Setup breakdown */}
+      <SectionHeader title="PERFORMANCE BY SETUP TYPE" />
+      <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+        <SetupBreakdownTable breakdown={report?.setup_breakdown} />
+      </div>
+
+      {/* Ticker distribution */}
+      <SectionHeader title="TRADE CONCENTRATION BY TICKER" />
+      <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+        <TickerDistribution rows={report?.ticker_distribution} />
+      </div>
+
+      {/* Regime performance */}
+      <SectionHeader title="PERFORMANCE BY MARKET REGIME" />
+      <RegimePerformance perf={report?.regime_performance} />
+    </div>
+  )
+}
