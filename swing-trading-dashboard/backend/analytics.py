@@ -210,3 +210,73 @@ def compute_regime_performance(trades: list) -> dict:
         }
 
     return result
+
+
+def print_backtest_diagnostics(trades: list) -> str:
+    """
+    Format a human-readable diagnostics summary for a completed backtest run.
+
+    Accepts a flat list of TradeRecord.to_dict() dicts (as returned by
+    run_backtest_universe). Returns a multi-line string suitable for logging.
+
+    Sections:
+    - Overall: trade count, win rate, expectancy (avg R), profit factor
+    - Per setup_type breakdown
+    - Score distribution (only when final_score is populated — scored mode)
+    """
+    sep = "═" * 44
+
+    if not trades:
+        return f"\n{sep}\n BACKTEST DIAGNOSTICS\n{sep}\n No trades generated.\n{sep}\n"
+
+    wins        = [t for t in trades if t.get("is_win")]
+    win_rate    = len(wins) / len(trades) * 100
+    rr_values   = [t["rr_achieved"] for t in trades if t.get("rr_achieved") is not None]
+    avg_rr      = sum(rr_values) / len(rr_values) if rr_values else 0.0
+
+    gross_pos   = sum(r for r in rr_values if r > 0)
+    gross_neg   = sum(r for r in rr_values if r <= 0)
+    profit_factor = (gross_pos / abs(gross_neg)) if gross_neg != 0 else float("inf")
+
+    lines = [
+        "",
+        sep,
+        " BACKTEST DIAGNOSTICS",
+        sep,
+        f" Total trades        : {len(trades):>7,}",
+        f" Win rate            : {win_rate:>7.1f}%",
+        f" Expectancy (avg R)  : {avg_rr:>+7.2f} R",
+        f" Profit factor       : {profit_factor:>7.2f}",
+        "",
+        " Signal type breakdown:",
+    ]
+
+    by_type: dict = {}
+    for t in trades:
+        st = str(t.get("setup_type", "UNKNOWN")).upper()
+        by_type.setdefault(st, []).append(t)
+
+    for st in sorted(by_type):
+        group   = by_type[st]
+        g_wins  = [t for t in group if t.get("is_win")]
+        g_rr    = [t["rr_achieved"] for t in group if t.get("rr_achieved") is not None]
+        g_wr    = len(g_wins) / len(group) * 100 if group else 0.0
+        g_avg_r = sum(g_rr) / len(g_rr) if g_rr else 0.0
+        pct     = len(group) / len(trades) * 100
+        lines.append(
+            f"   {st:<14} : {len(group):>5,}  ({pct:4.1f}%)  "
+            f"win {g_wr:.1f}%  avg R {g_avg_r:+.2f}"
+        )
+
+    # Score section — only when final_score is populated (scored mode)
+    scores = [t["final_score"] for t in trades if t.get("final_score") is not None]
+    if scores:
+        lines += [
+            "",
+            " Score distribution (scored mode):",
+            f"   avg final score   : {sum(scores)/len(scores):>6.2f}",
+            f"   min / max score   : {min(scores):.1f} / {max(scores):.1f}",
+        ]
+
+    lines += [sep, ""]
+    return "\n".join(lines)

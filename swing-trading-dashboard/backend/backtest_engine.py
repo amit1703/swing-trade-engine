@@ -961,4 +961,9 @@ async def run_backtest_universe(
     results = await asyncio.gather(*[_run_one(t) for t in tickers])
     for batch in results:
         all_trades.extend(batch)
+
+    # Emit diagnostics to server log
+    from analytics import print_backtest_diagnostics as _diag
+    logger.info("%s", _diag(all_trades))
+
     return all_trades
