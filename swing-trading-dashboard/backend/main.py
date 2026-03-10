@@ -1675,6 +1675,66 @@ class WFORunRequest(BaseModel):
     min_trades:  int = 20
 
 
+def _generate_analysis_narrative(ticker: str, signals: dict, best_setup: dict | None) -> dict:
+    """Rule-based narrative generator for stock analysis."""
+    rs_score  = signals.get("rs_score", 0.0) or 0.0
+    vol_ratio = signals.get("vol_ratio", 1.0) or 1.0
+    above_ema = signals.get("above_ema20", False)
+    above_sma = signals.get("above_sma50", False)
+    score     = best_setup.get("setup_score", 0) if best_setup else 0
+
+    sentences = []
+
+    # RS sentence
+    if rs_score > 0.10:
+        sentences.append("Relative strength is strong — the stock is meaningfully outperforming the market.")
+    elif rs_score > 0.02:
+        sentences.append("Relative strength is modestly positive versus the benchmark.")
+    elif rs_score > -0.05:
+        sentences.append("Relative strength is near-neutral, neither leading nor lagging significantly.")
+    else:
+        sentences.append("Relative strength is declining — the stock is underperforming the market.")
+
+    # Volume sentence
+    if vol_ratio >= 1.5:
+        sentences.append(f"Volume is surging at {vol_ratio:.1f}× the 50-day average, showing strong participation.")
+    elif vol_ratio >= 1.1:
+        sentences.append("Volume is above average, indicating improving buying interest.")
+    else:
+        sentences.append("Volume participation is below average, limiting conviction in any move.")
+
+    # Trend sentence
+    if above_ema and above_sma:
+        sentences.append("Price is trading above both the 20-day EMA and 50-day SMA, confirming a healthy uptrend structure.")
+    elif above_ema and not above_sma:
+        sentences.append("Price is recovering above the 20-day EMA but remains below the 50-day SMA — trend is mixed.")
+    else:
+        sentences.append("Price is trading below key moving averages — no clear uptrend structure is present.")
+
+    # Setup sentence
+    if best_setup:
+        st    = best_setup.get("setup_type", "setup")
+        entry = best_setup.get("entry") or 0
+        sentences.append(f"A {st} pattern has been detected with an entry near ${entry:.2f}.")
+    else:
+        sentences.append("No high-quality breakout pattern has been identified at current price levels.")
+
+    # Verdict
+    if score >= 70 and best_setup:
+        verdict = "TRADE CANDIDATE"; verdict_color = "go";     quality = "Strong"
+    elif score >= 50 or (best_setup and score >= 40):
+        verdict = "WATCHLIST";       verdict_color = "accent";  quality = "Moderate"
+    else:
+        verdict = "AVOID";           verdict_color = "halt";    quality = "Weak" if score > 0 else "No Setup"
+
+    return {
+        "verdict":       verdict,
+        "verdict_color": verdict_color,
+        "quality":       quality,
+        "narrative":     " ".join(sentences),
+    }
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Endpoints
 # ────────────────────────────────────────────────────────────────────────────
@@ -2357,6 +2417,91 @@ async def debug_ticker(ticker: str):
         "engine5": e5_out,
         "engine6": e6_out,
     }
+
+
+@app.get("/api/analyze/{ticker}")
+async def analyze_ticker(ticker: str):
+    """Full technical analysis for any ticker."""
+    import yfinance as yf
+    import pandas as pd
+    ticker = ticker.upper().strip()
+
+    try:
+        raw = yf.download(ticker, period="1y", auto_adjust=True, progress=False)
+        if raw is None or raw.empty or len(raw) < 60:
+            return {
+                "ticker": ticker, "score": 0, "setup_type": None,
+                "entry": None, "stop_loss": None, "take_profit": None, "rr": None,
+                "verdict": "NO DATA", "verdict_color": "halt",
+                "quality": "No Data", "narrative": "Insufficient price history to perform analysis.",
+                "signals": {},
+            }
+
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+        df = raw.rename(columns=str.title).copy()
+
+        close   = float(df["Close"].iloc[-1])
+        ema20   = float(df["Close"].ewm(span=20, adjust=False).mean().iloc[-1])
+        sma50   = float(df["Close"].rolling(50).mean().iloc[-1])
+        vol_50  = float(df["Volume"].rolling(50).mean().iloc[-1]) if "Volume" in df.columns else 1.0
+        vol_now = float(df["Volume"].iloc[-1]) if "Volume" in df.columns else 1.0
+        vol_ratio = (vol_now / vol_50) if vol_50 > 0 else 1.0
+
+        try:
+            spy_raw = yf.download("SPY", period="6mo", auto_adjust=True, progress=False)
+            if isinstance(spy_raw.columns, pd.MultiIndex):
+                spy_raw.columns = spy_raw.columns.get_level_values(0)
+            spy_close = spy_raw["Close"] if "Close" in spy_raw.columns else spy_raw.iloc[:, 0]
+            n = min(63, len(df) - 1, len(spy_close) - 1)
+            stock_ret = float(df["Close"].iloc[-1] / df["Close"].iloc[-(n + 1)] - 1)
+            spy_ret   = float(spy_close.iloc[-1] / spy_close.iloc[-(n + 1)] - 1)
+            rs_score  = stock_ret - spy_ret
+        except Exception:
+            rs_score = 0.0
+
+        signals = {
+            "price":       close,
+            "ema20":       ema20,
+            "sma50":       sma50,
+            "above_ema20": close > ema20,
+            "above_sma50": close > sma50,
+            "vol_ratio":   round(vol_ratio, 2),
+            "rs_score":    round(rs_score, 4),
+        }
+
+        from database import get_setups_by_ticker
+        existing = await get_setups_by_ticker(DB_PATH, ticker)
+        best_setup = None
+        if existing:
+            best_setup = max(existing, key=lambda s: s.get("setup_score") or 0)
+            signals["vol_ratio"] = best_setup.get("vol_ratio", signals["vol_ratio"])
+            signals["rs_score"]  = best_setup.get("rs_score",  signals["rs_score"])
+
+        analysis = _generate_analysis_narrative(ticker, signals, best_setup)
+
+        return {
+            "ticker":      ticker,
+            "score":       int(best_setup.get("setup_score") or 0) if best_setup else 0,
+            "setup_type":  best_setup.get("setup_type")   if best_setup else None,
+            "entry":       best_setup.get("entry")        if best_setup else None,
+            "stop_loss":   best_setup.get("stop_loss")    if best_setup else None,
+            "take_profit": best_setup.get("take_profit")  if best_setup else None,
+            "rr":          best_setup.get("rr")           if best_setup else None,
+            **analysis,
+            "signals":     signals,
+        }
+
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return {
+            "ticker": ticker, "score": 0, "setup_type": None,
+            "entry": None, "stop_loss": None, "take_profit": None, "rr": None,
+            "verdict": "ERROR", "verdict_color": "halt",
+            "quality": "Error", "narrative": f"Analysis failed: {str(exc)[:120]}",
+            "signals": {},
+        }
 
 
 @app.get("/api/chart/{ticker}")

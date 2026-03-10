@@ -242,6 +242,37 @@ async def get_latest_scan_timestamp(db_path: str) -> Optional[str]:
             return row[0] if row else None
 
 
+async def get_setups_by_ticker(db_path: str, ticker: str) -> list:
+    """Return all setups for a given ticker from the most recent scan."""
+    scan_ts = await get_latest_scan_timestamp(db_path)
+    if not scan_ts:
+        return []
+    results = []
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute(
+            """SELECT ticker, setup_type, entry, stop_loss, take_profit, rr, setup_date, metadata
+               FROM scan_setups WHERE scan_timestamp = ? AND ticker = ?""",
+            (scan_ts, ticker.upper()),
+        ) as cur:
+            async for row in cur:
+                import json as _json
+                record = {
+                    "ticker":      row[0],
+                    "setup_type":  row[1],
+                    "entry":       row[2],
+                    "stop_loss":   row[3],
+                    "take_profit": row[4],
+                    "rr":          row[5],
+                    "setup_date":  row[6],
+                }
+                try:
+                    record.update(_json.loads(row[7]) if row[7] else {})
+                except Exception:
+                    pass
+                results.append(record)
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Write helpers
 # ---------------------------------------------------------------------------

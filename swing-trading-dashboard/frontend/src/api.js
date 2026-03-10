@@ -130,3 +130,6 @@ export async function wfoAudit(runId, period = 'oos') {
 
 export const buildUniverse = () =>
   fetch('/api/build-universe', { method: 'POST' }).then(handleResponse)
+
+export const fetchAnalysis = (ticker) =>
+  fetch(`/api/analyze/${ticker}`).then(handleResponse)
