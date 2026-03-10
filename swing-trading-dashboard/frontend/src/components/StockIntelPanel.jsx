@@ -49,6 +49,91 @@ function ScoreBadge({ score }) {
   )
 }
 
+function RankBadge({ rank }) {
+  const r = Math.round(rank ?? 0)
+  const color = r >= 85 ? 'var(--go)' : r >= 70 ? 'var(--accent)' : 'var(--halt)'
+  return (
+    <span style={{
+      padding: '2px 7px', borderRadius: 4,
+      fontFamily: '"IBM Plex Mono", monospace', fontSize: 10, fontWeight: 700,
+      background: `${color}22`, color, border: `1px solid ${color}55`,
+    }}>
+      RS {r}
+    </span>
+  )
+}
+
+function AlignmentChip({ alignment }) {
+  const map = { STRONG: 'var(--go)', MODERATE: 'var(--accent)', WEAK: 'var(--halt)' }
+  const c = map[alignment] ?? 'var(--muted)'
+  return (
+    <span style={{
+      padding: '2px 7px', borderRadius: 4, fontSize: 9,
+      fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700,
+      background: `${c}22`, color: c, border: `1px solid ${c}44`,
+      letterSpacing: '0.06em',
+    }}>
+      {alignment ?? '—'}
+    </span>
+  )
+}
+
+function V5AnalysisSection({ analysis }) {
+  if (!analysis) return null
+
+  const {
+    rs_rank, regime_alignment, entry_quality,
+    price_risk_pct, risk_level, reject_reasons = [],
+  } = analysis
+
+  const riskColor = { LOW: 'var(--go)', MODERATE: 'var(--accent)', HIGH: 'var(--halt)' }[risk_level] ?? 'var(--muted)'
+
+  return (
+    <div style={{ padding: '10px 16px', borderTop: '1px solid var(--card-border)' }}>
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8 }}>
+        V5 ANALYSIS
+      </div>
+
+      {/* RS Rank + Regime + Entry Quality chips */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+        {rs_rank != null && <RankBadge rank={rs_rank} />}
+        {regime_alignment && <AlignmentChip alignment={regime_alignment} />}
+        {entry_quality && (
+          <span style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace' }}>
+            {entry_quality}
+          </span>
+        )}
+      </div>
+
+      {/* Price risk */}
+      {price_risk_pct != null && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 10 }}>
+          <span style={{ color: 'var(--muted)' }}>Price Risk</span>
+          <span style={{ fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700, color: riskColor }}>
+            {price_risk_pct.toFixed(1)}% — {risk_level}
+          </span>
+        </div>
+      )}
+
+      {/* Reject reasons */}
+      {reject_reasons.length > 0 && (
+        <div style={{ marginTop: 6 }}>
+          {reject_reasons.map((reason, i) => (
+            <div key={i} style={{
+              fontSize: 9, lineHeight: 1.5, color: 'var(--halt)',
+              fontFamily: '"Inter", sans-serif',
+              borderLeft: '2px solid var(--halt)',
+              paddingLeft: 6, marginBottom: 3,
+            }}>
+              {reason}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function StockIntelPanel({ setup, livePrices, analysis, analysisLoading }) {
   if (!setup) {
     return (
@@ -218,6 +303,9 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
           <div className="shimmer-row" style={{ height: 50 }} />
         </div>
       )}
+
+      {/* V5 Analysis section */}
+      <V5AnalysisSection analysis={analysis} />
 
       {/* TradingView link */}
       <div style={{ padding: '10px 16px', borderTop: '1px solid var(--card-border)' }}>
