@@ -315,8 +315,10 @@ export default function DiagnosticsTab() {
         Strategy Diagnostics
       </div>
       <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 20 }}>
-        Live trading performance from closed portfolio trades.
-        {!hasData && ' Close trades in the Portfolio tab to populate this report.'}
+        {source === 'backtest'
+          ? 'V4 strategy baseline — historical simulation (2023–2024).'
+          : 'Live trading performance from closed portfolio trades.'}
+        {source === 'live' && !hasData && ' Close trades in the Portfolio tab to populate this report.'}
       </div>
 
       {/* Source toggle */}
