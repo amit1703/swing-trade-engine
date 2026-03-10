@@ -560,3 +560,127 @@ def _prepare_indicators(
         cci_today=cci_today, cci_prev=cci_prev,
         ema8=ema8, ema20=ema20, sma50=sma50, atr14=atr14, cci20=cci20,
     )
+
+
+def scan_pullback_scored(
+    ticker: str,
+    df: pd.DataFrame,
+    sr_zones: List[Dict],
+    params,                         # BacktestParams (duck-typed — no circular import)
+    trendline: Optional[Dict] = None,
+    rs_score: float = 0.0,
+) -> tuple:
+    """
+    Score-based pullback detector for use in BacktestEngine scored mode.
+
+    Returns (setup_dict, score) or (None, 0.0).
+
+    Hard gates (return (None, 0.0) immediately):
+    - Insufficient bars / NaN indicators
+    - Trend score == 0  (no uptrend whatsoever)
+    - No structural support found
+    - Risk math invalid (risk <= 0 or > 15% of entry)
+
+    Additive scoring:
+    +2  : 8 EMA > 20 EMA AND close > SMA50 (strong trend)
+    +1  : 8 EMA > 20 EMA AND close > SMA50*0.97 (relaxed trend)
+    +2  : low penetrates EMA8 or EMA20
+    +1  : close within params.ema_distance of EMA8 or EMA20
+    +2  : CCI_prev < -100 (deep oversold)
+    +1  : CCI_prev < params.cci_threshold AND CCI turning up
+    +2  : structural support found
+    +tdl_bonus : support source is ASCENDING_TDL
+    """
+    try:
+        ind = _prepare_indicators(ticker, df)
+        if ind is None:
+            return None, 0.0
+
+        lc, lh, ll   = ind.lc, ind.lh, ind.ll
+        l8, l20, l50 = ind.l8, ind.l20, ind.l50
+        latr         = ind.latr
+        cci_today    = ind.cci_today
+        cci_prev     = ind.cci_prev
+        data         = ind.data
+
+        score = 0.0
+
+        # ── Trend score ───────────────────────────────────────────────────────
+        if l8 > l20 and lc > l50:
+            score += 2.0
+        elif l8 > l20 and lc > l50 * 0.97:
+            score += 1.0
+        else:
+            return None, 0.0   # hard gate: no uptrend at all
+
+        # ── Value zone score ──────────────────────────────────────────────────
+        if ll <= l8 or ll <= l20:
+            score += 2.0
+        else:
+            dist_to_8  = abs(lc - l8)  / l8  if l8  > 0 else float("inf")
+            dist_to_20 = abs(lc - l20) / l20 if l20 > 0 else float("inf")
+            if dist_to_8 <= params.ema_distance or dist_to_20 <= params.ema_distance:
+                score += 1.0
+
+        # ── CCI momentum score ────────────────────────────────────────────────
+        if cci_prev < -100 and cci_today > cci_prev:
+            score += 2.0
+        elif cci_prev < params.cci_threshold and cci_today > cci_prev:
+            score += 1.0
+
+        # ── Structural support (hard gate + score) ────────────────────────────
+        vol_sma50   = ind.volume.rolling(50).mean()
+        vsm_val     = vol_sma50.iloc[-1]
+        avg_vol_sup = float(vsm_val.item() if hasattr(vsm_val, "item") else vsm_val)
+
+        nearest_sup = _find_structural_support(
+            ll, lc, sr_zones, trendline,
+            ind.high, ind.low, ind.close, ind.volume, avg_vol_sup,
+        )
+        if nearest_sup is None:
+            return None, 0.0   # hard gate: no structural support
+
+        score += 2.0
+
+        if nearest_sup["source"] == "ASCENDING_TDL":
+            score += params.tdl_bonus
+
+        # ── Risk math ─────────────────────────────────────────────────────────
+        entry = round(lh * 1.001, 2)
+
+        if nearest_sup["level"] >= lc:
+            return None, 0.0
+
+        stop_base = min(ll, nearest_sup["lower"])
+        stop_loss = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
+        risk      = entry - stop_loss
+
+        if risk <= 0 or risk > entry * 0.15:
+            return None, 0.0
+
+        take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
+
+        setup = {
+            "ticker":           ticker,
+            "setup_type":       "PULLBACK",
+            "entry":            entry,
+            "stop_loss":        stop_loss,
+            "take_profit":      take_profit,
+            "rr":               actual_rr,
+            "setup_date":       str(data.index[-1].date()),
+            "cci_today":        round(cci_today, 2),
+            "cci_yesterday":    round(cci_prev, 2),
+            "support_level":    nearest_sup["level"],
+            "support_source":   nearest_sup["source"],
+            "ema8":             round(l8, 2),
+            "ema20":            round(l20, 2),
+            "is_ascending_tdl": nearest_sup["source"] == "ASCENDING_TDL",
+            "pullback_score":   score,
+            "is_scored_mode":   True,
+        }
+        return setup, score
+
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).debug("scan_pullback_scored %s: %s", ticker, exc)
+        return None, 0.0
