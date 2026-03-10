@@ -284,7 +284,7 @@ export default function DiagnosticsTab() {
   async function handleRunBacktest() {
     if (btRunning) return
     setBtRunning(true)
-    setData(null)
+    // Don't clear data — keep existing results visible while re-run progresses
     try {
       await fetch('/api/diagnostics/backtest/run', { method: 'POST' })
       const s = await fetch('/api/diagnostics/backtest/status').then(r => r.json())
@@ -379,13 +379,48 @@ export default function DiagnosticsTab() {
         </div>
       )}
 
+      {/* Backtest running overlay (when re-running over existing data) */}
+      {source === 'backtest' && data && btRunning && (
+        <div style={{ padding: '12px 20px', background: 'rgba(245,166,35,0.06)',
+                      borderBottom: '1px solid rgba(245,166,35,0.2)' }}>
+          <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
+            Re-running V4 backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'} tickers…
+          </div>
+          <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
+            <div style={{
+              height: '100%', borderRadius: 2, background: 'var(--accent)',
+              width: backtestStatus?.total > 0
+                ? `${(backtestStatus.done / backtestStatus.total * 100)}%`
+                : '0%',
+              transition: 'width 0.5s ease',
+            }} />
+          </div>
+        </div>
+      )}
+
       {/* Backtest metadata badge */}
       {source === 'backtest' && data && (
-        <div style={{ padding: '8px 20px', fontSize: 10, color: 'var(--muted)',
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '8px 20px', fontSize: 10, color: 'var(--muted)',
                       fontFamily: '"IBM Plex Mono", monospace',
                       borderBottom: '1px solid var(--card-border)' }}>
-          V4 Baseline · {data.start_date} → {data.end_date} ·{' '}
-          {data.tickers_run} tickers · generated {data.generated_at ? new Date(data.generated_at).toLocaleDateString() : '—'}
+          <span>
+            V4 Baseline · {data.start_date} → {data.end_date} ·{' '}
+            {data.tickers_run} tickers · generated {data.generated_at ? new Date(data.generated_at).toLocaleDateString() : '—'}
+          </span>
+          <button
+            onClick={handleRunBacktest}
+            disabled={btRunning}
+            style={{
+              padding: '3px 10px', borderRadius: 5, fontSize: 10, fontWeight: 700,
+              fontFamily: '"IBM Plex Mono", monospace',
+              background: 'transparent', color: btRunning ? 'var(--muted)' : 'var(--accent)',
+              border: `1px solid ${btRunning ? 'var(--border)' : 'rgba(245,166,35,0.35)'}`,
+              cursor: btRunning ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {btRunning ? 'Running…' : 'Re-run'}
+          </button>
         </div>
       )}
 
