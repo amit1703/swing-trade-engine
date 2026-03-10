@@ -321,20 +321,20 @@ export default function DiagnosticsTab() {
 
       {/* Source toggle */}
       <div style={{ display: 'flex', gap: 4, padding: '12px 20px 0', borderBottom: '1px solid var(--card-border)' }}>
-        {['live', 'backtest'].map(s => (
+        {['live', 'backtest'].map(src => (
           <button
-            key={s}
-            onClick={() => { setSource(s); setData(null) }}
+            key={src}
+            onClick={() => { setSource(src); setData(null) }}
             style={{
               padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 700,
               fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '0.05em',
-              border: source === s ? '1px solid var(--accent)' : '1px solid var(--border)',
-              background: source === s ? 'rgba(245,166,35,0.12)' : 'transparent',
-              color: source === s ? 'var(--accent)' : 'var(--muted)',
+              border: source === src ? '1px solid var(--accent)' : '1px solid var(--border)',
+              background: source === src ? 'rgba(245,166,35,0.12)' : 'transparent',
+              color: source === src ? 'var(--accent)' : 'var(--muted)',
               cursor: 'pointer',
             }}
           >
-            {s === 'live' ? 'Live Trades' : 'Backtest (V4 baseline)'}
+            {src === 'live' ? 'Live Trades' : 'Backtest (V4 baseline)'}
           </button>
         ))}
       </div>
@@ -383,7 +383,7 @@ export default function DiagnosticsTab() {
                       fontFamily: '"IBM Plex Mono", monospace',
                       borderBottom: '1px solid var(--card-border)' }}>
           V4 Baseline · {data.start_date} → {data.end_date} ·{' '}
-          {data.tickers_run} tickers · generated {new Date(data.generated_at).toLocaleDateString()}
+          {data.tickers_run} tickers · generated {data.generated_at ? new Date(data.generated_at).toLocaleDateString() : '—'}
         </div>
       )}
 
