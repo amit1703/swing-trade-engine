@@ -106,6 +106,12 @@ from constants import (
     DISCOVERY_52WK_HIGH_PCT,
     DISCOVERY_VOL_RATIO,
     DISCOVERY_MAX_PCT,
+    # V5: per-setup ATR trail multipliers
+    VCP_TRAIL_ATR_MULT,
+    PULLBACK_TRAIL_ATR_MULT,
+    RES_BREAKOUT_TRAIL_ATR_MULT,
+    BASE_TRAIL_ATR_MULT,
+    TRAIL_ATR_MULT,
 )
 from database import (
     complete_scan_run,
@@ -390,6 +396,14 @@ _digest_cache_lock = threading.Lock()
 
 # ── APScheduler instance ──────────────────────────────────────────────────────
 _scheduler: Optional[BackgroundScheduler] = None
+
+# V5: per-setup ATR trail multipliers for live trade enrichment (matches backtest_engine.py)
+_LIVE_TRAIL_ATR_BY_TYPE = {
+    "VCP":          VCP_TRAIL_ATR_MULT,
+    "PULLBACK":     PULLBACK_TRAIL_ATR_MULT,
+    "RES_BREAKOUT": RES_BREAKOUT_TRAIL_ATR_MULT,
+    "BASE":         BASE_TRAIL_ATR_MULT,
+}
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -2751,8 +2765,21 @@ async def _enrich_trade(trade: Dict) -> Dict:
         pl_d = round((lc - ep) * qty, 2)
         pl_p = round((lc / ep - 1) * 100, 2) if ep > 0 else 0.0
 
-        # Trailing stop: rises with EMA20 when in profit; stays at original SL otherwise
-        trailing_stop = max(float(trade["stop_loss"]), l20) if lc > trade["entry_price"] else float(trade["stop_loss"])
+        atr14_s = _atr(high, low, close, 14)
+        current_atr = float(atr14_s.iloc[-1]) if pd.notna(atr14_s.iloc[-1]) else 0.0
+
+        # V5 setup-specific trailing stop: max(ATR_trail, EMA20), never loosens.
+        setup_type_key = str(trade.get("setup_type", "")).upper()
+        atr_mult = _LIVE_TRAIL_ATR_BY_TYPE.get(setup_type_key, TRAIL_ATR_MULT)
+
+        if lc > trade["entry_price"] and current_atr > 0:
+            ema20_floor = l20
+            atr_trail   = lc - (atr_mult * current_atr)
+            raw_trail   = max(atr_trail, ema20_floor)
+            trailing_stop = max(float(trade["stop_loss"]), raw_trail)
+        else:
+            trailing_stop = float(trade["stop_loss"])
+
         is_risk_free = trailing_stop > trade["entry_price"]
 
         result.update({
