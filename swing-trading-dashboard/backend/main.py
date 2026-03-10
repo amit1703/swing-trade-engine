@@ -36,6 +36,7 @@ import asyncio
 import json
 import logging
 import os
+import tempfile
 import threading
 import time
 import uuid
@@ -3044,8 +3045,17 @@ async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
             }
 
             os.makedirs(os.path.dirname(BACKTEST_DIAG_CACHE_PATH), exist_ok=True)
-            with open(BACKTEST_DIAG_CACHE_PATH, "w") as f:
-                json.dump(report, f)
+            tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(BACKTEST_DIAG_CACHE_PATH))
+            try:
+                with os.fdopen(tmp_fd, "w") as f:
+                    json.dump(report, f)
+                os.replace(tmp_path, BACKTEST_DIAG_CACHE_PATH)
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
 
             now_iso = datetime.now(timezone.utc).isoformat()
             _backtest_diag_status.update({"status": "completed", "last_run": now_iso})
