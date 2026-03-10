@@ -767,8 +767,11 @@ class BacktestEngine:
                 "spy_3m":      float(_spy_3m_s.iloc[full_idx]),
             }
 
-            # NOTE: self.params (if set) gates this bar via RS threshold (Task 2)
-            # and routes PULLBACK signals through scan_pullback_scored (Task 4).
+            # RS gate (scored mode only) — skip bar if stock RS below threshold
+            if self.params is not None:
+                if _rs_t["rs_score"] < self.params.rs_threshold:
+                    continue
+
             signal = _detect_signals(
                 self.ticker, df_slice, spy_slice, self.setup_types,
                 sr_zones=_sr_zones_cache,
