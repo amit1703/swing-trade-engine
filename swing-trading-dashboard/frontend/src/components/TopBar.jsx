@@ -189,6 +189,25 @@ export default function TopBar({
         </div>
       )}
 
+      {devMode && (
+        <div
+          onClick={onToggleDev}
+          title="Press D to toggle Dev Mode"
+          style={{
+            fontSize: 8, padding: '2px 6px', borderRadius: 4,
+            background: 'rgba(155,110,255,0.15)',
+            border: '1px solid rgba(155,110,255,0.35)',
+            color: '#9B6EFF',
+            fontFamily: '"IBM Plex Mono", monospace',
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            cursor: 'pointer',
+          }}
+        >
+          DEV
+        </div>
+      )}
+
       {/* Guide button */}
       <button
         onClick={onOpenGuide}

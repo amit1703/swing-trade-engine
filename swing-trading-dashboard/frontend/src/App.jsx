@@ -275,6 +275,13 @@ export default function App() {
       if (e.key === '?') setShowGuide(v => !v)
       if (e.key === 'f' || e.key === 'F') setChartFocus(v => !v)
       if (e.key === 'Escape') setDebugTicker(null)
+      if (e.key === 'd' || e.key === 'D') {
+        setDevMode(v => {
+          const next = !v
+          if (!next) { setDryRun(false); setDebugTicker(null) }
+          return next
+        })
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -300,12 +307,11 @@ export default function App() {
           devMode={devMode}
           dryRun={dryRun}
           onToggleDev={() => {
-            const next = !devMode
-            setDevMode(next)
-            if (!next) {
-              setDryRun(false)
-              if (activePage === 'analytics') setActivePage('scanner')
-            }
+            setDevMode(v => {
+              const next = !v
+              if (!next) { setDryRun(false); setDebugTicker(null) }
+              return next
+            })
           }}
           onToggleDryRun={() => setDryRun(v => !v)}
           onOpenGuide={() => setShowGuide(true)}
@@ -382,6 +388,8 @@ export default function App() {
                   selectedTicker={selectedTicker}
                   onSelectTicker={handleTickerClick}
                   livePrices={livePrices}
+                  devMode={devMode}
+                  onDebug={handleDebug}
                 />
               </div>
             )}

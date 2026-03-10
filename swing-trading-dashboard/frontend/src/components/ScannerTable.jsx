@@ -26,7 +26,7 @@ function SortIcon({ col, sortCol, sortDir }) {
   return sortDir === 'desc' ? <ArrowDown size={9} color="var(--accent)" /> : <ArrowUp size={9} color="var(--accent)" />
 }
 
-export default function ScannerTable({ allSetups, filters, selectedTicker, onSelectTicker, livePrices = {} }) {
+export default function ScannerTable({ allSetups, filters, selectedTicker, onSelectTicker, livePrices = {}, devMode = false, onDebug }) {
   const [sortCol, setSortCol] = useState('score')
   const [sortDir, setSortDir] = useState('desc')
 
@@ -135,6 +135,7 @@ return true
                 className={`${isSelected ? 'selected' : ''} ${isNearEntry ? 'row-near-entry' : ''}`}
                 style={{ background: rowBg, borderLeft }}
                 onClick={() => onSelectTicker(s.ticker)}
+                onDoubleClick={devMode && onDebug ? () => onDebug(s.ticker) : undefined}
               >
                 <td style={{ textAlign: 'right', width: 40 }}>
                   <span style={{ color: scoreColor, fontWeight: 700, fontSize: 11 }}>{score ?? '—'}</span>
