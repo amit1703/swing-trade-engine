@@ -331,9 +331,13 @@ def _manage_open_trade(
     # 3. Update trailing stop: ratchet to max(EMA20, ATR-based trail) when in profit
     if close > entry:
         atr14 = bar.get("atr14", 0.0)
-        setup_type = state.get("setup_type", "")
-        mult_fn = _TRAIL_ATR_BY_SETUP.get(setup_type)
-        mult = mult_fn() if mult_fn else _constants.TRAIL_ATR_MULT
+        override = state.get("trail_mult_override")
+        if override is not None:
+            mult = override
+        else:
+            setup_type = state.get("setup_type", "")
+            mult_fn = _TRAIL_ATR_BY_SETUP.get(setup_type)
+            mult = mult_fn() if mult_fn else _constants.TRAIL_ATR_MULT
         atr_trail = (close - mult * atr14) if atr14 > 0 else ema20
         new_trail = max(ema20, atr_trail)
         if new_trail > stop:
@@ -535,15 +539,17 @@ class BacktestEngine:
         ticker_df: Optional[pd.DataFrame] = None,
         spy_df: Optional[pd.DataFrame] = None,
         earnings_dates: Optional[Dict[str, List[str]]] = None,
+        trail_mult_override: Optional[float] = None,
     ):
-        self.ticker      = ticker.upper()
-        self.start_date  = start_date
-        self.end_date    = end_date
-        self.setup_types = setup_types or ["VCP", "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"]
-        self.run_id      = run_id or str(uuid.uuid4())
-        self.ticker_df   = ticker_df
-        self.spy_df      = spy_df
+        self.ticker              = ticker.upper()
+        self.start_date          = start_date
+        self.end_date            = end_date
+        self.setup_types         = setup_types or ["VCP", "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"]
+        self.run_id              = run_id or str(uuid.uuid4())
+        self.ticker_df           = ticker_df
+        self.spy_df              = spy_df
         self.earnings_dates: Dict[str, List[str]] = earnings_dates or {}
+        self.trail_mult_override = trail_mult_override
 
     async def run(self) -> BacktestSummary:
         """Execute the backtest. Returns a BacktestSummary with all closed trades."""
@@ -751,13 +757,14 @@ class BacktestEngine:
                 continue
 
             open_trades.append({
-                "setup_type":    signal.get("setup_type", self.setup_types[0]),
-                "signal_date":   T_date.strftime("%Y-%m-%d"),
-                "entry_date":    next_date.strftime("%Y-%m-%d"),
-                "entry_price":   entry_price,
-                "initial_stop":  stop_loss,
-                "trailing_stop": stop_loss,
-                "take_profit":   take_profit,
+                "setup_type":         signal.get("setup_type", self.setup_types[0]),
+                "signal_date":        T_date.strftime("%Y-%m-%d"),
+                "entry_date":         next_date.strftime("%Y-%m-%d"),
+                "entry_price":        entry_price,
+                "initial_stop":       stop_loss,
+                "trailing_stop":      stop_loss,
+                "take_profit":        take_profit,
+                "trail_mult_override": self.trail_mult_override,
             })
 
         # ── 5. Close any still-open trades at end of period ───────────────
