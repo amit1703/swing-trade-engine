@@ -222,18 +222,6 @@ export default function TopBar({
       >
         ?
       </button>
-
-      {/* User avatar placeholder */}
-      <div style={{
-        width: 30, height: 30, borderRadius: '50%',
-        background: 'linear-gradient(135deg, var(--go), var(--blue))',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
-        fontWeight: 700, fontSize: 11, color: '#000',
-        fontFamily: '"Barlow Condensed", sans-serif',
-      }}>
-        TR
-      </div>
     </header>
   )
 }
