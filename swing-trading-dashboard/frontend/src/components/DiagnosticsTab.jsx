@@ -224,18 +224,74 @@ function RegimePerformance({ perf }) {
 
 // ─── DiagnosticsTab (main) ────────────────────────────────────────────────────
 export default function DiagnosticsTab() {
-  const [report, setReport]   = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
+  const [data, setData]           = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState(null)
+  const [source, setSource]       = useState('live')      // 'live' | 'backtest'
+  const [backtestStatus, setBacktestStatus] = useState(null)
+  const [btRunning, setBtRunning] = useState(false)
+  const pollRef                   = useRef(null)
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/diagnostics/report', { signal: controller.signal })
-      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
-      .then(data => { setReport(data); setLoading(false) })
-      .catch(e  => { if (e.name !== 'AbortError') { setError(String(e)); setLoading(false) } })
+
+    async function fetchData() {
+      setLoading(true)
+      setError(null)
+      try {
+        const url = source === 'live'
+          ? '/api/diagnostics/report'
+          : '/api/diagnostics/backtest'
+        const res = await fetch(url, { signal: controller.signal })
+        if (res.status === 404 && source === 'backtest') {
+          setData(null)   // no cache yet — show "run backtest" prompt
+          setLoading(false)
+          return
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        setData(await res.json())
+      } catch (err) {
+        if (err.name !== 'AbortError') setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
     return () => controller.abort()
-  }, [])
+  }, [source])   // re-fetches whenever source changes
+
+  useEffect(() => {
+    if (!btRunning) return
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('/api/diagnostics/backtest/status')
+        const s = await res.json()
+        setBacktestStatus(s)
+        if (s.status === 'completed' || s.status === 'failed') {
+          setBtRunning(false)
+          clearInterval(pollRef.current)
+          if (s.status === 'completed') {
+            const r = await fetch('/api/diagnostics/backtest')
+            if (r.ok) setData(await r.json())
+          }
+        }
+      } catch (_) {}
+    }, 3000)
+    return () => clearInterval(pollRef.current)
+  }, [btRunning])
+
+  async function handleRunBacktest() {
+    setBtRunning(true)
+    setData(null)
+    try {
+      await fetch('/api/diagnostics/backtest/run', { method: 'POST' })
+      const s = await fetch('/api/diagnostics/backtest/status').then(r => r.json())
+      setBacktestStatus(s)
+    } catch (err) {
+      setBtRunning(false)
+    }
+  }
 
   if (loading) return (
     <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
@@ -248,7 +304,7 @@ export default function DiagnosticsTab() {
     </div>
   )
 
-  const s       = report?.summary ?? {}
+  const s       = data?.summary ?? {}
   const hasData = (s.total_trades ?? 0) > 0
 
   return (
@@ -261,6 +317,74 @@ export default function DiagnosticsTab() {
         Live trading performance from closed portfolio trades.
         {!hasData && ' Close trades in the Portfolio tab to populate this report.'}
       </div>
+
+      {/* Source toggle */}
+      <div style={{ display: 'flex', gap: 4, padding: '12px 20px 0', borderBottom: '1px solid var(--card-border)' }}>
+        {['live', 'backtest'].map(s => (
+          <button
+            key={s}
+            onClick={() => { setSource(s); setData(null) }}
+            style={{
+              padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+              fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '0.05em',
+              border: source === s ? '1px solid var(--accent)' : '1px solid var(--border)',
+              background: source === s ? 'rgba(245,166,35,0.12)' : 'transparent',
+              color: source === s ? 'var(--accent)' : 'var(--muted)',
+              cursor: 'pointer',
+            }}
+          >
+            {s === 'live' ? 'Live Trades' : 'Backtest (V4 baseline)'}
+          </button>
+        ))}
+      </div>
+
+      {/* Backtest empty state */}
+      {source === 'backtest' && !data && !loading && (
+        <div style={{ padding: 40, textAlign: 'center' }}>
+          {btRunning && backtestStatus ? (
+            <>
+              <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 12 }}>
+                Running V4 backtest — {backtestStatus.done} / {backtestStatus.total} tickers…
+              </div>
+              <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, width: 300, margin: '0 auto' }}>
+                <div style={{
+                  height: '100%', borderRadius: 2, background: 'var(--accent)',
+                  width: `${backtestStatus.total > 0 ? (backtestStatus.done / backtestStatus.total * 100) : 0}%`,
+                  transition: 'width 0.5s ease',
+                }} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 16 }}>
+                No V4 backtest data. Run the baseline to generate a strategy audit.
+              </div>
+              <button
+                onClick={handleRunBacktest}
+                disabled={btRunning}
+                style={{
+                  padding: '8px 20px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  background: 'rgba(245,166,35,0.15)', color: 'var(--accent)',
+                  border: '1px solid rgba(245,166,35,0.35)', cursor: 'pointer',
+                }}
+              >
+                Run V4 Backtest
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Backtest metadata badge */}
+      {source === 'backtest' && data && (
+        <div style={{ padding: '8px 20px', fontSize: 10, color: 'var(--muted)',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      borderBottom: '1px solid var(--card-border)' }}>
+          V4 Baseline · {data.start_date} → {data.end_date} ·{' '}
+          {data.tickers_run} tickers · generated {new Date(data.generated_at).toLocaleDateString()}
+        </div>
+      )}
 
       {/* Summary cards */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -281,18 +405,18 @@ export default function DiagnosticsTab() {
       {/* Setup breakdown */}
       <SectionHeader title="PERFORMANCE BY SETUP TYPE" />
       <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
-        <SetupBreakdownTable breakdown={report?.setup_breakdown} />
+        <SetupBreakdownTable breakdown={data?.setup_breakdown} />
       </div>
 
       {/* Ticker distribution */}
       <SectionHeader title="TRADE CONCENTRATION BY TICKER" />
       <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
-        <TickerDistribution rows={report?.ticker_distribution} />
+        <TickerDistribution rows={data?.ticker_distribution} />
       </div>
 
       {/* Regime performance */}
       <SectionHeader title="PERFORMANCE BY MARKET REGIME" />
-      <RegimePerformance perf={report?.regime_performance} />
+      <RegimePerformance perf={data?.regime_performance} />
     </div>
   )
 }
