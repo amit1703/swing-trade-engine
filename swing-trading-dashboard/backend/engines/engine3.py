@@ -34,7 +34,7 @@ from zone_utils import nearest_resistance_target
 
 # RS gate: reject stocks that persistently underperform SPY.
 # Loose floor allows flat-vs-SPY stocks to qualify. Patchable by Optuna.
-RS_REJECT_THRESHOLD = -0.05
+RS_REJECT_THRESHOLD = -0.01219   # Optuna v4 best (trial #951); was -0.034124 (v3)
 
 # ---------------------------------------------------------------------------
 # Public API

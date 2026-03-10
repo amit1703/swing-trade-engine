@@ -20,7 +20,7 @@ KDE_BREAKOUT_LOWER_PCT = 0.001  # 0.1% below resistance for near-breakout detect
 DRY_RESISTANCE_PROXIMITY_PCT = 0.05  # 5% proximity for dry setups
 WATCHLIST_PROXIMITY_PCT = 0.015  # 1.5% below resistance for watchlist items
 TRENDLINE_TOUCH_TOLERANCE_PCT = 0.015  # 1.5% tolerance for ascending trendline touch check
-VCP_TIGHT_RANGE_5D_PCT = 0.025         # 2.5% close range over 5 days signals price compression
+VCP_TIGHT_RANGE_5D_PCT = 0.03594       # Optuna v4 best (trial #951); was 0.04259 (v3)
 
 # ── Engine 8: High Tight Flag ──────────────────────────────────────────────
 HTF_LOOKBACK_DAYS     = 40    # Trading days to look back for the prior strong move
@@ -51,7 +51,7 @@ MIN_CANDLES_FOR_RS = 252  # Minimum candles required for RS Line calculation
 # ──────────────────────────────────────────────────────────────────────────
 
 VOL_SMA_PERIOD = 50  # Period for volume SMA calculation
-VOL_SURGE_MULTIPLIER = 1.5  # 150% of SMA for volume surge detection
+VOL_SURGE_MULTIPLIER = 1.1078  # Optuna v4 best (trial #951); was 1.1155 (v3)
 KDE_VOL_MULTIPLIER = 1.15  # 115% of SMA for KDE breakout volume
 TRENDLINE_VOL_MULTIPLIER = 1.2  # 120% of SMA for trendline breakout volume
 
@@ -64,18 +64,23 @@ EMA_SHORT = 8  # Short-term EMA period
 EMA_LONG = 20  # Long-term EMA period
 SMA_LONG = 50  # Long-term SMA period
 CCI_PERIOD = 20  # Commodity Channel Index period
-CCI_STRICT_FLOOR = -50.0  # CCI oversold floor for strict pullback hook
-CCI_RLX_FLOOR = -20.0  # CCI oversold floor for relaxed pullback hook
+CCI_STRICT_FLOOR = -39.10  # Optuna v4 best (trial #951); was -50.0 (v3)
+CCI_RLX_FLOOR = -1.95   # Optuna v4 best (trial #951); was -20.0 (v3)
 
 # ──────────────────────────────────────────────────────────────────────────
 # Risk Management & Stop Loss
 # ──────────────────────────────────────────────────────────────────────────
 
-ATR_STOP_MULTIPLIER = 0.8  # ATR × multiplier below swing low (widened to prevent stop hunts)
+ATR_STOP_MULTIPLIER = 1.278  # Optuna v4 best (trial #951); was 1.360 (v3)
 ENTRY_PRICE_MULTIPLIER = 1.001  # 0.1% above current price for entry orders
 MIN_RISK_REWARD_RATIO = 1.0  # Minimum acceptable R:R ratio for setups
-TARGET_RR             = 2.0  # Default take-profit multiplier (change to 3.0 for 3:1 target)
-TRAIL_ATR_MULT        = 1.5  # ATR multiplier for trailing stop ratchet (optimizable)
+TARGET_RR             = 2.785   # Optuna v4 best (trial #951); was 2.4736 (v3)
+TRAIL_ATR_MULT        = 4.162   # Optuna v4 best (trial #951); was 2.834 (v3)
+
+# ── Position Sizing (risk model) ───────────────────────────────────────────────
+RISK_PER_TRADE_PCT    = 1.0   # % of equity to risk per trade (1R = 1% of equity)
+MAX_POSITION_SIZE_PCT = 20.0  # max % of equity in one position (prevents oversizing on tight stops)
+MAX_OPEN_POSITIONS    = 5     # max concurrent open positions per ticker
 
 # ──────────────────────────────────────────────────────────────────────────
 # VCP Volatility Contraction (Task 13)
@@ -127,7 +132,7 @@ REGIME_WEIGHT_HL       = 10   # New 52-week highs vs lows ratio
 REGIME_WEIGHT_VIX      = 10   # VIX below its 20-day SMA
 
 REGIME_AGGRESSIVE_THRESHOLD = 70   # 70–100 = AGGRESSIVE
-REGIME_SELECTIVE_THRESHOLD  = 40   # 40–69  = SELECTIVE
+REGIME_SELECTIVE_THRESHOLD  = 59   # Optuna v4 best (trial #951); was 54 (v3)
                                     # 0–39   = DEFENSIVE (Engines 2 & 3 disabled)
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -219,7 +224,7 @@ BASE_BRK_MIN_VOL_RATIO = 1.5       # BASE BRK signal: raised from 1.2x to 1.5x
 # RES_BREAKOUT tighter filters
 RES_LAUNCHPAD_BARS         = 5     # Pre-breakout consolidation bars (was 3)
 RES_DECISIVE_MIN_PCT       = 0.007 # Decisive close minimum = 0.7% above zone
-RES_DECISIVE_ATR_FACTOR    = 0.25  # Decisive close = max(0.7%, 0.25 x ATR)
+RES_DECISIVE_ATR_FACTOR    = 0.5400  # Optuna v4 best (trial #951); was 0.4725 (v3)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Universe & Pre-Scan Filtering (2026-03-07)
