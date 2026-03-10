@@ -72,6 +72,34 @@ MIN_BARS_FOR_SIGNAL = 60    # minimum bars before signal detection starts
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Optuna-tunable parameters
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class BacktestParams:
+    """
+    All parameters that Optuna tunes in a single trial.
+
+    Passed to BacktestEngine(params=...). When params=None the engine runs
+    in legacy mode — identical behaviour to pre-V5 backtest. All defaults
+    match the V4 Optuna best so that a plain BacktestParams() is a sensible
+    starting point.
+    """
+    # ── RS filter ────────────────────────────────────────────────────────────
+    rs_threshold:    float = -0.01219  # O'Neil RS floor  (Optuna: -0.05 → +0.10)
+
+    # ── Pullback scoring thresholds ──────────────────────────────────────────
+    cci_threshold:   float = -20.0     # relaxed CCI floor (Optuna: -150 → -10)
+    ema_distance:    float = 0.04      # value-zone proximity (Optuna: 0.01 → 0.08)
+    score_threshold: float = 5.0       # min score to open any trade (Optuna: 2 → 9)
+
+    # ── Signal-type weights ──────────────────────────────────────────────────
+    breakout_weight: float = 1.0       # VCP / RES_BREAKOUT / HTF / LCE (Optuna: 0.5 → 3.0)
+    pullback_weight: float = 1.0       # PULLBACK  (Optuna: 0.5 → 3.0)
+    tdl_bonus:       float = 1.0       # ascending TDL support (Optuna: 0.0 → 2.0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Data structures
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -95,6 +123,9 @@ class TradeRecord:
     pnl_pct:           float = field(init=False)
     portfolio_pnl_pct: float = field(init=False)  # position-sized portfolio impact (1% risk model)
     is_win:            bool  = field(init=False)
+
+    # Scoring (populated in scored mode only; None in legacy mode)
+    final_score: Optional[float] = None
 
     def __post_init__(self):
         risk = self.entry_price - self.initial_stop
@@ -133,6 +164,7 @@ class TradeRecord:
             "pnl_pct":           self.pnl_pct,
             "portfolio_pnl_pct": self.portfolio_pnl_pct,
             "is_win":            self.is_win,
+            "final_score":       self.final_score,
         }
 
 
@@ -541,6 +573,7 @@ class BacktestEngine:
         spy_df: Optional[pd.DataFrame] = None,
         earnings_dates: Optional[Dict[str, List[str]]] = None,
         trail_mult_override: Optional[float] = None,
+        params: Optional[BacktestParams] = None,
     ):
         self.ticker              = ticker.upper()
         self.start_date          = start_date
@@ -551,6 +584,7 @@ class BacktestEngine:
         self.spy_df              = spy_df
         self.earnings_dates: Dict[str, List[str]] = earnings_dates or {}
         self.trail_mult_override = trail_mult_override
+        self.params              = params
 
     async def run(self) -> BacktestSummary:
         """Execute the backtest. Returns a BacktestSummary with all closed trades."""
