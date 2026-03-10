@@ -1,0 +1,390 @@
+Study: trading_optimizer_v3  |  Completed: 118  |  Running: 182
+Optimizing:   0%|          | 0/182 [00:00<?, ?trial/s]wfo: no cache for SQ — skipping
+Optimizing:   1%|          | 1/182 [01:57<5:53:56, 117.33s/trial]Optimizing:   1%|          | 1/182 [01:57<5:53:56, 117.33s/trial, best=0.0682]wfo: no cache for SQ — skipping
+Optimizing:   1%|          | 2/182 [03:30<5:09:44, 103.25s/trial, best=0.0682]Optimizing:   1%|          | 2/182 [03:30<5:09:44, 103.25s/trial, best=0.0682]wfo: no cache for SQ — skipping
+Optimizing:   2%|▏         | 3/182 [05:12<5:06:01, 102.58s/trial, best=0.0682]Optimizing:   2%|▏         | 3/182 [05:12<5:06:01, 102.58s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   2%|▏         | 4/182 [06:53<5:01:58, 101.79s/trial, best=0.0856]Optimizing:   2%|▏         | 4/182 [06:53<5:01:58, 101.79s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   3%|▎         | 5/182 [08:40<5:06:33, 103.92s/trial, best=0.0856]Optimizing:   3%|▎         | 5/182 [08:40<5:06:33, 103.92s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   3%|▎         | 6/182 [10:18<4:59:07, 101.98s/trial, best=0.0856]Optimizing:   3%|▎         | 6/182 [10:18<4:59:07, 101.98s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   4%|▍         | 7/182 [11:57<4:54:08, 100.85s/trial, best=0.0856]Optimizing:   4%|▍         | 7/182 [11:57<4:54:08, 100.85s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   4%|▍         | 8/182 [13:38<4:52:58, 101.03s/trial, best=0.0856]Optimizing:   4%|▍         | 8/182 [13:38<4:52:58, 101.03s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   5%|▍         | 9/182 [15:11<4:43:33, 98.35s/trial, best=0.0856] Optimizing:   5%|▍         | 9/182 [15:11<4:43:33, 98.35s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   5%|▌         | 10/182 [16:42<4:35:24, 96.07s/trial, best=0.0856]Optimizing:   5%|▌         | 10/182 [16:42<4:35:24, 96.07s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   6%|▌         | 11/182 [18:14<4:30:07, 94.78s/trial, best=0.0856]Optimizing:   6%|▌         | 11/182 [18:14<4:30:07, 94.78s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   7%|▋         | 12/182 [19:45<4:25:09, 93.58s/trial, best=0.0856]Optimizing:   7%|▋         | 12/182 [19:45<4:25:09, 93.58s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   7%|▋         | 13/182 [21:19<4:24:18, 93.84s/trial, best=0.0856]Optimizing:   7%|▋         | 13/182 [21:19<4:24:18, 93.84s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   8%|▊         | 14/182 [22:49<4:19:39, 92.74s/trial, best=0.0856]Optimizing:   8%|▊         | 14/182 [22:49<4:19:39, 92.74s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   8%|▊         | 15/182 [24:19<4:15:41, 91.86s/trial, best=0.0856]Optimizing:   8%|▊         | 15/182 [24:19<4:15:41, 91.86s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   9%|▉         | 16/182 [25:45<4:09:12, 90.08s/trial, best=0.0856]Optimizing:   9%|▉         | 16/182 [25:45<4:09:12, 90.08s/trial, best=0.0856]wfo: no cache for SQ — skipping
+Optimizing:   9%|▉         | 17/182 [27:11<4:04:45, 89.00s/trial, best=0.0856]Optimizing:   9%|▉         | 17/182 [27:11<4:04:45, 89.00s/trial, best=0.0858]wfo: no cache for SQ — skipping
+Optimizing:  10%|▉         | 18/182 [28:38<4:00:52, 88.12s/trial, best=0.0858]Optimizing:  10%|▉         | 18/182 [28:38<4:00:52, 88.12s/trial, best=0.0858]wfo: no cache for SQ — skipping
+Optimizing:  10%|█         | 19/182 [30:02<3:56:34, 87.08s/trial, best=0.0858]Optimizing:  10%|█         | 19/182 [30:02<3:56:34, 87.08s/trial, best=0.0886]wfo: no cache for SQ — skipping
+Optimizing:  11%|█         | 20/182 [31:27<3:53:09, 86.36s/trial, best=0.0886]Optimizing:  11%|█         | 20/182 [31:27<3:53:09, 86.36s/trial, best=0.0886]wfo: no cache for SQ — skipping
+Optimizing:  12%|█▏        | 21/182 [32:54<3:52:39, 86.70s/trial, best=0.0886]Optimizing:  12%|█▏        | 21/182 [32:54<3:52:39, 86.70s/trial, best=0.0886]wfo: no cache for SQ — skipping
+Optimizing:  12%|█▏        | 22/182 [34:23<3:52:43, 87.27s/trial, best=0.0886]Optimizing:  12%|█▏        | 22/182 [34:23<3:52:43, 87.27s/trial, best=0.092] wfo: no cache for SQ — skipping
+Optimizing:  13%|█▎        | 23/182 [35:49<3:50:05, 86.83s/trial, best=0.092]Optimizing:  13%|█▎        | 23/182 [35:49<3:50:05, 86.83s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  13%|█▎        | 24/182 [37:15<3:48:19, 86.71s/trial, best=0.092]Optimizing:  13%|█▎        | 24/182 [37:15<3:48:19, 86.71s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  14%|█▎        | 25/182 [38:42<3:46:42, 86.64s/trial, best=0.092]Optimizing:  14%|█▎        | 25/182 [38:42<3:46:42, 86.64s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  14%|█▍        | 26/182 [40:08<3:44:53, 86.50s/trial, best=0.092]Optimizing:  14%|█▍        | 26/182 [40:08<3:44:53, 86.50s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  15%|█▍        | 27/182 [41:34<3:42:52, 86.27s/trial, best=0.092]Optimizing:  15%|█▍        | 27/182 [41:34<3:42:52, 86.27s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  15%|█▌        | 28/182 [43:00<3:41:11, 86.18s/trial, best=0.092]Optimizing:  15%|█▌        | 28/182 [43:00<3:41:11, 86.18s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  16%|█▌        | 29/182 [44:31<3:43:42, 87.73s/trial, best=0.092]Optimizing:  16%|█▌        | 29/182 [44:31<3:43:42, 87.73s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  16%|█▋        | 30/182 [47:29<4:51:18, 114.99s/trial, best=0.092]Optimizing:  16%|█▋        | 30/182 [47:29<4:51:18, 114.99s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  17%|█▋        | 31/182 [48:59<4:30:26, 107.46s/trial, best=0.092]Optimizing:  17%|█▋        | 31/182 [48:59<4:30:26, 107.46s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  18%|█▊        | 32/182 [50:24<4:11:27, 100.59s/trial, best=0.092]Optimizing:  18%|█▊        | 32/182 [50:24<4:11:27, 100.59s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  18%|█▊        | 33/182 [51:57<4:04:29, 98.45s/trial, best=0.092] Optimizing:  18%|█▊        | 33/182 [51:57<4:04:29, 98.45s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  19%|█▊        | 34/182 [53:22<3:52:32, 94.28s/trial, best=0.092]Optimizing:  19%|█▊        | 34/182 [53:22<3:52:32, 94.28s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  19%|█▉        | 35/182 [54:47<3:43:52, 91.38s/trial, best=0.092]Optimizing:  19%|█▉        | 35/182 [54:47<3:43:52, 91.38s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  20%|█▉        | 36/182 [56:15<3:40:34, 90.64s/trial, best=0.092]Optimizing:  20%|█▉        | 36/182 [56:15<3:40:34, 90.64s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  20%|██        | 37/182 [57:49<3:41:14, 91.55s/trial, best=0.092]Optimizing:  20%|██        | 37/182 [57:49<3:41:14, 91.55s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  21%|██        | 38/182 [59:14<3:34:40, 89.45s/trial, best=0.092]Optimizing:  21%|██        | 38/182 [59:14<3:34:40, 89.45s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  21%|██▏       | 39/182 [1:00:43<3:32:54, 89.33s/trial, best=0.092]Optimizing:  21%|██▏       | 39/182 [1:00:43<3:32:54, 89.33s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  22%|██▏       | 40/182 [1:02:12<3:31:06, 89.20s/trial, best=0.092]Optimizing:  22%|██▏       | 40/182 [1:02:12<3:31:06, 89.20s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  23%|██▎       | 41/182 [1:03:45<3:32:35, 90.46s/trial, best=0.092]Optimizing:  23%|██▎       | 41/182 [1:03:45<3:32:35, 90.46s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  23%|██▎       | 42/182 [1:05:09<3:26:49, 88.64s/trial, best=0.092]Optimizing:  23%|██▎       | 42/182 [1:05:09<3:26:49, 88.64s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  24%|██▎       | 43/182 [1:06:34<3:22:26, 87.39s/trial, best=0.092]Optimizing:  24%|██▎       | 43/182 [1:06:34<3:22:26, 87.39s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  24%|██▍       | 44/182 [1:07:58<3:18:57, 86.50s/trial, best=0.092]Optimizing:  24%|██▍       | 44/182 [1:07:58<3:18:57, 86.50s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  25%|██▍       | 45/182 [1:09:27<3:18:57, 87.14s/trial, best=0.092]Optimizing:  25%|██▍       | 45/182 [1:09:27<3:18:57, 87.14s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  25%|██▌       | 46/182 [1:10:56<3:18:32, 87.59s/trial, best=0.092]Optimizing:  25%|██▌       | 46/182 [1:10:56<3:18:32, 87.59s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  26%|██▌       | 47/182 [1:12:24<3:17:46, 87.90s/trial, best=0.092]Optimizing:  26%|██▌       | 47/182 [1:12:24<3:17:46, 87.90s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  26%|██▋       | 48/182 [1:13:58<3:20:32, 89.79s/trial, best=0.092]Optimizing:  26%|██▋       | 48/182 [1:13:58<3:20:32, 89.79s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  27%|██▋       | 49/182 [1:15:28<3:18:50, 89.70s/trial, best=0.092]Optimizing:  27%|██▋       | 49/182 [1:15:28<3:18:50, 89.70s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  27%|██▋       | 50/182 [1:17:03<3:20:42, 91.23s/trial, best=0.092]Optimizing:  27%|██▋       | 50/182 [1:17:03<3:20:42, 91.23s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  28%|██▊       | 51/182 [1:18:33<3:18:34, 90.95s/trial, best=0.092]Optimizing:  28%|██▊       | 51/182 [1:18:33<3:18:34, 90.95s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  29%|██▊       | 52/182 [1:20:08<3:19:35, 92.12s/trial, best=0.092]Optimizing:  29%|██▊       | 52/182 [1:20:08<3:19:35, 92.12s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  29%|██▉       | 53/182 [1:21:38<3:16:52, 91.57s/trial, best=0.092]Optimizing:  29%|██▉       | 53/182 [1:21:38<3:16:52, 91.57s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  30%|██▉       | 54/182 [1:23:04<3:11:30, 89.77s/trial, best=0.092]Optimizing:  30%|██▉       | 54/182 [1:23:04<3:11:30, 89.77s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  30%|███       | 55/182 [1:24:30<3:07:29, 88.58s/trial, best=0.092]Optimizing:  30%|███       | 55/182 [1:24:30<3:07:29, 88.58s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  31%|███       | 56/182 [1:25:55<3:04:09, 87.70s/trial, best=0.092]Optimizing:  31%|███       | 56/182 [1:25:55<3:04:09, 87.70s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  31%|███▏      | 57/182 [1:27:21<3:01:31, 87.13s/trial, best=0.092]Optimizing:  31%|███▏      | 57/182 [1:27:21<3:01:31, 87.13s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  32%|███▏      | 58/182 [1:28:47<2:59:11, 86.70s/trial, best=0.092]Optimizing:  32%|███▏      | 58/182 [1:28:47<2:59:11, 86.70s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  32%|███▏      | 59/182 [1:30:21<3:02:40, 89.11s/trial, best=0.092]Optimizing:  32%|███▏      | 59/182 [1:30:21<3:02:40, 89.11s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  33%|███▎      | 60/182 [1:31:51<3:01:46, 89.40s/trial, best=0.092]Optimizing:  33%|███▎      | 60/182 [1:31:51<3:01:46, 89.40s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  34%|███▎      | 61/182 [1:33:16<2:57:26, 87.99s/trial, best=0.092]Optimizing:  34%|███▎      | 61/182 [1:33:16<2:57:26, 87.99s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  34%|███▍      | 62/182 [1:34:45<2:56:34, 88.29s/trial, best=0.092]Optimizing:  34%|███▍      | 62/182 [1:34:45<2:56:34, 88.29s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  35%|███▍      | 63/182 [1:36:19<2:58:17, 89.90s/trial, best=0.092]Optimizing:  35%|███▍      | 63/182 [1:36:19<2:58:17, 89.90s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  35%|███▌      | 64/182 [1:37:48<2:56:23, 89.69s/trial, best=0.092]Optimizing:  35%|███▌      | 64/182 [1:37:48<2:56:23, 89.69s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  36%|███▌      | 65/182 [1:39:13<2:51:53, 88.15s/trial, best=0.092]Optimizing:  36%|███▌      | 65/182 [1:39:13<2:51:53, 88.15s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  36%|███▋      | 66/182 [1:40:42<2:51:04, 88.49s/trial, best=0.092]Optimizing:  36%|███▋      | 66/182 [1:40:42<2:51:04, 88.49s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  37%|███▋      | 67/182 [1:42:53<3:14:18, 101.38s/trial, best=0.092]Optimizing:  37%|███▋      | 67/182 [1:42:53<3:14:18, 101.38s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  37%|███▋      | 68/182 [1:44:18<3:03:04, 96.36s/trial, best=0.092] Optimizing:  37%|███▋      | 68/182 [1:44:18<3:03:04, 96.36s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  38%|███▊      | 69/182 [1:45:52<3:00:01, 95.59s/trial, best=0.092]Optimizing:  38%|███▊      | 69/182 [1:45:52<3:00:01, 95.59s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  38%|███▊      | 70/182 [1:47:21<2:54:47, 93.64s/trial, best=0.092]Optimizing:  38%|███▊      | 70/182 [1:47:21<2:54:47, 93.64s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  39%|███▉      | 71/182 [1:48:45<2:48:14, 90.95s/trial, best=0.092]Optimizing:  39%|███▉      | 71/182 [1:48:45<2:48:14, 90.95s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  40%|███▉      | 72/182 [1:50:10<2:43:16, 89.06s/trial, best=0.092]Optimizing:  40%|███▉      | 72/182 [1:50:10<2:43:16, 89.06s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  40%|████      | 73/182 [1:51:35<2:39:24, 87.75s/trial, best=0.092]Optimizing:  40%|████      | 73/182 [1:51:35<2:39:24, 87.75s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  41%|████      | 74/182 [1:52:59<2:36:15, 86.81s/trial, best=0.092]Optimizing:  41%|████      | 74/182 [1:52:59<2:36:15, 86.81s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  41%|████      | 75/182 [1:54:24<2:33:39, 86.17s/trial, best=0.092]Optimizing:  41%|████      | 75/182 [1:54:24<2:33:39, 86.17s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  42%|████▏     | 76/182 [1:55:49<2:31:22, 85.68s/trial, best=0.092]Optimizing:  42%|████▏     | 76/182 [1:55:49<2:31:22, 85.68s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  42%|████▏     | 77/182 [1:57:18<2:31:45, 86.72s/trial, best=0.092]Optimizing:  42%|████▏     | 77/182 [1:57:18<2:31:45, 86.72s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  43%|████▎     | 78/182 [1:58:43<2:29:16, 86.12s/trial, best=0.092]Optimizing:  43%|████▎     | 78/182 [1:58:43<2:29:16, 86.12s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  43%|████▎     | 79/182 [2:00:12<2:29:20, 87.00s/trial, best=0.092]Optimizing:  43%|████▎     | 79/182 [2:00:12<2:29:20, 87.00s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  44%|████▍     | 80/182 [2:01:36<2:26:44, 86.31s/trial, best=0.092]Optimizing:  44%|████▍     | 80/182 [2:01:36<2:26:44, 86.31s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  45%|████▍     | 81/182 [2:03:10<2:28:59, 88.51s/trial, best=0.092]Optimizing:  45%|████▍     | 81/182 [2:03:10<2:28:59, 88.51s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  45%|████▌     | 82/182 [2:04:35<2:25:35, 87.36s/trial, best=0.092]Optimizing:  45%|████▌     | 82/182 [2:04:35<2:25:35, 87.36s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  46%|████▌     | 83/182 [2:06:05<2:25:26, 88.15s/trial, best=0.092]Optimizing:  46%|████▌     | 83/182 [2:06:05<2:25:26, 88.15s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  46%|████▌     | 84/182 [2:07:37<2:25:50, 89.29s/trial, best=0.092]Optimizing:  46%|████▌     | 84/182 [2:07:37<2:25:50, 89.29s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  47%|████▋     | 85/182 [2:09:06<2:24:14, 89.22s/trial, best=0.092]Optimizing:  47%|████▋     | 85/182 [2:09:06<2:24:14, 89.22s/trial, best=0.092]wfo: no cache for SQ — skipping
+Optimizing:  47%|████▋     | 86/182 [2:10:37<2:24:02, 90.02s/trial, best=0.092]Optimizing:  47%|████▋     | 86/182 [2:10:37<2:24:02, 90.02s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  48%|████▊     | 87/182 [2:12:04<2:21:01, 89.07s/trial, best=0.0939]Optimizing:  48%|████▊     | 87/182 [2:12:04<2:21:01, 89.07s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  48%|████▊     | 88/182 [2:13:37<2:21:13, 90.14s/trial, best=0.0939]Optimizing:  48%|████▊     | 88/182 [2:13:37<2:21:13, 90.14s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  49%|████▉     | 89/182 [2:15:09<2:20:42, 90.78s/trial, best=0.0939]Optimizing:  49%|████▉     | 89/182 [2:15:09<2:20:42, 90.78s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  49%|████▉     | 90/182 [2:16:46<2:22:06, 92.68s/trial, best=0.0939]Optimizing:  49%|████▉     | 90/182 [2:16:46<2:22:06, 92.68s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  50%|█████     | 91/182 [2:18:15<2:18:34, 91.36s/trial, best=0.0939]Optimizing:  50%|█████     | 91/182 [2:18:15<2:18:34, 91.36s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  51%|█████     | 92/182 [2:19:46<2:17:13, 91.49s/trial, best=0.0939]Optimizing:  51%|█████     | 92/182 [2:19:46<2:17:13, 91.49s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  51%|█████     | 93/182 [2:21:53<2:31:24, 102.07s/trial, best=0.0939]Optimizing:  51%|█████     | 93/182 [2:21:53<2:31:24, 102.07s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  52%|█████▏    | 94/182 [2:23:23<2:24:20, 98.42s/trial, best=0.0939] Optimizing:  52%|█████▏    | 94/182 [2:23:23<2:24:20, 98.42s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  52%|█████▏    | 95/182 [2:24:51<2:18:03, 95.21s/trial, best=0.0939]Optimizing:  52%|█████▏    | 95/182 [2:24:51<2:18:03, 95.21s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  53%|█████▎    | 96/182 [2:26:18<2:13:05, 92.86s/trial, best=0.0939]Optimizing:  53%|█████▎    | 96/182 [2:26:18<2:13:05, 92.86s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  53%|█████▎    | 97/182 [2:27:46<2:09:22, 91.32s/trial, best=0.0939]Optimizing:  53%|█████▎    | 97/182 [2:27:46<2:09:22, 91.32s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  54%|█████▍    | 98/182 [2:29:13<2:06:04, 90.05s/trial, best=0.0939]Optimizing:  54%|█████▍    | 98/182 [2:29:13<2:06:04, 90.05s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  54%|█████▍    | 99/182 [2:30:45<2:05:25, 90.67s/trial, best=0.0939]Optimizing:  54%|█████▍    | 99/182 [2:30:45<2:05:25, 90.67s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  55%|█████▍    | 100/182 [2:32:11<2:01:57, 89.24s/trial, best=0.0939]Optimizing:  55%|█████▍    | 100/182 [2:32:11<2:01:57, 89.24s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  55%|█████▌    | 101/182 [2:33:50<2:04:20, 92.10s/trial, best=0.0939]Optimizing:  55%|█████▌    | 101/182 [2:33:50<2:04:20, 92.10s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  56%|█████▌    | 102/182 [2:35:22<2:02:46, 92.08s/trial, best=0.0939]Optimizing:  56%|█████▌    | 102/182 [2:35:22<2:02:46, 92.08s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  57%|█████▋    | 103/182 [2:36:50<1:59:35, 90.82s/trial, best=0.0939]Optimizing:  57%|█████▋    | 103/182 [2:36:50<1:59:35, 90.82s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  57%|█████▋    | 104/182 [2:38:23<1:58:52, 91.44s/trial, best=0.0939]Optimizing:  57%|█████▋    | 104/182 [2:38:23<1:58:52, 91.44s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  58%|█████▊    | 105/182 [2:39:55<1:57:39, 91.68s/trial, best=0.0939]Optimizing:  58%|█████▊    | 105/182 [2:39:55<1:57:39, 91.68s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  58%|█████▊    | 106/182 [2:41:24<1:55:01, 90.80s/trial, best=0.0939]Optimizing:  58%|█████▊    | 106/182 [2:41:24<1:55:01, 90.80s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  59%|█████▉    | 107/182 [2:42:57<1:54:25, 91.54s/trial, best=0.0939]Optimizing:  59%|█████▉    | 107/182 [2:42:57<1:54:25, 91.54s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  59%|█████▉    | 108/182 [2:44:29<1:52:58, 91.60s/trial, best=0.0939]Optimizing:  59%|█████▉    | 108/182 [2:44:29<1:52:58, 91.60s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  60%|█████▉    | 109/182 [2:46:08<1:54:24, 94.04s/trial, best=0.0939]Optimizing:  60%|█████▉    | 109/182 [2:46:08<1:54:24, 94.04s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  60%|██████    | 110/182 [2:47:43<1:53:09, 94.29s/trial, best=0.0939]Optimizing:  60%|██████    | 110/182 [2:47:43<1:53:09, 94.29s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  61%|██████    | 111/182 [2:49:19<1:51:56, 94.60s/trial, best=0.0939]Optimizing:  61%|██████    | 111/182 [2:49:19<1:51:56, 94.60s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  62%|██████▏   | 112/182 [2:51:01<1:52:58, 96.83s/trial, best=0.0939]Optimizing:  62%|██████▏   | 112/182 [2:51:01<1:52:58, 96.83s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  62%|██████▏   | 113/182 [2:52:30<1:48:48, 94.62s/trial, best=0.0939]Optimizing:  62%|██████▏   | 113/182 [2:52:30<1:48:48, 94.62s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  63%|██████▎   | 114/182 [2:54:08<1:48:23, 95.64s/trial, best=0.0939]Optimizing:  63%|██████▎   | 114/182 [2:54:08<1:48:23, 95.64s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  63%|██████▎   | 115/182 [2:55:36<1:44:07, 93.25s/trial, best=0.0939]Optimizing:  63%|██████▎   | 115/182 [2:55:36<1:44:07, 93.25s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  64%|██████▎   | 116/182 [2:57:02<1:40:26, 91.31s/trial, best=0.0939]Optimizing:  64%|██████▎   | 116/182 [2:57:02<1:40:26, 91.31s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  64%|██████▍   | 117/182 [2:58:32<1:38:23, 90.82s/trial, best=0.0939]Optimizing:  64%|██████▍   | 117/182 [2:58:32<1:38:23, 90.82s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  65%|██████▍   | 118/182 [2:59:57<1:35:04, 89.13s/trial, best=0.0939]Optimizing:  65%|██████▍   | 118/182 [2:59:57<1:35:04, 89.13s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  65%|██████▌   | 119/182 [3:01:22<1:32:15, 87.86s/trial, best=0.0939]Optimizing:  65%|██████▌   | 119/182 [3:01:22<1:32:15, 87.86s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  66%|██████▌   | 120/182 [3:02:51<1:31:09, 88.22s/trial, best=0.0939]Optimizing:  66%|██████▌   | 120/182 [3:02:51<1:31:09, 88.22s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  66%|██████▋   | 121/182 [3:04:16<1:28:35, 87.13s/trial, best=0.0939]Optimizing:  66%|██████▋   | 121/182 [3:04:16<1:28:35, 87.13s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  67%|██████▋   | 122/182 [3:05:50<1:29:12, 89.22s/trial, best=0.0939]Optimizing:  67%|██████▋   | 122/182 [3:05:50<1:29:12, 89.22s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  68%|██████▊   | 123/182 [3:07:19<1:27:45, 89.24s/trial, best=0.0939]Optimizing:  68%|██████▊   | 123/182 [3:07:19<1:27:45, 89.24s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  68%|██████▊   | 124/182 [3:08:44<1:25:03, 87.98s/trial, best=0.0939]Optimizing:  68%|██████▊   | 124/182 [3:08:44<1:25:03, 87.98s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  69%|██████▊   | 125/182 [3:10:09<1:22:41, 87.05s/trial, best=0.0939]Optimizing:  69%|██████▊   | 125/182 [3:10:09<1:22:41, 87.05s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  69%|██████▉   | 126/182 [3:11:34<1:20:42, 86.48s/trial, best=0.0939]Optimizing:  69%|██████▉   | 126/182 [3:11:34<1:20:42, 86.48s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  70%|██████▉   | 127/182 [3:12:59<1:18:46, 85.94s/trial, best=0.0939]Optimizing:  70%|██████▉   | 127/182 [3:12:59<1:18:46, 85.94s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  70%|███████   | 128/182 [3:14:24<1:17:02, 85.60s/trial, best=0.0939]Optimizing:  70%|███████   | 128/182 [3:14:24<1:17:02, 85.60s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  71%|███████   | 129/182 [3:15:48<1:15:21, 85.31s/trial, best=0.0939]Optimizing:  71%|███████   | 129/182 [3:15:48<1:15:21, 85.31s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  71%|███████▏  | 130/182 [3:17:17<1:14:53, 86.42s/trial, best=0.0939]Optimizing:  71%|███████▏  | 130/182 [3:17:17<1:14:53, 86.42s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  72%|███████▏  | 131/182 [3:18:42<1:12:59, 85.87s/trial, best=0.0939]Optimizing:  72%|███████▏  | 131/182 [3:18:42<1:12:59, 85.87s/trial, best=0.0939]wfo: no cache for SQ — skipping
+Optimizing:  73%|███████▎  | 132/182 [3:20:11<1:12:24, 86.89s/trial, best=0.0939]Optimizing:  73%|███████▎  | 132/182 [3:20:11<1:12:24, 86.89s/trial, best=0.101] wfo: no cache for SQ — skipping
+Optimizing:  73%|███████▎  | 133/182 [3:21:41<1:11:31, 87.59s/trial, best=0.101]Optimizing:  73%|███████▎  | 133/182 [3:21:41<1:11:31, 87.59s/trial, best=0.101]wfo: no cache for SQ — skipping
+Optimizing:  74%|███████▎  | 134/182 [3:23:10<1:10:28, 88.09s/trial, best=0.101]Optimizing:  74%|███████▎  | 134/182 [3:23:10<1:10:28, 88.09s/trial, best=0.101]wfo: no cache for SQ — skipping
+Optimizing:  74%|███████▍  | 135/182 [3:24:44<1:10:28, 89.96s/trial, best=0.101]Optimizing:  74%|███████▍  | 135/182 [3:24:44<1:10:28, 89.96s/trial, best=0.101]wfo: no cache for SQ — skipping
+Optimizing:  75%|███████▍  | 136/182 [3:26:13<1:08:44, 89.67s/trial, best=0.101]Optimizing:  75%|███████▍  | 136/182 [3:26:13<1:08:44, 89.67s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  75%|███████▌  | 137/182 [3:27:38<1:06:06, 88.15s/trial, best=0.149]Optimizing:  75%|███████▌  | 137/182 [3:27:38<1:06:06, 88.15s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  76%|███████▌  | 138/182 [3:29:03<1:03:56, 87.20s/trial, best=0.149]Optimizing:  76%|███████▌  | 138/182 [3:29:03<1:03:56, 87.20s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  76%|███████▋  | 139/182 [3:30:36<1:03:53, 89.15s/trial, best=0.149]Optimizing:  76%|███████▋  | 139/182 [3:30:36<1:03:53, 89.15s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  77%|███████▋  | 140/182 [3:32:06<1:02:25, 89.17s/trial, best=0.149]Optimizing:  77%|███████▋  | 140/182 [3:32:06<1:02:25, 89.17s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  77%|███████▋  | 141/182 [3:33:35<1:00:57, 89.20s/trial, best=0.149]Optimizing:  77%|███████▋  | 141/182 [3:33:35<1:00:57, 89.20s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  78%|███████▊  | 142/182 [3:35:40<1:06:39, 99.98s/trial, best=0.149]Optimizing:  78%|███████▊  | 142/182 [3:35:40<1:06:39, 99.98s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  79%|███████▊  | 143/182 [3:37:14<1:03:46, 98.12s/trial, best=0.149]Optimizing:  79%|███████▊  | 143/182 [3:37:14<1:03:46, 98.12s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  79%|███████▉  | 144/182 [3:38:43<1:00:24, 95.37s/trial, best=0.149]Optimizing:  79%|███████▉  | 144/182 [3:38:43<1:00:24, 95.37s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  80%|███████▉  | 145/182 [3:40:07<56:50, 92.17s/trial, best=0.149]  Optimizing:  80%|███████▉  | 145/182 [3:40:07<56:50, 92.17s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  80%|████████  | 146/182 [3:41:36<54:42, 91.17s/trial, best=0.149]Optimizing:  80%|████████  | 146/182 [3:41:36<54:42, 91.17s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  81%|████████  | 147/182 [3:43:10<53:34, 91.84s/trial, best=0.149]Optimizing:  81%|████████  | 147/182 [3:43:10<53:34, 91.84s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  81%|████████▏ | 148/182 [3:44:39<51:32, 90.96s/trial, best=0.149]Optimizing:  81%|████████▏ | 148/182 [3:44:39<51:32, 90.96s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  82%|████████▏ | 149/182 [3:46:17<51:13, 93.12s/trial, best=0.149]Optimizing:  82%|████████▏ | 149/182 [3:46:17<51:13, 93.12s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  82%|████████▏ | 150/182 [3:47:55<50:30, 94.72s/trial, best=0.149]Optimizing:  82%|████████▏ | 150/182 [3:47:55<50:30, 94.72s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  83%|████████▎ | 151/182 [3:49:33<49:29, 95.78s/trial, best=0.149]Optimizing:  83%|████████▎ | 151/182 [3:49:33<49:29, 95.78s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  84%|████████▎ | 152/182 [3:51:12<48:15, 96.52s/trial, best=0.149]Optimizing:  84%|████████▎ | 152/182 [3:51:12<48:15, 96.52s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  84%|████████▍ | 153/182 [3:52:51<46:59, 97.21s/trial, best=0.149]Optimizing:  84%|████████▍ | 153/182 [3:52:51<46:59, 97.21s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  85%|████████▍ | 154/182 [3:54:29<45:36, 97.71s/trial, best=0.149]Optimizing:  85%|████████▍ | 154/182 [3:54:29<45:36, 97.71s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  85%|████████▌ | 155/182 [3:56:08<44:04, 97.96s/trial, best=0.149]Optimizing:  85%|████████▌ | 155/182 [3:56:08<44:04, 97.96s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  86%|████████▌ | 156/182 [3:57:46<42:29, 98.04s/trial, best=0.149]Optimizing:  86%|████████▌ | 156/182 [3:57:46<42:29, 98.04s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  86%|████████▋ | 157/182 [3:59:25<40:54, 98.18s/trial, best=0.149]Optimizing:  86%|████████▋ | 157/182 [3:59:25<40:54, 98.18s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  87%|████████▋ | 158/182 [4:01:06<39:35, 98.97s/trial, best=0.149]Optimizing:  87%|████████▋ | 158/182 [4:01:06<39:35, 98.97s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  87%|████████▋ | 159/182 [4:02:44<37:51, 98.75s/trial, best=0.149]Optimizing:  87%|████████▋ | 159/182 [4:02:44<37:51, 98.75s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  88%|████████▊ | 160/182 [4:04:22<36:11, 98.71s/trial, best=0.149]Optimizing:  88%|████████▊ | 160/182 [4:04:22<36:11, 98.71s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  88%|████████▊ | 161/182 [4:06:01<34:30, 98.58s/trial, best=0.149]Optimizing:  88%|████████▊ | 161/182 [4:06:01<34:30, 98.58s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  89%|████████▉ | 162/182 [4:07:48<33:41, 101.09s/trial, best=0.149]Optimizing:  89%|████████▉ | 162/182 [4:07:48<33:41, 101.09s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  90%|████████▉ | 163/182 [4:09:28<31:58, 100.98s/trial, best=0.149]Optimizing:  90%|████████▉ | 163/182 [4:09:28<31:58, 100.98s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  90%|█████████ | 164/182 [4:11:07<30:05, 100.32s/trial, best=0.149]Optimizing:  90%|█████████ | 164/182 [4:11:07<30:05, 100.32s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  91%|█████████ | 165/182 [4:12:46<28:16, 99.77s/trial, best=0.149] Optimizing:  91%|█████████ | 165/182 [4:12:46<28:16, 99.77s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  91%|█████████ | 166/182 [4:14:27<26:41, 100.11s/trial, best=0.149]Optimizing:  91%|█████████ | 166/182 [4:14:27<26:41, 100.11s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  92%|█████████▏| 167/182 [4:16:05<24:53, 99.59s/trial, best=0.149] Optimizing:  92%|█████████▏| 167/182 [4:16:05<24:53, 99.59s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  92%|█████████▏| 168/182 [4:17:43<23:08, 99.15s/trial, best=0.149]Optimizing:  92%|█████████▏| 168/182 [4:17:43<23:08, 99.15s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  93%|█████████▎| 169/182 [4:19:22<21:26, 98.96s/trial, best=0.149]Optimizing:  93%|█████████▎| 169/182 [4:19:22<21:26, 98.96s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  93%|█████████▎| 170/182 [4:21:02<19:54, 99.55s/trial, best=0.149]Optimizing:  93%|█████████▎| 170/182 [4:21:02<19:54, 99.55s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  94%|█████████▍| 171/182 [4:22:49<18:39, 101.73s/trial, best=0.149]Optimizing:  94%|█████████▍| 171/182 [4:22:49<18:39, 101.73s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  95%|█████████▍| 172/182 [4:24:28<16:48, 100.81s/trial, best=0.149]Optimizing:  95%|█████████▍| 172/182 [4:24:28<16:48, 100.81s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  95%|█████████▌| 173/182 [4:26:06<15:00, 100.04s/trial, best=0.149]Optimizing:  95%|█████████▌| 173/182 [4:26:06<15:00, 100.04s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  96%|█████████▌| 174/182 [4:27:45<13:16, 99.59s/trial, best=0.149] Optimizing:  96%|█████████▌| 174/182 [4:27:45<13:16, 99.59s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  96%|█████████▌| 175/182 [4:29:26<11:39, 99.95s/trial, best=0.149]Optimizing:  96%|█████████▌| 175/182 [4:29:26<11:39, 99.95s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  97%|█████████▋| 176/182 [4:31:04<09:57, 99.54s/trial, best=0.149]Optimizing:  97%|█████████▋| 176/182 [4:31:04<09:57, 99.54s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  97%|█████████▋| 177/182 [4:32:43<08:16, 99.26s/trial, best=0.149]Optimizing:  97%|█████████▋| 177/182 [4:32:43<08:16, 99.26s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  98%|█████████▊| 178/182 [4:34:24<06:39, 99.75s/trial, best=0.149]Optimizing:  98%|█████████▊| 178/182 [4:34:24<06:39, 99.75s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  98%|█████████▊| 179/182 [4:36:05<05:00, 100.12s/trial, best=0.149]Optimizing:  98%|█████████▊| 179/182 [4:36:05<05:00, 100.12s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  99%|█████████▉| 180/182 [4:37:45<03:20, 100.33s/trial, best=0.149]Optimizing:  99%|█████████▉| 180/182 [4:37:45<03:20, 100.33s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing:  99%|█████████▉| 181/182 [4:39:24<01:39, 99.74s/trial, best=0.149] Optimizing:  99%|█████████▉| 181/182 [4:39:24<01:39, 99.74s/trial, best=0.149]wfo: no cache for SQ — skipping
+Optimizing: 100%|██████████| 182/182 [4:41:11<00:00, 101.90s/trial, best=0.149]Optimizing: 100%|██████████| 182/182 [4:41:11<00:00, 101.90s/trial, best=0.149]Optimizing: 100%|██████████| 182/182 [4:41:11<00:00, 92.70s/trial, best=0.149] 
+Trial 119: score=0.0060
+Trial 120: score=0.0308
+Trial 121: score=0.0856
+Trial 122: score=0.0355
+Trial 123: score=0.0172
+Trial 124: score=0.0713
+Trial 125: score=0.0530
+Trial 126: score=0.0375
+Trial 127: score=0.0760
+Trial 128: score=0.0683
+Trial 129: score=0.0458
+Trial 130: score=0.0546
+Trial 131: score=0.0466
+Trial 132: score=0.0578
+Trial 133: score=0.0286
+Trial 134: score=0.0737
+Trial 135: score=0.0858
+Trial 136: score=0.0823
+Trial 137: score=0.0886
+Trial 138: score=0.0754
+Trial 139: score=0.0820
+Trial 140: score=0.0920
+Trial 141: score=0.0765
+Trial 142: score=0.0652
+Trial 143: score=0.0750
+Trial 144: score=0.0759
+Trial 145: score=0.0549
+Trial 146: score=0.0439
+Trial 147: score=0.0355
+Trial 148: score=0.0590
+Trial 149: score=0.0213
+Trial 150: score=0.0578
+Trial 151: score=0.0276
+Trial 152: score=0.0615
+Trial 153: score=-0.0148
+Trial 154: score=0.0628
+Trial 155: score=0.0137
+Trial 156: score=0.0489
+Trial 157: score=0.0239
+Trial 158: score=0.0314
+Trial 159: score=0.0020
+Trial 160: score=0.0427
+Trial 161: score=0.0636
+Trial 162: score=0.0640
+Trial 163: score=0.0661
+Trial 164: score=0.0695
+Trial 165: score=0.0333
+Trial 166: score=0.0226
+Trial 167: score=0.0302
+Trial 168: score=0.0289
+Trial 169: score=0.0394
+Trial 170: score=0.0246
+Trial 171: score=0.0456
+Trial 172: score=0.0664
+Trial 173: score=0.0838
+Trial 174: score=0.0537
+Trial 175: score=0.0625
+Trial 176: score=0.0420
+Trial 177: score=0.0095
+Trial 178: score=-0.0087
+Trial 179: score=0.0736
+Trial 180: score=0.0733
+Trial 181: score=0.0219
+Trial 182: score=0.0506
+Trial 183: score=0.0586
+Trial 184: score=0.0561
+Trial 185: score=-0.0083
+Trial 186: score=0.0596
+Trial 187: score=0.0652
+Trial 188: score=0.0519
+Trial 189: score=0.0731
+Trial 190: score=0.0569
+Trial 191: score=0.0892
+Trial 192: score=0.0755
+Trial 193: score=0.0511
+Trial 194: score=0.0655
+Trial 195: score=0.0574
+Trial 196: score=0.0454
+Trial 197: score=0.0312
+Trial 198: score=0.0505
+Trial 199: score=0.0107
+Trial 200: score=0.0437
+Trial 201: score=0.0331
+Trial 202: score=0.0716
+Trial 203: score=0.0602
+Trial 204: score=0.0939
+Trial 205: score=0.0666
+Trial 206: score=0.0778
+Trial 207: score=0.0441
+Trial 208: score=0.0134
+Trial 209: score=0.0680
+Trial 210: score=0.0639
+Trial 211: score=0.0020
+Trial 212: score=0.0717
+Trial 213: score=0.0830
+Trial 214: score=0.0631
+Trial 215: score=0.0650
+Trial 216: score=0.0456
+Trial 217: score=0.0713
+Trial 218: score=0.0559
+Trial 219: score=0.0291
+Trial 220: score=0.0556
+Trial 221: score=0.0630
+Trial 222: score=0.0698
+Trial 223: score=0.0533
+Trial 224: score=0.0673
+Trial 225: score=0.0364
+Trial 226: score=0.0522
+Trial 227: score=0.0248
+Trial 228: score=0.0332
+Trial 229: score=0.0622
+Trial 230: score=0.0682
+Trial 231: score=0.0418
+Trial 232: score=0.0107
+Trial 233: score=0.0715
+Trial 234: score=0.0278
+Trial 235: score=0.0325
+Trial 236: score=0.0753
+Trial 237: score=0.0601
+Trial 238: score=0.0450
+Trial 239: score=0.0662
+Trial 240: score=0.0316
+Trial 241: score=0.0254
+Trial 242: score=0.0873
+Trial 243: score=0.0842
+Trial 244: score=0.0646
+Trial 245: score=0.0629
+Trial 246: score=0.0674
+Trial 247: score=0.0650
+Trial 248: score=0.0522
+Trial 249: score=0.0824
+Trial 250: score=0.1010
+Trial 251: score=0.0483
+Trial 252: score=0.0394
+Trial 253: score=0.0054
+Trial 254: score=0.1491
+Trial 255: score=0.0761
+Trial 256: score=0.0530
+Trial 257: score=0.0375
+Trial 258: score=0.1077
+Trial 259: score=0.0470
+Trial 260: score=0.0114
+Trial 261: score=0.0313
+Trial 262: score=0.0093
+Trial 263: score=0.0452
+Trial 264: score=0.0830
+Trial 265: score=0.0612
+Trial 266: score=0.0872
+Trial 267: score=0.0950
+Trial 268: score=0.0921
+Trial 269: score=0.0966
+Trial 270: score=0.0968
+Trial 271: score=0.0667
+Trial 272: score=0.0687
+Trial 273: score=0.0353
+Trial 274: score=0.0974
+Trial 275: score=0.1372
+Trial 276: score=0.0753
+Trial 277: score=0.1390
+Trial 278: score=0.0960
+Trial 279: score=0.0603
+Trial 280: score=0.0603
+Trial 281: score=0.0781
+Trial 282: score=0.1116
+Trial 283: score=0.0577
+Trial 284: score=0.0469
+Trial 285: score=0.1105
+Trial 286: score=0.0795
+Trial 287: score=0.0613
+Trial 288: score=0.0678
+Trial 289: score=0.0605
+Trial 290: score=0.0928
+Trial 291: score=0.0345
+Trial 292: score=0.0957
+Trial 293: score=0.0454
+Trial 294: score=0.0935
+Trial 295: score=0.0639
+Trial 296: score=0.0866
+Trial 297: score=0.0610
+Trial 298: score=0.0082
+Trial 299: score=0.0709
+Trial 300: score=0.0462
+
+=======================================================
+  BEST PARAMETERS
+=======================================================
+  ATR_MULTIPLIER            1.36
+  VCP_TIGHTNESS_RANGE       0.0426
+  BREAKOUT_BUFFER_ATR       0.4725
+  BREAKOUT_VOL_MULT         1.1155
+  TARGET_RR                 2.4736
+  TRAIL_ATR_MULT            2.834
+  REGIME_BULL_THRESHOLD     54
+  ENGINE3_RS_THRESHOLD      -0.0341
+
+  OOS Performance:
+  total_trades              79
+  win_rate                  45.57
+  expectancy                0.1478
+  profit_factor             1.8048
+  max_drawdown_pct          5.96
+  net_profit_pct            13.86
+
+  Robustness Score:  0.1491
+  Exported to:       /Users/amit/Documents/GitHub/superpowers/swing-trading-dashboard/config/best_parameters.json
+=======================================================

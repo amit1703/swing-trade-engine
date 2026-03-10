@@ -1,22 +1,25 @@
 {
-  "generated_at": "2026-03-08T00:59:20.919664+00:00",
-  "study_name": "trading_optimizer",
-  "best_trial": 0,
-  "best_score": -10.0,
+  "generated_at": "2026-03-09T01:25:06.789569+00:00",
+  "study_name": "trading_optimizer_v3",
+  "best_trial": 254,
+  "best_score": 0.149115,
   "parameters": {
-    "ATR_MULTIPLIER": 0.87454,
-    "VCP_TIGHTNESS_RANGE": 0.048275,
-    "BREAKOUT_BUFFER_ATR": 0.392798,
-    "BREAKOUT_VOL_MULT": 1.598658,
-    "TARGET_RR": 1.812037,
-    "TRAIL_ATR_MULT": 1.311989
+    "ATR_MULTIPLIER": 1.360049,
+    "VCP_TIGHTNESS_RANGE": 0.04259,
+    "BREAKOUT_BUFFER_ATR": 0.472535,
+    "BREAKOUT_VOL_MULT": 1.115481,
+    "TARGET_RR": 2.473563,
+    "TRAIL_ATR_MULT": 2.833954,
+    "REGIME_BULL_THRESHOLD": 54,
+    "ENGINE3_RS_THRESHOLD": -0.034124
   },
   "oos_metrics": {
-    "total_trades": 166,
-    "win_rate": 43.98,
-    "expectancy": 0.0527,
-    "profit_factor": 1.0297,
-    "max_drawdown_pct": 62.21,
-    "net_profit_pct": 10.76
-  }
+    "total_trades": 79,
+    "win_rate": 45.57,
+    "expectancy": 0.1478,
+    "profit_factor": 1.8048,
+    "max_drawdown_pct": 5.96,
+    "net_profit_pct": 13.86
+  },
+  "param_importance": {}
 }

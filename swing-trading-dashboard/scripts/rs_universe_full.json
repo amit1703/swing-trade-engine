@@ -1,0 +1,9332 @@
+{
+  "generated_at": "2026-03-09T13:44:20.140809",
+  "rs_cutoff_date": "2024-03-09",
+  "universe_total": 1865,
+  "all_ranked": [
+    {
+      "ticker": "SLNO",
+      "rs_score": 7.1576,
+      "cached": true
+    },
+    {
+      "ticker": "SMCI",
+      "rs_score": 4.6158,
+      "cached": true
+    },
+    {
+      "ticker": "SEZL",
+      "rs_score": 4.3011,
+      "cached": false
+    },
+    {
+      "ticker": "DAVE",
+      "rs_score": 4.1997,
+      "cached": false
+    },
+    {
+      "ticker": "IMNM",
+      "rs_score": 3.2501,
+      "cached": true
+    },
+    {
+      "ticker": "SYRE",
+      "rs_score": 3.201,
+      "cached": true
+    },
+    {
+      "ticker": "VKTX",
+      "rs_score": 3.1927,
+      "cached": true
+    },
+    {
+      "ticker": "MSTR",
+      "rs_score": 2.9447,
+      "cached": true
+    },
+    {
+      "ticker": "CVNA",
+      "rs_score": 2.8025,
+      "cached": true
+    },
+    {
+      "ticker": "VERA",
+      "rs_score": 2.7113,
+      "cached": false
+    },
+    {
+      "ticker": "GCT",
+      "rs_score": 2.6511,
+      "cached": false
+    },
+    {
+      "ticker": "JANX",
+      "rs_score": 2.4516,
+      "cached": false
+    },
+    {
+      "ticker": "EYPT",
+      "rs_score": 2.3776,
+      "cached": true
+    },
+    {
+      "ticker": "GBTC",
+      "rs_score": 2.1282,
+      "cached": true
+    },
+    {
+      "ticker": "QXO",
+      "rs_score": 2.0969,
+      "cached": true
+    },
+    {
+      "ticker": "PRAX",
+      "rs_score": 2.0531,
+      "cached": true
+    },
+    {
+      "ticker": "COIN",
+      "rs_score": 2.0108,
+      "cached": false
+    },
+    {
+      "ticker": "ETHE",
+      "rs_score": 1.9239,
+      "cached": true
+    },
+    {
+      "ticker": "APGE",
+      "rs_score": 1.9087,
+      "cached": false
+    },
+    {
+      "ticker": "WGS",
+      "rs_score": 1.7941,
+      "cached": true
+    },
+    {
+      "ticker": "DFTX",
+      "rs_score": 1.6431,
+      "cached": true
+    },
+    {
+      "ticker": "ARQT",
+      "rs_score": 1.5393,
+      "cached": true
+    },
+    {
+      "ticker": "ANF",
+      "rs_score": 1.4241,
+      "cached": true
+    },
+    {
+      "ticker": "AAOI",
+      "rs_score": 1.3947,
+      "cached": true
+    },
+    {
+      "ticker": "VRT",
+      "rs_score": 1.3598,
+      "cached": true
+    },
+    {
+      "ticker": "APP",
+      "rs_score": 1.3597,
+      "cached": false
+    },
+    {
+      "ticker": "CLS",
+      "rs_score": 1.3357,
+      "cached": true
+    },
+    {
+      "ticker": "SMMT",
+      "rs_score": 1.2757,
+      "cached": true
+    },
+    {
+      "ticker": "NVDA",
+      "rs_score": 1.1509,
+      "cached": true
+    },
+    {
+      "ticker": "GRPN",
+      "rs_score": 1.1156,
+      "cached": true
+    },
+    {
+      "ticker": "EWTX",
+      "rs_score": 1.11,
+      "cached": false
+    },
+    {
+      "ticker": "RNAM",
+      "rs_score": 1.076,
+      "cached": true
+    },
+    {
+      "ticker": "ORIC",
+      "rs_score": 1.0612,
+      "cached": true
+    },
+    {
+      "ticker": "OCUL",
+      "rs_score": 1.0592,
+      "cached": true
+    },
+    {
+      "ticker": "BULZ",
+      "rs_score": 1.0573,
+      "cached": false
+    },
+    {
+      "ticker": "DNTH",
+      "rs_score": 1.0256,
+      "cached": true
+    },
+    {
+      "ticker": "OSCR",
+      "rs_score": 1.0107,
+      "cached": false
+    },
+    {
+      "ticker": "MOD",
+      "rs_score": 0.9957,
+      "cached": true
+    },
+    {
+      "ticker": "ARM",
+      "rs_score": 0.9844,
+      "cached": false
+    },
+    {
+      "ticker": "DELL",
+      "rs_score": 0.9525,
+      "cached": true
+    },
+    {
+      "ticker": "ACMR",
+      "rs_score": 0.9508,
+      "cached": true
+    },
+    {
+      "ticker": "XPO",
+      "rs_score": 0.9477,
+      "cached": true
+    },
+    {
+      "ticker": "DYN",
+      "rs_score": 0.8851,
+      "cached": true
+    },
+    {
+      "ticker": "NAMS",
+      "rs_score": 0.8531,
+      "cached": true
+    },
+    {
+      "ticker": "CNTA",
+      "rs_score": 0.8444,
+      "cached": false
+    },
+    {
+      "ticker": "VTYX",
+      "rs_score": 0.8218,
+      "cached": false
+    },
+    {
+      "ticker": "AMSC",
+      "rs_score": 0.8214,
+      "cached": true
+    },
+    {
+      "ticker": "VST",
+      "rs_score": 0.8091,
+      "cached": true
+    },
+    {
+      "ticker": "METC",
+      "rs_score": 0.8028,
+      "cached": true
+    },
+    {
+      "ticker": "TARS",
+      "rs_score": 0.7942,
+      "cached": true
+    },
+    {
+      "ticker": "PLTR",
+      "rs_score": 0.7827,
+      "cached": true
+    },
+    {
+      "ticker": "TNGX",
+      "rs_score": 0.7807,
+      "cached": true
+    },
+    {
+      "ticker": "CELH",
+      "rs_score": 0.767,
+      "cached": true
+    },
+    {
+      "ticker": "BVN",
+      "rs_score": 0.7463,
+      "cached": true
+    },
+    {
+      "ticker": "LQDA",
+      "rs_score": 0.7422,
+      "cached": true
+    },
+    {
+      "ticker": "NTNX",
+      "rs_score": 0.7405,
+      "cached": true
+    },
+    {
+      "ticker": "META",
+      "rs_score": 0.7143,
+      "cached": true
+    },
+    {
+      "ticker": "CRNX",
+      "rs_score": 0.6982,
+      "cached": true
+    },
+    {
+      "ticker": "CRWD",
+      "rs_score": 0.6928,
+      "cached": true
+    },
+    {
+      "ticker": "QBTS",
+      "rs_score": 0.6905,
+      "cached": true
+    },
+    {
+      "ticker": "AMD",
+      "rs_score": 0.6869,
+      "cached": true
+    },
+    {
+      "ticker": "ELF",
+      "rs_score": 0.6854,
+      "cached": true
+    },
+    {
+      "ticker": "REAL",
+      "rs_score": 0.6757,
+      "cached": true
+    },
+    {
+      "ticker": "EVER",
+      "rs_score": 0.6757,
+      "cached": true
+    },
+    {
+      "ticker": "CAVA",
+      "rs_score": 0.6721,
+      "cached": false
+    },
+    {
+      "ticker": "IDYA",
+      "rs_score": 0.6635,
+      "cached": true
+    },
+    {
+      "ticker": "NUVL",
+      "rs_score": 0.6567,
+      "cached": false
+    },
+    {
+      "ticker": "KYMR",
+      "rs_score": 0.6539,
+      "cached": true
+    },
+    {
+      "ticker": "AMRX",
+      "rs_score": 0.6538,
+      "cached": true
+    },
+    {
+      "ticker": "AFRM",
+      "rs_score": 0.6485,
+      "cached": true
+    },
+    {
+      "ticker": "CAMT",
+      "rs_score": 0.6472,
+      "cached": true
+    },
+    {
+      "ticker": "CYTK",
+      "rs_score": 0.6349,
+      "cached": true
+    },
+    {
+      "ticker": "TRVI",
+      "rs_score": 0.6306,
+      "cached": true
+    },
+    {
+      "ticker": "RGTI",
+      "rs_score": 0.6295,
+      "cached": false
+    },
+    {
+      "ticker": "WING",
+      "rs_score": 0.6183,
+      "cached": true
+    },
+    {
+      "ticker": "KOLD",
+      "rs_score": 0.6116,
+      "cached": true
+    },
+    {
+      "ticker": "ACLX",
+      "rs_score": 0.6033,
+      "cached": false
+    },
+    {
+      "ticker": "TWST",
+      "rs_score": 0.5934,
+      "cached": true
+    },
+    {
+      "ticker": "MMYT",
+      "rs_score": 0.5903,
+      "cached": true
+    },
+    {
+      "ticker": "SRRK",
+      "rs_score": 0.5865,
+      "cached": true
+    },
+    {
+      "ticker": "AXTI",
+      "rs_score": 0.5848,
+      "cached": true
+    },
+    {
+      "ticker": "OLMA",
+      "rs_score": 0.5707,
+      "cached": true
+    },
+    {
+      "ticker": "PSTG",
+      "rs_score": 0.5637,
+      "cached": true
+    },
+    {
+      "ticker": "KOD",
+      "rs_score": 0.5521,
+      "cached": true
+    },
+    {
+      "ticker": "UBER",
+      "rs_score": 0.5409,
+      "cached": true
+    },
+    {
+      "ticker": "FTAI",
+      "rs_score": 0.5383,
+      "cached": true
+    },
+    {
+      "ticker": "CGEM",
+      "rs_score": 0.5303,
+      "cached": true
+    },
+    {
+      "ticker": "ADMA",
+      "rs_score": 0.5224,
+      "cached": true
+    },
+    {
+      "ticker": "DASH",
+      "rs_score": 0.5206,
+      "cached": true
+    },
+    {
+      "ticker": "HIMS",
+      "rs_score": 0.515,
+      "cached": true
+    },
+    {
+      "ticker": "LYFT",
+      "rs_score": 0.4972,
+      "cached": true
+    },
+    {
+      "ticker": "CNM",
+      "rs_score": 0.4896,
+      "cached": false
+    },
+    {
+      "ticker": "DECK",
+      "rs_score": 0.4872,
+      "cached": true
+    },
+    {
+      "ticker": "SAIA",
+      "rs_score": 0.4832,
+      "cached": true
+    },
+    {
+      "ticker": "EDU",
+      "rs_score": 0.4792,
+      "cached": true
+    },
+    {
+      "ticker": "COHR",
+      "rs_score": 0.4767,
+      "cached": true
+    },
+    {
+      "ticker": "FROG",
+      "rs_score": 0.4757,
+      "cached": true
+    },
+    {
+      "ticker": "SHAK",
+      "rs_score": 0.4729,
+      "cached": true
+    },
+    {
+      "ticker": "UTI",
+      "rs_score": 0.4707,
+      "cached": true
+    },
+    {
+      "ticker": "RYTM",
+      "rs_score": 0.4686,
+      "cached": true
+    },
+    {
+      "ticker": "WULF",
+      "rs_score": 0.4657,
+      "cached": true
+    },
+    {
+      "ticker": "NU",
+      "rs_score": 0.4542,
+      "cached": false
+    },
+    {
+      "ticker": "AVGO",
+      "rs_score": 0.4525,
+      "cached": true
+    },
+    {
+      "ticker": "BLDR",
+      "rs_score": 0.4482,
+      "cached": true
+    },
+    {
+      "ticker": "ARVN",
+      "rs_score": 0.4449,
+      "cached": true
+    },
+    {
+      "ticker": "SPHR",
+      "rs_score": 0.4443,
+      "cached": true
+    },
+    {
+      "ticker": "SPOT",
+      "rs_score": 0.4428,
+      "cached": true
+    },
+    {
+      "ticker": "HOOD",
+      "rs_score": 0.4405,
+      "cached": false
+    },
+    {
+      "ticker": "HMY",
+      "rs_score": 0.4373,
+      "cached": true
+    },
+    {
+      "ticker": "SFM",
+      "rs_score": 0.4331,
+      "cached": true
+    },
+    {
+      "ticker": "NTRA",
+      "rs_score": 0.4315,
+      "cached": true
+    },
+    {
+      "ticker": "GAP",
+      "rs_score": 0.4271,
+      "cached": true
+    },
+    {
+      "ticker": "NRIX",
+      "rs_score": 0.424,
+      "cached": true
+    },
+    {
+      "ticker": "LLY",
+      "rs_score": 0.4226,
+      "cached": true
+    },
+    {
+      "ticker": "TLN",
+      "rs_score": 0.4224,
+      "cached": false
+    },
+    {
+      "ticker": "IRON",
+      "rs_score": 0.4209,
+      "cached": true
+    },
+    {
+      "ticker": "CLBT",
+      "rs_score": 0.4115,
+      "cached": true
+    },
+    {
+      "ticker": "ONTO",
+      "rs_score": 0.4103,
+      "cached": true
+    },
+    {
+      "ticker": "KALV",
+      "rs_score": 0.4096,
+      "cached": true
+    },
+    {
+      "ticker": "AEVA",
+      "rs_score": 0.3961,
+      "cached": true
+    },
+    {
+      "ticker": "WSM",
+      "rs_score": 0.3946,
+      "cached": true
+    },
+    {
+      "ticker": "PLAY",
+      "rs_score": 0.393,
+      "cached": true
+    },
+    {
+      "ticker": "FLEX",
+      "rs_score": 0.3927,
+      "cached": true
+    },
+    {
+      "ticker": "AWI",
+      "rs_score": 0.3918,
+      "cached": true
+    },
+    {
+      "ticker": "NRG",
+      "rs_score": 0.3912,
+      "cached": true
+    },
+    {
+      "ticker": "TOL",
+      "rs_score": 0.3909,
+      "cached": true
+    },
+    {
+      "ticker": "CELC",
+      "rs_score": 0.3889,
+      "cached": true
+    },
+    {
+      "ticker": "TPC",
+      "rs_score": 0.3886,
+      "cached": true
+    },
+    {
+      "ticker": "CIFR",
+      "rs_score": 0.3835,
+      "cached": true
+    },
+    {
+      "ticker": "PAY",
+      "rs_score": 0.3833,
+      "cached": false
+    },
+    {
+      "ticker": "KKR",
+      "rs_score": 0.3817,
+      "cached": true
+    },
+    {
+      "ticker": "VRNS",
+      "rs_score": 0.3807,
+      "cached": true
+    },
+    {
+      "ticker": "FRPT",
+      "rs_score": 0.37,
+      "cached": true
+    },
+    {
+      "ticker": "TSM",
+      "rs_score": 0.3686,
+      "cached": true
+    },
+    {
+      "ticker": "GE",
+      "rs_score": 0.3622,
+      "cached": true
+    },
+    {
+      "ticker": "FN",
+      "rs_score": 0.3549,
+      "cached": true
+    },
+    {
+      "ticker": "NXT",
+      "rs_score": 0.3533,
+      "cached": false
+    },
+    {
+      "ticker": "RSI",
+      "rs_score": 0.3528,
+      "cached": true
+    },
+    {
+      "ticker": "LRCX",
+      "rs_score": 0.3521,
+      "cached": true
+    },
+    {
+      "ticker": "NVO",
+      "rs_score": 0.3507,
+      "cached": true
+    },
+    {
+      "ticker": "S",
+      "rs_score": 0.3507,
+      "cached": false
+    },
+    {
+      "ticker": "SLG",
+      "rs_score": 0.3487,
+      "cached": true
+    },
+    {
+      "ticker": "PSN",
+      "rs_score": 0.3473,
+      "cached": true
+    },
+    {
+      "ticker": "AVAV",
+      "rs_score": 0.3468,
+      "cached": true
+    },
+    {
+      "ticker": "WIX",
+      "rs_score": 0.3436,
+      "cached": true
+    },
+    {
+      "ticker": "GGAL",
+      "rs_score": 0.339,
+      "cached": true
+    },
+    {
+      "ticker": "TRIP",
+      "rs_score": 0.3384,
+      "cached": true
+    },
+    {
+      "ticker": "JXN",
+      "rs_score": 0.3325,
+      "cached": false
+    },
+    {
+      "ticker": "CRDO",
+      "rs_score": 0.3322,
+      "cached": false
+    },
+    {
+      "ticker": "CART",
+      "rs_score": 0.3288,
+      "cached": false
+    },
+    {
+      "ticker": "WVE",
+      "rs_score": 0.3278,
+      "cached": true
+    },
+    {
+      "ticker": "PVH",
+      "rs_score": 0.3261,
+      "cached": true
+    },
+    {
+      "ticker": "AROC",
+      "rs_score": 0.3256,
+      "cached": true
+    },
+    {
+      "ticker": "KGS",
+      "rs_score": 0.3252,
+      "cached": false
+    },
+    {
+      "ticker": "RDNT",
+      "rs_score": 0.3249,
+      "cached": true
+    },
+    {
+      "ticker": "NFLX",
+      "rs_score": 0.3236,
+      "cached": true
+    },
+    {
+      "ticker": "JHX",
+      "rs_score": 0.3235,
+      "cached": true
+    },
+    {
+      "ticker": "ROAD",
+      "rs_score": 0.3197,
+      "cached": true
+    },
+    {
+      "ticker": "DKNG",
+      "rs_score": 0.3192,
+      "cached": true
+    },
+    {
+      "ticker": "URI",
+      "rs_score": 0.3191,
+      "cached": true
+    },
+    {
+      "ticker": "BBAR",
+      "rs_score": 0.3155,
+      "cached": true
+    },
+    {
+      "ticker": "MLKN",
+      "rs_score": 0.3153,
+      "cached": true
+    },
+    {
+      "ticker": "UCTT",
+      "rs_score": 0.3147,
+      "cached": true
+    },
+    {
+      "ticker": "TREX",
+      "rs_score": 0.3128,
+      "cached": true
+    },
+    {
+      "ticker": "ASML",
+      "rs_score": 0.311,
+      "cached": true
+    },
+    {
+      "ticker": "PHM",
+      "rs_score": 0.308,
+      "cached": true
+    },
+    {
+      "ticker": "AMAT",
+      "rs_score": 0.3062,
+      "cached": true
+    },
+    {
+      "ticker": "TEVA",
+      "rs_score": 0.304,
+      "cached": true
+    },
+    {
+      "ticker": "ANET",
+      "rs_score": 0.3029,
+      "cached": true
+    },
+    {
+      "ticker": "QTWO",
+      "rs_score": 0.3026,
+      "cached": true
+    },
+    {
+      "ticker": "KNF",
+      "rs_score": 0.3019,
+      "cached": false
+    },
+    {
+      "ticker": "JBL",
+      "rs_score": 0.3013,
+      "cached": true
+    },
+    {
+      "ticker": "CRH",
+      "rs_score": 0.2995,
+      "cached": true
+    },
+    {
+      "ticker": "TAL",
+      "rs_score": 0.2954,
+      "cached": true
+    },
+    {
+      "ticker": "VIST",
+      "rs_score": 0.2951,
+      "cached": true
+    },
+    {
+      "ticker": "NKTR",
+      "rs_score": 0.2935,
+      "cached": true
+    },
+    {
+      "ticker": "WDC",
+      "rs_score": 0.2902,
+      "cached": true
+    },
+    {
+      "ticker": "ELAN",
+      "rs_score": 0.2899,
+      "cached": true
+    },
+    {
+      "ticker": "NET",
+      "rs_score": 0.2886,
+      "cached": true
+    },
+    {
+      "ticker": "MRVL",
+      "rs_score": 0.2872,
+      "cached": true
+    },
+    {
+      "ticker": "KLAC",
+      "rs_score": 0.2847,
+      "cached": true
+    },
+    {
+      "ticker": "MU",
+      "rs_score": 0.2774,
+      "cached": true
+    },
+    {
+      "ticker": "RL",
+      "rs_score": 0.2766,
+      "cached": true
+    },
+    {
+      "ticker": "PCVX",
+      "rs_score": 0.2758,
+      "cached": true
+    },
+    {
+      "ticker": "BRBR",
+      "rs_score": 0.2742,
+      "cached": true
+    },
+    {
+      "ticker": "APG",
+      "rs_score": 0.2735,
+      "cached": true
+    },
+    {
+      "ticker": "IDR",
+      "rs_score": 0.2734,
+      "cached": true
+    },
+    {
+      "ticker": "THC",
+      "rs_score": 0.2727,
+      "cached": true
+    },
+    {
+      "ticker": "BWXT",
+      "rs_score": 0.2726,
+      "cached": true
+    },
+    {
+      "ticker": "KBH",
+      "rs_score": 0.2723,
+      "cached": true
+    },
+    {
+      "ticker": "VITL",
+      "rs_score": 0.2689,
+      "cached": true
+    },
+    {
+      "ticker": "ITRI",
+      "rs_score": 0.2677,
+      "cached": true
+    },
+    {
+      "ticker": "CRVS",
+      "rs_score": 0.2676,
+      "cached": true
+    },
+    {
+      "ticker": "WMS",
+      "rs_score": 0.2638,
+      "cached": true
+    },
+    {
+      "ticker": "BKD",
+      "rs_score": 0.2637,
+      "cached": true
+    },
+    {
+      "ticker": "CG",
+      "rs_score": 0.2632,
+      "cached": true
+    },
+    {
+      "ticker": "AEO",
+      "rs_score": 0.2605,
+      "cached": true
+    },
+    {
+      "ticker": "UEC",
+      "rs_score": 0.2593,
+      "cached": true
+    },
+    {
+      "ticker": "ETN",
+      "rs_score": 0.2581,
+      "cached": true
+    },
+    {
+      "ticker": "FRO",
+      "rs_score": 0.2573,
+      "cached": true
+    },
+    {
+      "ticker": "ICHR",
+      "rs_score": 0.2542,
+      "cached": false
+    },
+    {
+      "ticker": "SWBI",
+      "rs_score": 0.2539,
+      "cached": false
+    },
+    {
+      "ticker": "CVLT",
+      "rs_score": 0.2527,
+      "cached": false
+    },
+    {
+      "ticker": "MKSI",
+      "rs_score": 0.2523,
+      "cached": false
+    },
+    {
+      "ticker": "QCOM",
+      "rs_score": 0.2516,
+      "cached": true
+    },
+    {
+      "ticker": "OKTA",
+      "rs_score": 0.2512,
+      "cached": false
+    },
+    {
+      "ticker": "TPG",
+      "rs_score": 0.2495,
+      "cached": false
+    },
+    {
+      "ticker": "ABVX",
+      "rs_score": 0.2477,
+      "cached": false
+    },
+    {
+      "ticker": "NMRK",
+      "rs_score": 0.2468,
+      "cached": false
+    },
+    {
+      "ticker": "AXON",
+      "rs_score": 0.2449,
+      "cached": true
+    },
+    {
+      "ticker": "PLAB",
+      "rs_score": 0.2426,
+      "cached": false
+    },
+    {
+      "ticker": "LPG",
+      "rs_score": 0.2421,
+      "cached": false
+    },
+    {
+      "ticker": "ASND",
+      "rs_score": 0.2406,
+      "cached": false
+    },
+    {
+      "ticker": "DRS",
+      "rs_score": 0.2395,
+      "cached": false
+    },
+    {
+      "ticker": "DVA",
+      "rs_score": 0.239,
+      "cached": false
+    },
+    {
+      "ticker": "NXE",
+      "rs_score": 0.2373,
+      "cached": false
+    },
+    {
+      "ticker": "GKOS",
+      "rs_score": 0.237,
+      "cached": false
+    },
+    {
+      "ticker": "CLDX",
+      "rs_score": 0.2348,
+      "cached": false
+    },
+    {
+      "ticker": "CRBG",
+      "rs_score": 0.2346,
+      "cached": false
+    },
+    {
+      "ticker": "CBZ",
+      "rs_score": 0.2341,
+      "cached": false
+    },
+    {
+      "ticker": "ENTG",
+      "rs_score": 0.2306,
+      "cached": false
+    },
+    {
+      "ticker": "WFRD",
+      "rs_score": 0.229,
+      "cached": false
+    },
+    {
+      "ticker": "HWM",
+      "rs_score": 0.2289,
+      "cached": false
+    },
+    {
+      "ticker": "PCAR",
+      "rs_score": 0.2278,
+      "cached": true
+    },
+    {
+      "ticker": "ASX",
+      "rs_score": 0.2262,
+      "cached": false
+    },
+    {
+      "ticker": "VSEC",
+      "rs_score": 0.2216,
+      "cached": false
+    },
+    {
+      "ticker": "GRND",
+      "rs_score": 0.2216,
+      "cached": false
+    },
+    {
+      "ticker": "VNT",
+      "rs_score": 0.2211,
+      "cached": false
+    },
+    {
+      "ticker": "MLYS",
+      "rs_score": 0.2198,
+      "cached": false
+    },
+    {
+      "ticker": "MPWR",
+      "rs_score": 0.2185,
+      "cached": true
+    },
+    {
+      "ticker": "GEO",
+      "rs_score": 0.2184,
+      "cached": false
+    },
+    {
+      "ticker": "TT",
+      "rs_score": 0.2169,
+      "cached": false
+    },
+    {
+      "ticker": "MUFG",
+      "rs_score": 0.2156,
+      "cached": false
+    },
+    {
+      "ticker": "ARES",
+      "rs_score": 0.2138,
+      "cached": false
+    },
+    {
+      "ticker": "CENX",
+      "rs_score": 0.2135,
+      "cached": false
+    },
+    {
+      "ticker": "TYRA",
+      "rs_score": 0.212,
+      "cached": false
+    },
+    {
+      "ticker": "TME",
+      "rs_score": 0.2112,
+      "cached": false
+    },
+    {
+      "ticker": "FWRG",
+      "rs_score": 0.2099,
+      "cached": false
+    },
+    {
+      "ticker": "CRM",
+      "rs_score": 0.2089,
+      "cached": true
+    },
+    {
+      "ticker": "URGN",
+      "rs_score": 0.2084,
+      "cached": false
+    },
+    {
+      "ticker": "AMZN",
+      "rs_score": 0.2071,
+      "cached": true
+    },
+    {
+      "ticker": "ALSN",
+      "rs_score": 0.2057,
+      "cached": false
+    },
+    {
+      "ticker": "MAC",
+      "rs_score": 0.2056,
+      "cached": false
+    },
+    {
+      "ticker": "SKYT",
+      "rs_score": 0.2056,
+      "cached": false
+    },
+    {
+      "ticker": "ITGR",
+      "rs_score": 0.2051,
+      "cached": false
+    },
+    {
+      "ticker": "IBM",
+      "rs_score": 0.204,
+      "cached": false
+    },
+    {
+      "ticker": "IOT",
+      "rs_score": 0.2029,
+      "cached": false
+    },
+    {
+      "ticker": "IRM",
+      "rs_score": 0.2017,
+      "cached": false
+    },
+    {
+      "ticker": "STX",
+      "rs_score": 0.2016,
+      "cached": false
+    },
+    {
+      "ticker": "LEN",
+      "rs_score": 0.2012,
+      "cached": false
+    },
+    {
+      "ticker": "SAP",
+      "rs_score": 0.2008,
+      "cached": false
+    },
+    {
+      "ticker": "DKS",
+      "rs_score": 0.1996,
+      "cached": false
+    },
+    {
+      "ticker": "CAPR",
+      "rs_score": 0.1988,
+      "cached": false
+    },
+    {
+      "ticker": "VECO",
+      "rs_score": 0.198,
+      "cached": false
+    },
+    {
+      "ticker": "PK",
+      "rs_score": 0.1978,
+      "cached": false
+    },
+    {
+      "ticker": "BBVA",
+      "rs_score": 0.1964,
+      "cached": false
+    },
+    {
+      "ticker": "PRCT",
+      "rs_score": 0.1955,
+      "cached": false
+    },
+    {
+      "ticker": "SN",
+      "rs_score": 0.1949,
+      "cached": false
+    },
+    {
+      "ticker": "SKWD",
+      "rs_score": 0.1947,
+      "cached": false
+    },
+    {
+      "ticker": "TXRH",
+      "rs_score": 0.1934,
+      "cached": false
+    },
+    {
+      "ticker": "TOST",
+      "rs_score": 0.1918,
+      "cached": false
+    },
+    {
+      "ticker": "PH",
+      "rs_score": 0.1907,
+      "cached": true
+    },
+    {
+      "ticker": "HCC",
+      "rs_score": 0.1896,
+      "cached": false
+    },
+    {
+      "ticker": "PGR",
+      "rs_score": 0.1868,
+      "cached": false
+    },
+    {
+      "ticker": "GWRE",
+      "rs_score": 0.1857,
+      "cached": false
+    },
+    {
+      "ticker": "OPRA",
+      "rs_score": 0.1851,
+      "cached": false
+    },
+    {
+      "ticker": "CMG",
+      "rs_score": 0.1842,
+      "cached": true
+    },
+    {
+      "ticker": "ICLR",
+      "rs_score": 0.1796,
+      "cached": false
+    },
+    {
+      "ticker": "SM",
+      "rs_score": 0.1787,
+      "cached": false
+    },
+    {
+      "ticker": "NTAP",
+      "rs_score": 0.1782,
+      "cached": false
+    },
+    {
+      "ticker": "APO",
+      "rs_score": 0.177,
+      "cached": true
+    },
+    {
+      "ticker": "SBS",
+      "rs_score": 0.177,
+      "cached": false
+    },
+    {
+      "ticker": "MANH",
+      "rs_score": 0.1769,
+      "cached": false
+    },
+    {
+      "ticker": "SFL",
+      "rs_score": 0.1769,
+      "cached": false
+    },
+    {
+      "ticker": "KD",
+      "rs_score": 0.1764,
+      "cached": false
+    },
+    {
+      "ticker": "CRSP",
+      "rs_score": 0.1761,
+      "cached": false
+    },
+    {
+      "ticker": "ISRG",
+      "rs_score": 0.1744,
+      "cached": true
+    },
+    {
+      "ticker": "PRIM",
+      "rs_score": 0.1743,
+      "cached": false
+    },
+    {
+      "ticker": "SLM",
+      "rs_score": 0.174,
+      "cached": false
+    },
+    {
+      "ticker": "NRDS",
+      "rs_score": 0.173,
+      "cached": false
+    },
+    {
+      "ticker": "IR",
+      "rs_score": 0.1718,
+      "cached": false
+    },
+    {
+      "ticker": "M",
+      "rs_score": 0.1707,
+      "cached": false
+    },
+    {
+      "ticker": "HNI",
+      "rs_score": 0.1707,
+      "cached": false
+    },
+    {
+      "ticker": "GDDY",
+      "rs_score": 0.1693,
+      "cached": false
+    },
+    {
+      "ticker": "COST",
+      "rs_score": 0.1688,
+      "cached": true
+    },
+    {
+      "ticker": "MAS",
+      "rs_score": 0.1688,
+      "cached": false
+    },
+    {
+      "ticker": "EAT",
+      "rs_score": 0.168,
+      "cached": false
+    },
+    {
+      "ticker": "PTGX",
+      "rs_score": 0.168,
+      "cached": false
+    },
+    {
+      "ticker": "FAST",
+      "rs_score": 0.1677,
+      "cached": false
+    },
+    {
+      "ticker": "MPC",
+      "rs_score": 0.1672,
+      "cached": true
+    },
+    {
+      "ticker": "CAT",
+      "rs_score": 0.1666,
+      "cached": true
+    },
+    {
+      "ticker": "GLSI",
+      "rs_score": 0.1659,
+      "cached": false
+    },
+    {
+      "ticker": "H",
+      "rs_score": 0.1651,
+      "cached": false
+    },
+    {
+      "ticker": "WFC",
+      "rs_score": 0.1649,
+      "cached": true
+    },
+    {
+      "ticker": "BAH",
+      "rs_score": 0.1635,
+      "cached": false
+    },
+    {
+      "ticker": "RACE",
+      "rs_score": 0.1617,
+      "cached": false
+    },
+    {
+      "ticker": "PSX",
+      "rs_score": 0.1601,
+      "cached": true
+    },
+    {
+      "ticker": "NVT",
+      "rs_score": 0.1599,
+      "cached": false
+    },
+    {
+      "ticker": "BAP",
+      "rs_score": 0.1596,
+      "cached": false
+    },
+    {
+      "ticker": "ZYME",
+      "rs_score": 0.1593,
+      "cached": false
+    },
+    {
+      "ticker": "HBM",
+      "rs_score": 0.1592,
+      "cached": false
+    },
+    {
+      "ticker": "IREN",
+      "rs_score": 0.1584,
+      "cached": false
+    },
+    {
+      "ticker": "AXP",
+      "rs_score": 0.1581,
+      "cached": true
+    },
+    {
+      "ticker": "RCL",
+      "rs_score": 0.1581,
+      "cached": true
+    },
+    {
+      "ticker": "ALLY",
+      "rs_score": 0.1575,
+      "cached": false
+    },
+    {
+      "ticker": "LDOS",
+      "rs_score": 0.1574,
+      "cached": false
+    },
+    {
+      "ticker": "STNE",
+      "rs_score": 0.1572,
+      "cached": false
+    },
+    {
+      "ticker": "UHS",
+      "rs_score": 0.1566,
+      "cached": false
+    },
+    {
+      "ticker": "XP",
+      "rs_score": 0.1562,
+      "cached": false
+    },
+    {
+      "ticker": "FORM",
+      "rs_score": 0.1556,
+      "cached": false
+    },
+    {
+      "ticker": "LBRT",
+      "rs_score": 0.1541,
+      "cached": false
+    },
+    {
+      "ticker": "SYM",
+      "rs_score": 0.1516,
+      "cached": false
+    },
+    {
+      "ticker": "RKT",
+      "rs_score": 0.1514,
+      "cached": false
+    },
+    {
+      "ticker": "ALKT",
+      "rs_score": 0.1513,
+      "cached": false
+    },
+    {
+      "ticker": "PR",
+      "rs_score": 0.151,
+      "cached": false
+    },
+    {
+      "ticker": "TRMD",
+      "rs_score": 0.1504,
+      "cached": false
+    },
+    {
+      "ticker": "TPR",
+      "rs_score": 0.1493,
+      "cached": false
+    },
+    {
+      "ticker": "IAG",
+      "rs_score": 0.149,
+      "cached": false
+    },
+    {
+      "ticker": "COR",
+      "rs_score": 0.1485,
+      "cached": false
+    },
+    {
+      "ticker": "GEHC",
+      "rs_score": 0.1484,
+      "cached": false
+    },
+    {
+      "ticker": "NWSA",
+      "rs_score": 0.1475,
+      "cached": false
+    },
+    {
+      "ticker": "SMFG",
+      "rs_score": 0.1465,
+      "cached": false
+    },
+    {
+      "ticker": "PEGA",
+      "rs_score": 0.1464,
+      "cached": false
+    },
+    {
+      "ticker": "AMKR",
+      "rs_score": 0.1461,
+      "cached": false
+    },
+    {
+      "ticker": "MNDY",
+      "rs_score": 0.145,
+      "cached": false
+    },
+    {
+      "ticker": "ESTC",
+      "rs_score": 0.1434,
+      "cached": false
+    },
+    {
+      "ticker": "WRB",
+      "rs_score": 0.143,
+      "cached": false
+    },
+    {
+      "ticker": "HLT",
+      "rs_score": 0.1427,
+      "cached": false
+    },
+    {
+      "ticker": "BV",
+      "rs_score": 0.1421,
+      "cached": false
+    },
+    {
+      "ticker": "INTU",
+      "rs_score": 0.1416,
+      "cached": true
+    },
+    {
+      "ticker": "STNG",
+      "rs_score": 0.1414,
+      "cached": false
+    },
+    {
+      "ticker": "QNST",
+      "rs_score": 0.1398,
+      "cached": false
+    },
+    {
+      "ticker": "KNSA",
+      "rs_score": 0.1387,
+      "cached": false
+    },
+    {
+      "ticker": "EMBJ",
+      "rs_score": 0.1383,
+      "cached": false
+    },
+    {
+      "ticker": "HIG",
+      "rs_score": 0.1373,
+      "cached": false
+    },
+    {
+      "ticker": "BRKR",
+      "rs_score": 0.1364,
+      "cached": false
+    },
+    {
+      "ticker": "PWP",
+      "rs_score": 0.136,
+      "cached": false
+    },
+    {
+      "ticker": "HII",
+      "rs_score": 0.1359,
+      "cached": false
+    },
+    {
+      "ticker": "BWIN",
+      "rs_score": 0.1357,
+      "cached": false
+    },
+    {
+      "ticker": "RYAAY",
+      "rs_score": 0.1353,
+      "cached": false
+    },
+    {
+      "ticker": "ASTH",
+      "rs_score": 0.1348,
+      "cached": false
+    },
+    {
+      "ticker": "ARLO",
+      "rs_score": 0.1347,
+      "cached": false
+    },
+    {
+      "ticker": "CDNS",
+      "rs_score": 0.1334,
+      "cached": true
+    },
+    {
+      "ticker": "SKT",
+      "rs_score": 0.1326,
+      "cached": false
+    },
+    {
+      "ticker": "NGD",
+      "rs_score": 0.1321,
+      "cached": false
+    },
+    {
+      "ticker": "JPM",
+      "rs_score": 0.132,
+      "cached": true
+    },
+    {
+      "ticker": "WES",
+      "rs_score": 0.1306,
+      "cached": false
+    },
+    {
+      "ticker": "WAB",
+      "rs_score": 0.1304,
+      "cached": false
+    },
+    {
+      "ticker": "BFAM",
+      "rs_score": 0.1301,
+      "cached": false
+    },
+    {
+      "ticker": "VMC",
+      "rs_score": 0.1291,
+      "cached": false
+    },
+    {
+      "ticker": "LOGI",
+      "rs_score": 0.1288,
+      "cached": false
+    },
+    {
+      "ticker": "TRGP",
+      "rs_score": 0.1284,
+      "cached": false
+    },
+    {
+      "ticker": "GRMN",
+      "rs_score": 0.1277,
+      "cached": false
+    },
+    {
+      "ticker": "DHI",
+      "rs_score": 0.1273,
+      "cached": false
+    },
+    {
+      "ticker": "PBR-A",
+      "rs_score": 0.1268,
+      "cached": false
+    },
+    {
+      "ticker": "PI",
+      "rs_score": 0.1256,
+      "cached": false
+    },
+    {
+      "ticker": "FANG",
+      "rs_score": 0.1254,
+      "cached": false
+    },
+    {
+      "ticker": "PPC",
+      "rs_score": 0.1248,
+      "cached": false
+    },
+    {
+      "ticker": "MAR",
+      "rs_score": 0.1245,
+      "cached": false
+    },
+    {
+      "ticker": "TMHC",
+      "rs_score": 0.1243,
+      "cached": false
+    },
+    {
+      "ticker": "ALL",
+      "rs_score": 0.1237,
+      "cached": false
+    },
+    {
+      "ticker": "FG",
+      "rs_score": 0.1217,
+      "cached": false
+    },
+    {
+      "ticker": "SNDX",
+      "rs_score": 0.1215,
+      "cached": false
+    },
+    {
+      "ticker": "PNR",
+      "rs_score": 0.1191,
+      "cached": false
+    },
+    {
+      "ticker": "SBLK",
+      "rs_score": 0.1191,
+      "cached": false
+    },
+    {
+      "ticker": "FND",
+      "rs_score": 0.119,
+      "cached": false
+    },
+    {
+      "ticker": "CRL",
+      "rs_score": 0.1187,
+      "cached": false
+    },
+    {
+      "ticker": "APH",
+      "rs_score": 0.1186,
+      "cached": false
+    },
+    {
+      "ticker": "MORN",
+      "rs_score": 0.1178,
+      "cached": false
+    },
+    {
+      "ticker": "MLI",
+      "rs_score": 0.1177,
+      "cached": false
+    },
+    {
+      "ticker": "MCK",
+      "rs_score": 0.1161,
+      "cached": false
+    },
+    {
+      "ticker": "REZI",
+      "rs_score": 0.1161,
+      "cached": false
+    },
+    {
+      "ticker": "CAH",
+      "rs_score": 0.1159,
+      "cached": false
+    },
+    {
+      "ticker": "NBIX",
+      "rs_score": 0.1154,
+      "cached": false
+    },
+    {
+      "ticker": "CDNA",
+      "rs_score": 0.1142,
+      "cached": false
+    },
+    {
+      "ticker": "DUOL",
+      "rs_score": 0.1135,
+      "cached": false
+    },
+    {
+      "ticker": "PWR",
+      "rs_score": 0.1129,
+      "cached": false
+    },
+    {
+      "ticker": "RRR",
+      "rs_score": 0.1119,
+      "cached": false
+    },
+    {
+      "ticker": "AZTA",
+      "rs_score": 0.1116,
+      "cached": false
+    },
+    {
+      "ticker": "SPG",
+      "rs_score": 0.1109,
+      "cached": false
+    },
+    {
+      "ticker": "LENZ",
+      "rs_score": 0.1101,
+      "cached": false
+    },
+    {
+      "ticker": "BSX",
+      "rs_score": 0.109,
+      "cached": true
+    },
+    {
+      "ticker": "CI",
+      "rs_score": 0.1086,
+      "cached": true
+    },
+    {
+      "ticker": "KEP",
+      "rs_score": 0.108,
+      "cached": false
+    },
+    {
+      "ticker": "SPNT",
+      "rs_score": 0.1076,
+      "cached": false
+    },
+    {
+      "ticker": "SGI",
+      "rs_score": 0.1062,
+      "cached": false
+    },
+    {
+      "ticker": "AGIO",
+      "rs_score": 0.1062,
+      "cached": false
+    },
+    {
+      "ticker": "ITT",
+      "rs_score": 0.1057,
+      "cached": false
+    },
+    {
+      "ticker": "ASO",
+      "rs_score": 0.1054,
+      "cached": false
+    },
+    {
+      "ticker": "YPF",
+      "rs_score": 0.1053,
+      "cached": false
+    },
+    {
+      "ticker": "OMER",
+      "rs_score": 0.1049,
+      "cached": false
+    },
+    {
+      "ticker": "EKSO",
+      "rs_score": 0.1046,
+      "cached": false
+    },
+    {
+      "ticker": "PKG",
+      "rs_score": 0.1039,
+      "cached": false
+    },
+    {
+      "ticker": "GTES",
+      "rs_score": 0.1038,
+      "cached": false
+    },
+    {
+      "ticker": "PTC",
+      "rs_score": 0.1035,
+      "cached": false
+    },
+    {
+      "ticker": "TRMB",
+      "rs_score": 0.1033,
+      "cached": false
+    },
+    {
+      "ticker": "IBKR",
+      "rs_score": 0.1032,
+      "cached": false
+    },
+    {
+      "ticker": "GLUE",
+      "rs_score": 0.102,
+      "cached": false
+    },
+    {
+      "ticker": "NXPI",
+      "rs_score": 0.1017,
+      "cached": false
+    },
+    {
+      "ticker": "APAM",
+      "rs_score": 0.1015,
+      "cached": false
+    },
+    {
+      "ticker": "UBS",
+      "rs_score": 0.1007,
+      "cached": false
+    },
+    {
+      "ticker": "IMVT",
+      "rs_score": 0.1005,
+      "cached": false
+    },
+    {
+      "ticker": "URBN",
+      "rs_score": 0.0995,
+      "cached": false
+    },
+    {
+      "ticker": "GLDD",
+      "rs_score": 0.0993,
+      "cached": false
+    },
+    {
+      "ticker": "STEP",
+      "rs_score": 0.099,
+      "cached": false
+    },
+    {
+      "ticker": "WM",
+      "rs_score": 0.0982,
+      "cached": false
+    },
+    {
+      "ticker": "RVMD",
+      "rs_score": 0.0982,
+      "cached": false
+    },
+    {
+      "ticker": "KTB",
+      "rs_score": 0.0974,
+      "cached": false
+    },
+    {
+      "ticker": "COF",
+      "rs_score": 0.0966,
+      "cached": false
+    },
+    {
+      "ticker": "EWBC",
+      "rs_score": 0.0964,
+      "cached": false
+    },
+    {
+      "ticker": "HTGC",
+      "rs_score": 0.0957,
+      "cached": false
+    },
+    {
+      "ticker": "FERG",
+      "rs_score": 0.0947,
+      "cached": false
+    },
+    {
+      "ticker": "PCOR",
+      "rs_score": 0.0941,
+      "cached": false
+    },
+    {
+      "ticker": "MGNI",
+      "rs_score": 0.094,
+      "cached": false
+    },
+    {
+      "ticker": "BBIO",
+      "rs_score": 0.0938,
+      "cached": false
+    },
+    {
+      "ticker": "FITB",
+      "rs_score": 0.0935,
+      "cached": false
+    },
+    {
+      "ticker": "WT",
+      "rs_score": 0.0935,
+      "cached": false
+    },
+    {
+      "ticker": "AER",
+      "rs_score": 0.0929,
+      "cached": false
+    },
+    {
+      "ticker": "FOUR",
+      "rs_score": 0.0921,
+      "cached": false
+    },
+    {
+      "ticker": "FTI",
+      "rs_score": 0.0919,
+      "cached": false
+    },
+    {
+      "ticker": "DLR",
+      "rs_score": 0.0914,
+      "cached": false
+    },
+    {
+      "ticker": "VNOM",
+      "rs_score": 0.0905,
+      "cached": false
+    },
+    {
+      "ticker": "SHOP",
+      "rs_score": 0.0903,
+      "cached": false
+    },
+    {
+      "ticker": "AAON",
+      "rs_score": 0.0903,
+      "cached": false
+    },
+    {
+      "ticker": "SYF",
+      "rs_score": 0.09,
+      "cached": false
+    },
+    {
+      "ticker": "EFX",
+      "rs_score": 0.0898,
+      "cached": false
+    },
+    {
+      "ticker": "RELX",
+      "rs_score": 0.0897,
+      "cached": false
+    },
+    {
+      "ticker": "CPRT",
+      "rs_score": 0.0897,
+      "cached": false
+    },
+    {
+      "ticker": "BURL",
+      "rs_score": 0.0896,
+      "cached": false
+    },
+    {
+      "ticker": "MHK",
+      "rs_score": 0.0889,
+      "cached": false
+    },
+    {
+      "ticker": "VTRS",
+      "rs_score": 0.0888,
+      "cached": false
+    },
+    {
+      "ticker": "USFD",
+      "rs_score": 0.0884,
+      "cached": false
+    },
+    {
+      "ticker": "SYK",
+      "rs_score": 0.0883,
+      "cached": false
+    },
+    {
+      "ticker": "FLUT",
+      "rs_score": 0.0881,
+      "cached": false
+    },
+    {
+      "ticker": "OC",
+      "rs_score": 0.0879,
+      "cached": false
+    },
+    {
+      "ticker": "BRO",
+      "rs_score": 0.0877,
+      "cached": false
+    },
+    {
+      "ticker": "ICE",
+      "rs_score": 0.086,
+      "cached": false
+    },
+    {
+      "ticker": "ZS",
+      "rs_score": 0.0847,
+      "cached": true
+    },
+    {
+      "ticker": "BX",
+      "rs_score": 0.0845,
+      "cached": true
+    },
+    {
+      "ticker": "WAT",
+      "rs_score": 0.0838,
+      "cached": false
+    },
+    {
+      "ticker": "DDOG",
+      "rs_score": 0.0836,
+      "cached": true
+    },
+    {
+      "ticker": "TXT",
+      "rs_score": 0.0832,
+      "cached": false
+    },
+    {
+      "ticker": "TRV",
+      "rs_score": 0.0827,
+      "cached": false
+    },
+    {
+      "ticker": "TGT",
+      "rs_score": 0.0825,
+      "cached": false
+    },
+    {
+      "ticker": "OUT",
+      "rs_score": 0.0825,
+      "cached": false
+    },
+    {
+      "ticker": "INTC",
+      "rs_score": 0.082,
+      "cached": true
+    },
+    {
+      "ticker": "MFC",
+      "rs_score": 0.0818,
+      "cached": false
+    },
+    {
+      "ticker": "DPZ",
+      "rs_score": 0.0806,
+      "cached": false
+    },
+    {
+      "ticker": "HST",
+      "rs_score": 0.0804,
+      "cached": false
+    },
+    {
+      "ticker": "TDS",
+      "rs_score": 0.0803,
+      "cached": false
+    },
+    {
+      "ticker": "PFGC",
+      "rs_score": 0.0797,
+      "cached": false
+    },
+    {
+      "ticker": "RVLV",
+      "rs_score": 0.0797,
+      "cached": false
+    },
+    {
+      "ticker": "Z",
+      "rs_score": 0.0793,
+      "cached": false
+    },
+    {
+      "ticker": "C",
+      "rs_score": 0.077,
+      "cached": true
+    },
+    {
+      "ticker": "VERX",
+      "rs_score": 0.0768,
+      "cached": false
+    },
+    {
+      "ticker": "VLTO",
+      "rs_score": 0.0761,
+      "cached": false
+    },
+    {
+      "ticker": "LRN",
+      "rs_score": 0.0758,
+      "cached": false
+    },
+    {
+      "ticker": "RSG",
+      "rs_score": 0.0752,
+      "cached": false
+    },
+    {
+      "ticker": "EMR",
+      "rs_score": 0.0741,
+      "cached": true
+    },
+    {
+      "ticker": "ZG",
+      "rs_score": 0.0738,
+      "cached": false
+    },
+    {
+      "ticker": "HRI",
+      "rs_score": 0.0736,
+      "cached": false
+    },
+    {
+      "ticker": "FNF",
+      "rs_score": 0.0733,
+      "cached": false
+    },
+    {
+      "ticker": "BPOP",
+      "rs_score": 0.0731,
+      "cached": false
+    },
+    {
+      "ticker": "SEMR",
+      "rs_score": 0.0727,
+      "cached": false
+    },
+    {
+      "ticker": "MSFT",
+      "rs_score": 0.0722,
+      "cached": true
+    },
+    {
+      "ticker": "ABNB",
+      "rs_score": 0.0722,
+      "cached": false
+    },
+    {
+      "ticker": "CTAS",
+      "rs_score": 0.0718,
+      "cached": false
+    },
+    {
+      "ticker": "JEF",
+      "rs_score": 0.0716,
+      "cached": false
+    },
+    {
+      "ticker": "HUBS",
+      "rs_score": 0.0713,
+      "cached": true
+    },
+    {
+      "ticker": "LPX",
+      "rs_score": 0.071,
+      "cached": false
+    },
+    {
+      "ticker": "BAM",
+      "rs_score": 0.0702,
+      "cached": false
+    },
+    {
+      "ticker": "HRB",
+      "rs_score": 0.0701,
+      "cached": false
+    },
+    {
+      "ticker": "RBA",
+      "rs_score": 0.0699,
+      "cached": false
+    },
+    {
+      "ticker": "BEAM",
+      "rs_score": 0.0694,
+      "cached": false
+    },
+    {
+      "ticker": "TCOM",
+      "rs_score": 0.0693,
+      "cached": false
+    },
+    {
+      "ticker": "HLNE",
+      "rs_score": 0.0687,
+      "cached": false
+    },
+    {
+      "ticker": "ODD",
+      "rs_score": 0.0685,
+      "cached": false
+    },
+    {
+      "ticker": "ECL",
+      "rs_score": 0.068,
+      "cached": false
+    },
+    {
+      "ticker": "RYAN",
+      "rs_score": 0.0679,
+      "cached": false
+    },
+    {
+      "ticker": "LAZ",
+      "rs_score": 0.0675,
+      "cached": false
+    },
+    {
+      "ticker": "ARIS",
+      "rs_score": 0.0674,
+      "cached": false
+    },
+    {
+      "ticker": "SUZ",
+      "rs_score": 0.067,
+      "cached": false
+    },
+    {
+      "ticker": "SNPS",
+      "rs_score": 0.0669,
+      "cached": true
+    },
+    {
+      "ticker": "ABBV",
+      "rs_score": 0.0668,
+      "cached": false
+    },
+    {
+      "ticker": "HCA",
+      "rs_score": 0.0661,
+      "cached": true
+    },
+    {
+      "ticker": "SKY",
+      "rs_score": 0.0659,
+      "cached": false
+    },
+    {
+      "ticker": "LYV",
+      "rs_score": 0.0657,
+      "cached": false
+    },
+    {
+      "ticker": "DAKT",
+      "rs_score": 0.0651,
+      "cached": false
+    },
+    {
+      "ticker": "ROST",
+      "rs_score": 0.0643,
+      "cached": true
+    },
+    {
+      "ticker": "AIG",
+      "rs_score": 0.0641,
+      "cached": false
+    },
+    {
+      "ticker": "GSK",
+      "rs_score": 0.0623,
+      "cached": false
+    },
+    {
+      "ticker": "SIG",
+      "rs_score": 0.0617,
+      "cached": false
+    },
+    {
+      "ticker": "RRX",
+      "rs_score": 0.0615,
+      "cached": false
+    },
+    {
+      "ticker": "PFSI",
+      "rs_score": 0.0614,
+      "cached": false
+    },
+    {
+      "ticker": "MOH",
+      "rs_score": 0.0611,
+      "cached": true
+    },
+    {
+      "ticker": "KT",
+      "rs_score": 0.0608,
+      "cached": false
+    },
+    {
+      "ticker": "BRZE",
+      "rs_score": 0.0602,
+      "cached": false
+    },
+    {
+      "ticker": "BCS",
+      "rs_score": 0.0601,
+      "cached": false
+    },
+    {
+      "ticker": "CE",
+      "rs_score": 0.06,
+      "cached": false
+    },
+    {
+      "ticker": "VRTX",
+      "rs_score": 0.0591,
+      "cached": true
+    },
+    {
+      "ticker": "FBP",
+      "rs_score": 0.0591,
+      "cached": false
+    },
+    {
+      "ticker": "CSWC",
+      "rs_score": 0.0591,
+      "cached": false
+    },
+    {
+      "ticker": "MTSI",
+      "rs_score": 0.0587,
+      "cached": false
+    },
+    {
+      "ticker": "VEEV",
+      "rs_score": 0.0583,
+      "cached": true
+    },
+    {
+      "ticker": "HLI",
+      "rs_score": 0.0576,
+      "cached": false
+    },
+    {
+      "ticker": "SAIC",
+      "rs_score": 0.0575,
+      "cached": false
+    },
+    {
+      "ticker": "ASGN",
+      "rs_score": 0.0572,
+      "cached": false
+    },
+    {
+      "ticker": "VCTR",
+      "rs_score": 0.0568,
+      "cached": false
+    },
+    {
+      "ticker": "WWD",
+      "rs_score": 0.0565,
+      "cached": false
+    },
+    {
+      "ticker": "HESM",
+      "rs_score": 0.0564,
+      "cached": false
+    },
+    {
+      "ticker": "XYZ",
+      "rs_score": 0.0563,
+      "cached": false
+    },
+    {
+      "ticker": "ATI",
+      "rs_score": 0.0555,
+      "cached": false
+    },
+    {
+      "ticker": "RPM",
+      "rs_score": 0.0551,
+      "cached": false
+    },
+    {
+      "ticker": "PATH",
+      "rs_score": 0.0547,
+      "cached": false
+    },
+    {
+      "ticker": "SWX",
+      "rs_score": 0.0545,
+      "cached": false
+    },
+    {
+      "ticker": "XYL",
+      "rs_score": 0.0543,
+      "cached": false
+    },
+    {
+      "ticker": "XHR",
+      "rs_score": 0.054,
+      "cached": false
+    },
+    {
+      "ticker": "BN",
+      "rs_score": 0.0535,
+      "cached": false
+    },
+    {
+      "ticker": "AMP",
+      "rs_score": 0.0533,
+      "cached": false
+    },
+    {
+      "ticker": "GVA",
+      "rs_score": 0.0532,
+      "cached": false
+    },
+    {
+      "ticker": "GTX",
+      "rs_score": 0.053,
+      "cached": false
+    },
+    {
+      "ticker": "GNTX",
+      "rs_score": 0.0528,
+      "cached": false
+    },
+    {
+      "ticker": "RIOT",
+      "rs_score": 0.0518,
+      "cached": false
+    },
+    {
+      "ticker": "KR",
+      "rs_score": 0.05,
+      "cached": false
+    },
+    {
+      "ticker": "PINS",
+      "rs_score": 0.0498,
+      "cached": false
+    },
+    {
+      "ticker": "CFLT",
+      "rs_score": 0.0498,
+      "cached": false
+    },
+    {
+      "ticker": "NPKI",
+      "rs_score": 0.0489,
+      "cached": false
+    },
+    {
+      "ticker": "MTG",
+      "rs_score": 0.0488,
+      "cached": false
+    },
+    {
+      "ticker": "PNFP",
+      "rs_score": 0.0484,
+      "cached": false
+    },
+    {
+      "ticker": "ONON",
+      "rs_score": 0.0477,
+      "cached": false
+    },
+    {
+      "ticker": "FFIV",
+      "rs_score": 0.0474,
+      "cached": false
+    },
+    {
+      "ticker": "STOK",
+      "rs_score": 0.0473,
+      "cached": false
+    },
+    {
+      "ticker": "FISV",
+      "rs_score": 0.047,
+      "cached": false
+    },
+    {
+      "ticker": "FIS",
+      "rs_score": 0.0467,
+      "cached": false
+    },
+    {
+      "ticker": "OSK",
+      "rs_score": 0.0466,
+      "cached": false
+    },
+    {
+      "ticker": "IMO",
+      "rs_score": 0.0462,
+      "cached": false
+    },
+    {
+      "ticker": "VVV",
+      "rs_score": 0.0461,
+      "cached": false
+    },
+    {
+      "ticker": "MLTX",
+      "rs_score": 0.0458,
+      "cached": false
+    },
+    {
+      "ticker": "LIN",
+      "rs_score": 0.0457,
+      "cached": false
+    },
+    {
+      "ticker": "ACN",
+      "rs_score": 0.0453,
+      "cached": false
+    },
+    {
+      "ticker": "RDY",
+      "rs_score": 0.0416,
+      "cached": false
+    },
+    {
+      "ticker": "LEVI",
+      "rs_score": 0.0415,
+      "cached": false
+    },
+    {
+      "ticker": "FBIN",
+      "rs_score": 0.0412,
+      "cached": false
+    },
+    {
+      "ticker": "PAA",
+      "rs_score": 0.0405,
+      "cached": false
+    },
+    {
+      "ticker": "DHT",
+      "rs_score": 0.0401,
+      "cached": false
+    },
+    {
+      "ticker": "WCN",
+      "rs_score": 0.0399,
+      "cached": false
+    },
+    {
+      "ticker": "IT",
+      "rs_score": 0.0395,
+      "cached": false
+    },
+    {
+      "ticker": "VNO",
+      "rs_score": 0.039,
+      "cached": false
+    },
+    {
+      "ticker": "OKE",
+      "rs_score": 0.0386,
+      "cached": false
+    },
+    {
+      "ticker": "RAMP",
+      "rs_score": 0.0386,
+      "cached": false
+    },
+    {
+      "ticker": "CM",
+      "rs_score": 0.0374,
+      "cached": false
+    },
+    {
+      "ticker": "SE",
+      "rs_score": 0.0372,
+      "cached": false
+    },
+    {
+      "ticker": "FTNT",
+      "rs_score": 0.0372,
+      "cached": true
+    },
+    {
+      "ticker": "TNET",
+      "rs_score": 0.0372,
+      "cached": false
+    },
+    {
+      "ticker": "SANM",
+      "rs_score": 0.0371,
+      "cached": false
+    },
+    {
+      "ticker": "PAGP",
+      "rs_score": 0.0369,
+      "cached": false
+    },
+    {
+      "ticker": "ALV",
+      "rs_score": 0.036,
+      "cached": false
+    },
+    {
+      "ticker": "IQV",
+      "rs_score": 0.0358,
+      "cached": false
+    },
+    {
+      "ticker": "CRI",
+      "rs_score": 0.0357,
+      "cached": false
+    },
+    {
+      "ticker": "PRU",
+      "rs_score": 0.0352,
+      "cached": false
+    },
+    {
+      "ticker": "SF",
+      "rs_score": 0.035,
+      "cached": false
+    },
+    {
+      "ticker": "JHG",
+      "rs_score": 0.035,
+      "cached": false
+    },
+    {
+      "ticker": "PENG",
+      "rs_score": 0.0346,
+      "cached": false
+    },
+    {
+      "ticker": "KEY",
+      "rs_score": 0.0344,
+      "cached": false
+    },
+    {
+      "ticker": "NSC",
+      "rs_score": 0.0342,
+      "cached": false
+    },
+    {
+      "ticker": "FTV",
+      "rs_score": 0.034,
+      "cached": false
+    },
+    {
+      "ticker": "DIS",
+      "rs_score": 0.0337,
+      "cached": false
+    },
+    {
+      "ticker": "CNQ",
+      "rs_score": 0.0336,
+      "cached": false
+    },
+    {
+      "ticker": "DB",
+      "rs_score": 0.0336,
+      "cached": false
+    },
+    {
+      "ticker": "DBRG",
+      "rs_score": 0.0331,
+      "cached": false
+    },
+    {
+      "ticker": "EHC",
+      "rs_score": 0.0324,
+      "cached": false
+    },
+    {
+      "ticker": "DOCN",
+      "rs_score": 0.0316,
+      "cached": false
+    },
+    {
+      "ticker": "SITE",
+      "rs_score": 0.0314,
+      "cached": false
+    },
+    {
+      "ticker": "HQY",
+      "rs_score": 0.0307,
+      "cached": false
+    },
+    {
+      "ticker": "GFI",
+      "rs_score": 0.0305,
+      "cached": false
+    },
+    {
+      "ticker": "ALLE",
+      "rs_score": 0.0302,
+      "cached": false
+    },
+    {
+      "ticker": "MPLX",
+      "rs_score": 0.0298,
+      "cached": false
+    },
+    {
+      "ticker": "AU",
+      "rs_score": 0.029,
+      "cached": false
+    },
+    {
+      "ticker": "VLO",
+      "rs_score": 0.027,
+      "cached": true
+    },
+    {
+      "ticker": "BK",
+      "rs_score": 0.0269,
+      "cached": false
+    },
+    {
+      "ticker": "BAC",
+      "rs_score": 0.0259,
+      "cached": true
+    },
+    {
+      "ticker": "OVV",
+      "rs_score": 0.0257,
+      "cached": false
+    },
+    {
+      "ticker": "PBR",
+      "rs_score": 0.0255,
+      "cached": false
+    },
+    {
+      "ticker": "BLK",
+      "rs_score": 0.0248,
+      "cached": true
+    },
+    {
+      "ticker": "CSX",
+      "rs_score": 0.0248,
+      "cached": false
+    },
+    {
+      "ticker": "CB",
+      "rs_score": 0.0238,
+      "cached": false
+    },
+    {
+      "ticker": "BFH",
+      "rs_score": 0.0234,
+      "cached": false
+    },
+    {
+      "ticker": "CPAY",
+      "rs_score": 0.0232,
+      "cached": false
+    },
+    {
+      "ticker": "HD",
+      "rs_score": 0.0231,
+      "cached": true
+    },
+    {
+      "ticker": "W",
+      "rs_score": 0.0225,
+      "cached": false
+    },
+    {
+      "ticker": "AME",
+      "rs_score": 0.0223,
+      "cached": false
+    },
+    {
+      "ticker": "MFIC",
+      "rs_score": 0.022,
+      "cached": false
+    },
+    {
+      "ticker": "REGN",
+      "rs_score": 0.0219,
+      "cached": true
+    },
+    {
+      "ticker": "TRI",
+      "rs_score": 0.0219,
+      "cached": false
+    },
+    {
+      "ticker": "EQIX",
+      "rs_score": 0.0216,
+      "cached": false
+    },
+    {
+      "ticker": "ESI",
+      "rs_score": 0.0215,
+      "cached": false
+    },
+    {
+      "ticker": "BXSL",
+      "rs_score": 0.021,
+      "cached": false
+    },
+    {
+      "ticker": "SCCO",
+      "rs_score": 0.0198,
+      "cached": false
+    },
+    {
+      "ticker": "BR",
+      "rs_score": 0.0195,
+      "cached": false
+    },
+    {
+      "ticker": "ABT",
+      "rs_score": 0.0194,
+      "cached": true
+    },
+    {
+      "ticker": "MA",
+      "rs_score": 0.0183,
+      "cached": true
+    },
+    {
+      "ticker": "CX",
+      "rs_score": 0.0183,
+      "cached": false
+    },
+    {
+      "ticker": "TS",
+      "rs_score": 0.018,
+      "cached": false
+    },
+    {
+      "ticker": "SIMO",
+      "rs_score": 0.0178,
+      "cached": false
+    },
+    {
+      "ticker": "TTEK",
+      "rs_score": 0.0175,
+      "cached": false
+    },
+    {
+      "ticker": "MTH",
+      "rs_score": 0.017,
+      "cached": false
+    },
+    {
+      "ticker": "EPAM",
+      "rs_score": 0.0168,
+      "cached": false
+    },
+    {
+      "ticker": "RDN",
+      "rs_score": 0.0168,
+      "cached": false
+    },
+    {
+      "ticker": "FER",
+      "rs_score": 0.016,
+      "cached": false
+    },
+    {
+      "ticker": "CP",
+      "rs_score": 0.0155,
+      "cached": false
+    },
+    {
+      "ticker": "OMF",
+      "rs_score": 0.0147,
+      "cached": false
+    },
+    {
+      "ticker": "BTU",
+      "rs_score": 0.0143,
+      "cached": false
+    },
+    {
+      "ticker": "GBDC",
+      "rs_score": 0.014,
+      "cached": false
+    },
+    {
+      "ticker": "BALL",
+      "rs_score": 0.0137,
+      "cached": false
+    },
+    {
+      "ticker": "AVY",
+      "rs_score": 0.0137,
+      "cached": false
+    },
+    {
+      "ticker": "WMT",
+      "rs_score": 0.0135,
+      "cached": true
+    },
+    {
+      "ticker": "PRM",
+      "rs_score": 0.0131,
+      "cached": false
+    },
+    {
+      "ticker": "CPRX",
+      "rs_score": 0.0128,
+      "cached": false
+    },
+    {
+      "ticker": "NX",
+      "rs_score": 0.0127,
+      "cached": false
+    },
+    {
+      "ticker": "HMC",
+      "rs_score": 0.0122,
+      "cached": false
+    },
+    {
+      "ticker": "AM",
+      "rs_score": 0.012,
+      "cached": false
+    },
+    {
+      "ticker": "CRS",
+      "rs_score": 0.0119,
+      "cached": false
+    },
+    {
+      "ticker": "WAL",
+      "rs_score": 0.0119,
+      "cached": false
+    },
+    {
+      "ticker": "GD",
+      "rs_score": 0.0114,
+      "cached": false
+    },
+    {
+      "ticker": "ARWR",
+      "rs_score": 0.0113,
+      "cached": false
+    },
+    {
+      "ticker": "AOS",
+      "rs_score": 0.0102,
+      "cached": false
+    },
+    {
+      "ticker": "POOL",
+      "rs_score": 0.0099,
+      "cached": false
+    },
+    {
+      "ticker": "SA",
+      "rs_score": 0.0096,
+      "cached": false
+    },
+    {
+      "ticker": "ET",
+      "rs_score": 0.0094,
+      "cached": false
+    },
+    {
+      "ticker": "MTDR",
+      "rs_score": 0.0091,
+      "cached": false
+    },
+    {
+      "ticker": "SONO",
+      "rs_score": 0.0091,
+      "cached": false
+    },
+    {
+      "ticker": "KMPR",
+      "rs_score": 0.0087,
+      "cached": false
+    },
+    {
+      "ticker": "GGG",
+      "rs_score": 0.0083,
+      "cached": false
+    },
+    {
+      "ticker": "XENE",
+      "rs_score": 0.0082,
+      "cached": false
+    },
+    {
+      "ticker": "A",
+      "rs_score": 0.0081,
+      "cached": false
+    },
+    {
+      "ticker": "SHOO",
+      "rs_score": 0.0078,
+      "cached": false
+    },
+    {
+      "ticker": "DOV",
+      "rs_score": 0.0073,
+      "cached": false
+    },
+    {
+      "ticker": "LULU",
+      "rs_score": 0.0066,
+      "cached": true
+    },
+    {
+      "ticker": "CSTM",
+      "rs_score": 0.0066,
+      "cached": false
+    },
+    {
+      "ticker": "PARR",
+      "rs_score": 0.0064,
+      "cached": false
+    },
+    {
+      "ticker": "ADEA",
+      "rs_score": 0.0063,
+      "cached": false
+    },
+    {
+      "ticker": "ZETA",
+      "rs_score": 0.006,
+      "cached": false
+    },
+    {
+      "ticker": "CHKP",
+      "rs_score": 0.0057,
+      "cached": false
+    },
+    {
+      "ticker": "PGY",
+      "rs_score": 0.0056,
+      "cached": false
+    },
+    {
+      "ticker": "STLD",
+      "rs_score": 0.0055,
+      "cached": false
+    },
+    {
+      "ticker": "BBWI",
+      "rs_score": 0.0044,
+      "cached": false
+    },
+    {
+      "ticker": "CL",
+      "rs_score": 0.0039,
+      "cached": false
+    },
+    {
+      "ticker": "AXGN",
+      "rs_score": 0.0036,
+      "cached": false
+    },
+    {
+      "ticker": "TRU",
+      "rs_score": 0.003,
+      "cached": false
+    },
+    {
+      "ticker": "J",
+      "rs_score": 0.0025,
+      "cached": false
+    },
+    {
+      "ticker": "LPLA",
+      "rs_score": 0.0023,
+      "cached": false
+    },
+    {
+      "ticker": "VRRM",
+      "rs_score": 0.0023,
+      "cached": false
+    },
+    {
+      "ticker": "RGEN",
+      "rs_score": 0.0019,
+      "cached": false
+    },
+    {
+      "ticker": "SCI",
+      "rs_score": 0.0018,
+      "cached": false
+    },
+    {
+      "ticker": "MIR",
+      "rs_score": 0.0014,
+      "cached": false
+    },
+    {
+      "ticker": "EBAY",
+      "rs_score": 0.0011,
+      "cached": false
+    },
+    {
+      "ticker": "CFG",
+      "rs_score": 0.0009,
+      "cached": false
+    },
+    {
+      "ticker": "NCLH",
+      "rs_score": 0.0006,
+      "cached": false
+    },
+    {
+      "ticker": "L",
+      "rs_score": 0.0004,
+      "cached": false
+    },
+    {
+      "ticker": "NEXA",
+      "rs_score": 0.0003,
+      "cached": false
+    },
+    {
+      "ticker": "UNP",
+      "rs_score": 0.0002,
+      "cached": false
+    },
+    {
+      "ticker": "ASC",
+      "rs_score": -0.0002,
+      "cached": false
+    },
+    {
+      "ticker": "ALC",
+      "rs_score": -0.0004,
+      "cached": false
+    },
+    {
+      "ticker": "INSM",
+      "rs_score": -0.0004,
+      "cached": false
+    },
+    {
+      "ticker": "CRTO",
+      "rs_score": -0.0006,
+      "cached": false
+    },
+    {
+      "ticker": "RJF",
+      "rs_score": -0.0014,
+      "cached": false
+    },
+    {
+      "ticker": "AVPT",
+      "rs_score": -0.0018,
+      "cached": false
+    },
+    {
+      "ticker": "SHNY",
+      "rs_score": -0.0022,
+      "cached": false
+    },
+    {
+      "ticker": "MAIN",
+      "rs_score": -0.0025,
+      "cached": false
+    },
+    {
+      "ticker": "BRK-B",
+      "rs_score": -0.0027,
+      "cached": false
+    },
+    {
+      "ticker": "ORLY",
+      "rs_score": -0.0027,
+      "cached": false
+    },
+    {
+      "ticker": "ODFL",
+      "rs_score": -0.0033,
+      "cached": false
+    },
+    {
+      "ticker": "ROL",
+      "rs_score": -0.0034,
+      "cached": false
+    },
+    {
+      "ticker": "ADSK",
+      "rs_score": -0.0037,
+      "cached": false
+    },
+    {
+      "ticker": "CXT",
+      "rs_score": -0.0037,
+      "cached": false
+    },
+    {
+      "ticker": "RARE",
+      "rs_score": -0.0039,
+      "cached": false
+    },
+    {
+      "ticker": "TNDM",
+      "rs_score": -0.0039,
+      "cached": false
+    },
+    {
+      "ticker": "OR",
+      "rs_score": -0.004,
+      "cached": false
+    },
+    {
+      "ticker": "VIV",
+      "rs_score": -0.0047,
+      "cached": false
+    },
+    {
+      "ticker": "TPH",
+      "rs_score": -0.0049,
+      "cached": false
+    },
+    {
+      "ticker": "TTD",
+      "rs_score": -0.0059,
+      "cached": false
+    },
+    {
+      "ticker": "ZION",
+      "rs_score": -0.0061,
+      "cached": false
+    },
+    {
+      "ticker": "NICE",
+      "rs_score": -0.0062,
+      "cached": false
+    },
+    {
+      "ticker": "CCJ",
+      "rs_score": -0.0065,
+      "cached": false
+    },
+    {
+      "ticker": "TNL",
+      "rs_score": -0.0068,
+      "cached": false
+    },
+    {
+      "ticker": "DCI",
+      "rs_score": -0.0072,
+      "cached": false
+    },
+    {
+      "ticker": "DXCM",
+      "rs_score": -0.0076,
+      "cached": true
+    },
+    {
+      "ticker": "CUK",
+      "rs_score": -0.0077,
+      "cached": false
+    },
+    {
+      "ticker": "FUTU",
+      "rs_score": -0.0087,
+      "cached": false
+    },
+    {
+      "ticker": "COO",
+      "rs_score": -0.0089,
+      "cached": false
+    },
+    {
+      "ticker": "MC",
+      "rs_score": -0.0089,
+      "cached": false
+    },
+    {
+      "ticker": "FLS",
+      "rs_score": -0.009,
+      "cached": false
+    },
+    {
+      "ticker": "ACGL",
+      "rs_score": -0.0093,
+      "cached": false
+    },
+    {
+      "ticker": "UMBF",
+      "rs_score": -0.0099,
+      "cached": false
+    },
+    {
+      "ticker": "DSGX",
+      "rs_score": -0.0104,
+      "cached": false
+    },
+    {
+      "ticker": "UGL",
+      "rs_score": -0.0106,
+      "cached": false
+    },
+    {
+      "ticker": "MET",
+      "rs_score": -0.0107,
+      "cached": false
+    },
+    {
+      "ticker": "WLK",
+      "rs_score": -0.0112,
+      "cached": false
+    },
+    {
+      "ticker": "V",
+      "rs_score": -0.0113,
+      "cached": true
+    },
+    {
+      "ticker": "USB",
+      "rs_score": -0.0115,
+      "cached": false
+    },
+    {
+      "ticker": "EEFT",
+      "rs_score": -0.0115,
+      "cached": false
+    },
+    {
+      "ticker": "DHR",
+      "rs_score": -0.0116,
+      "cached": true
+    },
+    {
+      "ticker": "POST",
+      "rs_score": -0.0119,
+      "cached": false
+    },
+    {
+      "ticker": "HBAN",
+      "rs_score": -0.0122,
+      "cached": false
+    },
+    {
+      "ticker": "CARG",
+      "rs_score": -0.0124,
+      "cached": false
+    },
+    {
+      "ticker": "ARMK",
+      "rs_score": -0.0125,
+      "cached": false
+    },
+    {
+      "ticker": "CPNG",
+      "rs_score": -0.013,
+      "cached": false
+    },
+    {
+      "ticker": "MRK",
+      "rs_score": -0.0133,
+      "cached": true
+    },
+    {
+      "ticker": "MDB",
+      "rs_score": -0.0135,
+      "cached": false
+    },
+    {
+      "ticker": "ZGN",
+      "rs_score": -0.0142,
+      "cached": false
+    },
+    {
+      "ticker": "ATRO",
+      "rs_score": -0.0142,
+      "cached": false
+    },
+    {
+      "ticker": "AXIA",
+      "rs_score": -0.0145,
+      "cached": false
+    },
+    {
+      "ticker": "CROX",
+      "rs_score": -0.0147,
+      "cached": false
+    },
+    {
+      "ticker": "FA",
+      "rs_score": -0.0147,
+      "cached": false
+    },
+    {
+      "ticker": "BCSF",
+      "rs_score": -0.0149,
+      "cached": false
+    },
+    {
+      "ticker": "CCEP",
+      "rs_score": -0.0153,
+      "cached": false
+    },
+    {
+      "ticker": "ASB",
+      "rs_score": -0.0153,
+      "cached": false
+    },
+    {
+      "ticker": "TSCO",
+      "rs_score": -0.0155,
+      "cached": false
+    },
+    {
+      "ticker": "OBDC",
+      "rs_score": -0.016,
+      "cached": false
+    },
+    {
+      "ticker": "CNR",
+      "rs_score": -0.0164,
+      "cached": false
+    },
+    {
+      "ticker": "INDV",
+      "rs_score": -0.0165,
+      "cached": false
+    },
+    {
+      "ticker": "KSS",
+      "rs_score": -0.0166,
+      "cached": false
+    },
+    {
+      "ticker": "AR",
+      "rs_score": -0.0167,
+      "cached": false
+    },
+    {
+      "ticker": "SEIC",
+      "rs_score": -0.0174,
+      "cached": false
+    },
+    {
+      "ticker": "QSR",
+      "rs_score": -0.0175,
+      "cached": false
+    },
+    {
+      "ticker": "PSO",
+      "rs_score": -0.0175,
+      "cached": false
+    },
+    {
+      "ticker": "QRVO",
+      "rs_score": -0.0176,
+      "cached": false
+    },
+    {
+      "ticker": "EYE",
+      "rs_score": -0.0177,
+      "cached": false
+    },
+    {
+      "ticker": "PNC",
+      "rs_score": -0.0182,
+      "cached": false
+    },
+    {
+      "ticker": "ECAT",
+      "rs_score": -0.0184,
+      "cached": false
+    },
+    {
+      "ticker": "CIEN",
+      "rs_score": -0.0186,
+      "cached": false
+    },
+    {
+      "ticker": "RYN",
+      "rs_score": -0.0191,
+      "cached": false
+    },
+    {
+      "ticker": "KEX",
+      "rs_score": -0.0198,
+      "cached": false
+    },
+    {
+      "ticker": "CGBD",
+      "rs_score": -0.0201,
+      "cached": false
+    },
+    {
+      "ticker": "EQH",
+      "rs_score": -0.0215,
+      "cached": false
+    },
+    {
+      "ticker": "LI",
+      "rs_score": -0.0216,
+      "cached": false
+    },
+    {
+      "ticker": "TMO",
+      "rs_score": -0.0224,
+      "cached": true
+    },
+    {
+      "ticker": "CCL",
+      "rs_score": -0.0228,
+      "cached": false
+    },
+    {
+      "ticker": "GS",
+      "rs_score": -0.0231,
+      "cached": true
+    },
+    {
+      "ticker": "KTOS",
+      "rs_score": -0.0231,
+      "cached": false
+    },
+    {
+      "ticker": "NUE",
+      "rs_score": -0.0232,
+      "cached": false
+    },
+    {
+      "ticker": "ALGN",
+      "rs_score": -0.0233,
+      "cached": false
+    },
+    {
+      "ticker": "CMI",
+      "rs_score": -0.0236,
+      "cached": false
+    },
+    {
+      "ticker": "BOOT",
+      "rs_score": -0.0244,
+      "cached": false
+    },
+    {
+      "ticker": "AJG",
+      "rs_score": -0.0246,
+      "cached": false
+    },
+    {
+      "ticker": "STE",
+      "rs_score": -0.0246,
+      "cached": false
+    },
+    {
+      "ticker": "GBCI",
+      "rs_score": -0.025,
+      "cached": false
+    },
+    {
+      "ticker": "JLL",
+      "rs_score": -0.0252,
+      "cached": false
+    },
+    {
+      "ticker": "UNM",
+      "rs_score": -0.0258,
+      "cached": false
+    },
+    {
+      "ticker": "CTSH",
+      "rs_score": -0.0259,
+      "cached": false
+    },
+    {
+      "ticker": "ENOV",
+      "rs_score": -0.0259,
+      "cached": false
+    },
+    {
+      "ticker": "BAX",
+      "rs_score": -0.0265,
+      "cached": false
+    },
+    {
+      "ticker": "IRTC",
+      "rs_score": -0.0266,
+      "cached": false
+    },
+    {
+      "ticker": "ESNT",
+      "rs_score": -0.027,
+      "cached": false
+    },
+    {
+      "ticker": "BANC",
+      "rs_score": -0.0271,
+      "cached": false
+    },
+    {
+      "ticker": "PEB",
+      "rs_score": -0.0274,
+      "cached": false
+    },
+    {
+      "ticker": "TK",
+      "rs_score": -0.0275,
+      "cached": false
+    },
+    {
+      "ticker": "WTTR",
+      "rs_score": -0.0278,
+      "cached": false
+    },
+    {
+      "ticker": "INGR",
+      "rs_score": -0.028,
+      "cached": false
+    },
+    {
+      "ticker": "TMDX",
+      "rs_score": -0.0284,
+      "cached": true
+    },
+    {
+      "ticker": "CTRE",
+      "rs_score": -0.0299,
+      "cached": false
+    },
+    {
+      "ticker": "PRMB",
+      "rs_score": -0.0299,
+      "cached": false
+    },
+    {
+      "ticker": "SDRL",
+      "rs_score": -0.03,
+      "cached": false
+    },
+    {
+      "ticker": "DLTR",
+      "rs_score": -0.0303,
+      "cached": false
+    },
+    {
+      "ticker": "PBF",
+      "rs_score": -0.0306,
+      "cached": false
+    },
+    {
+      "ticker": "IMMX",
+      "rs_score": -0.0306,
+      "cached": false
+    },
+    {
+      "ticker": "OTIS",
+      "rs_score": -0.031,
+      "cached": false
+    },
+    {
+      "ticker": "CVI",
+      "rs_score": -0.031,
+      "cached": false
+    },
+    {
+      "ticker": "AFG",
+      "rs_score": -0.0316,
+      "cached": false
+    },
+    {
+      "ticker": "LIVN",
+      "rs_score": -0.0317,
+      "cached": false
+    },
+    {
+      "ticker": "CNX",
+      "rs_score": -0.0321,
+      "cached": false
+    },
+    {
+      "ticker": "GPK",
+      "rs_score": -0.0323,
+      "cached": false
+    },
+    {
+      "ticker": "AESI",
+      "rs_score": -0.0325,
+      "cached": false
+    },
+    {
+      "ticker": "MSI",
+      "rs_score": -0.0327,
+      "cached": false
+    },
+    {
+      "ticker": "HELE",
+      "rs_score": -0.0328,
+      "cached": false
+    },
+    {
+      "ticker": "WY",
+      "rs_score": -0.0329,
+      "cached": false
+    },
+    {
+      "ticker": "TJX",
+      "rs_score": -0.033,
+      "cached": true
+    },
+    {
+      "ticker": "CARR",
+      "rs_score": -0.0337,
+      "cached": false
+    },
+    {
+      "ticker": "MDY",
+      "rs_score": -0.0341,
+      "cached": false
+    },
+    {
+      "ticker": "EGO",
+      "rs_score": -0.0346,
+      "cached": false
+    },
+    {
+      "ticker": "CALM",
+      "rs_score": -0.0349,
+      "cached": false
+    },
+    {
+      "ticker": "BOX",
+      "rs_score": -0.0351,
+      "cached": false
+    },
+    {
+      "ticker": "ACHC",
+      "rs_score": -0.0353,
+      "cached": false
+    },
+    {
+      "ticker": "LUV",
+      "rs_score": -0.0356,
+      "cached": false
+    },
+    {
+      "ticker": "MWA",
+      "rs_score": -0.0358,
+      "cached": false
+    },
+    {
+      "ticker": "RCAT",
+      "rs_score": -0.0364,
+      "cached": false
+    },
+    {
+      "ticker": "BL",
+      "rs_score": -0.0367,
+      "cached": false
+    },
+    {
+      "ticker": "TMUS",
+      "rs_score": -0.0368,
+      "cached": false
+    },
+    {
+      "ticker": "CBRE",
+      "rs_score": -0.0368,
+      "cached": false
+    },
+    {
+      "ticker": "IBN",
+      "rs_score": -0.0369,
+      "cached": false
+    },
+    {
+      "ticker": "WDAY",
+      "rs_score": -0.0376,
+      "cached": false
+    },
+    {
+      "ticker": "MDU",
+      "rs_score": -0.0379,
+      "cached": false
+    },
+    {
+      "ticker": "SOC",
+      "rs_score": -0.0385,
+      "cached": false
+    },
+    {
+      "ticker": "GM",
+      "rs_score": -0.039,
+      "cached": false
+    },
+    {
+      "ticker": "GPN",
+      "rs_score": -0.0391,
+      "cached": false
+    },
+    {
+      "ticker": "EXPE",
+      "rs_score": -0.0395,
+      "cached": false
+    },
+    {
+      "ticker": "KGC",
+      "rs_score": -0.0403,
+      "cached": false
+    },
+    {
+      "ticker": "WELL",
+      "rs_score": -0.0407,
+      "cached": false
+    },
+    {
+      "ticker": "HPE",
+      "rs_score": -0.0409,
+      "cached": false
+    },
+    {
+      "ticker": "NN",
+      "rs_score": -0.0414,
+      "cached": false
+    },
+    {
+      "ticker": "SAN",
+      "rs_score": -0.0418,
+      "cached": false
+    },
+    {
+      "ticker": "TRIN",
+      "rs_score": -0.042,
+      "cached": false
+    },
+    {
+      "ticker": "CRUS",
+      "rs_score": -0.0422,
+      "cached": false
+    },
+    {
+      "ticker": "DTM",
+      "rs_score": -0.0425,
+      "cached": false
+    },
+    {
+      "ticker": "MCO",
+      "rs_score": -0.0427,
+      "cached": false
+    },
+    {
+      "ticker": "RRC",
+      "rs_score": -0.0429,
+      "cached": false
+    },
+    {
+      "ticker": "DSL",
+      "rs_score": -0.043,
+      "cached": false
+    },
+    {
+      "ticker": "PMT",
+      "rs_score": -0.043,
+      "cached": false
+    },
+    {
+      "ticker": "LHX",
+      "rs_score": -0.0431,
+      "cached": false
+    },
+    {
+      "ticker": "LUNR",
+      "rs_score": -0.0441,
+      "cached": false
+    },
+    {
+      "ticker": "KMX",
+      "rs_score": -0.0449,
+      "cached": false
+    },
+    {
+      "ticker": "PBI",
+      "rs_score": -0.0454,
+      "cached": false
+    },
+    {
+      "ticker": "ABCB",
+      "rs_score": -0.0457,
+      "cached": false
+    },
+    {
+      "ticker": "SBRA",
+      "rs_score": -0.0467,
+      "cached": false
+    },
+    {
+      "ticker": "RGNX",
+      "rs_score": -0.0468,
+      "cached": false
+    },
+    {
+      "ticker": "AKAM",
+      "rs_score": -0.0472,
+      "cached": false
+    },
+    {
+      "ticker": "HOPE",
+      "rs_score": -0.0473,
+      "cached": false
+    },
+    {
+      "ticker": "SYNA",
+      "rs_score": -0.048,
+      "cached": false
+    },
+    {
+      "ticker": "CHD",
+      "rs_score": -0.0482,
+      "cached": false
+    },
+    {
+      "ticker": "SLF",
+      "rs_score": -0.0488,
+      "cached": false
+    },
+    {
+      "ticker": "TEAM",
+      "rs_score": -0.049,
+      "cached": true
+    },
+    {
+      "ticker": "AXS",
+      "rs_score": -0.0491,
+      "cached": false
+    },
+    {
+      "ticker": "VIAV",
+      "rs_score": -0.0493,
+      "cached": false
+    },
+    {
+      "ticker": "SSB",
+      "rs_score": -0.0494,
+      "cached": false
+    },
+    {
+      "ticker": "ADBE",
+      "rs_score": -0.0497,
+      "cached": true
+    },
+    {
+      "ticker": "TFC",
+      "rs_score": -0.05,
+      "cached": false
+    },
+    {
+      "ticker": "IEX",
+      "rs_score": -0.0501,
+      "cached": false
+    },
+    {
+      "ticker": "SBH",
+      "rs_score": -0.0502,
+      "cached": false
+    },
+    {
+      "ticker": "FNB",
+      "rs_score": -0.0504,
+      "cached": false
+    },
+    {
+      "ticker": "AKR",
+      "rs_score": -0.0512,
+      "cached": false
+    },
+    {
+      "ticker": "SRPT",
+      "rs_score": -0.0513,
+      "cached": false
+    },
+    {
+      "ticker": "WMB",
+      "rs_score": -0.0514,
+      "cached": false
+    },
+    {
+      "ticker": "HCSG",
+      "rs_score": -0.0522,
+      "cached": false
+    },
+    {
+      "ticker": "ROP",
+      "rs_score": -0.0526,
+      "cached": false
+    },
+    {
+      "ticker": "CNK",
+      "rs_score": -0.0527,
+      "cached": false
+    },
+    {
+      "ticker": "CINF",
+      "rs_score": -0.0534,
+      "cached": false
+    },
+    {
+      "ticker": "INFY",
+      "rs_score": -0.054,
+      "cached": false
+    },
+    {
+      "ticker": "PDI",
+      "rs_score": -0.054,
+      "cached": false
+    },
+    {
+      "ticker": "WBS",
+      "rs_score": -0.0546,
+      "cached": false
+    },
+    {
+      "ticker": "CNI",
+      "rs_score": -0.0551,
+      "cached": false
+    },
+    {
+      "ticker": "MRSH",
+      "rs_score": -0.0556,
+      "cached": false
+    },
+    {
+      "ticker": "PLD",
+      "rs_score": -0.0561,
+      "cached": false
+    },
+    {
+      "ticker": "GEN",
+      "rs_score": -0.0561,
+      "cached": false
+    },
+    {
+      "ticker": "INVA",
+      "rs_score": -0.0562,
+      "cached": false
+    },
+    {
+      "ticker": "PAR",
+      "rs_score": -0.0565,
+      "cached": false
+    },
+    {
+      "ticker": "SMR",
+      "rs_score": -0.0566,
+      "cached": false
+    },
+    {
+      "ticker": "TSLX",
+      "rs_score": -0.0569,
+      "cached": false
+    },
+    {
+      "ticker": "CNC",
+      "rs_score": -0.057,
+      "cached": false
+    },
+    {
+      "ticker": "AFL",
+      "rs_score": -0.0572,
+      "cached": false
+    },
+    {
+      "ticker": "VZ",
+      "rs_score": -0.0573,
+      "cached": false
+    },
+    {
+      "ticker": "PTY",
+      "rs_score": -0.0578,
+      "cached": false
+    },
+    {
+      "ticker": "FFIN",
+      "rs_score": -0.0584,
+      "cached": false
+    },
+    {
+      "ticker": "PBA",
+      "rs_score": -0.0586,
+      "cached": false
+    },
+    {
+      "ticker": "BJ",
+      "rs_score": -0.059,
+      "cached": false
+    },
+    {
+      "ticker": "QLYS",
+      "rs_score": -0.0597,
+      "cached": false
+    },
+    {
+      "ticker": "MTZ",
+      "rs_score": -0.06,
+      "cached": false
+    },
+    {
+      "ticker": "LNC",
+      "rs_score": -0.0604,
+      "cached": false
+    },
+    {
+      "ticker": "AMGN",
+      "rs_score": -0.0608,
+      "cached": true
+    },
+    {
+      "ticker": "CNNE",
+      "rs_score": -0.0609,
+      "cached": false
+    },
+    {
+      "ticker": "HOG",
+      "rs_score": -0.0611,
+      "cached": false
+    },
+    {
+      "ticker": "FHN",
+      "rs_score": -0.0613,
+      "cached": false
+    },
+    {
+      "ticker": "NWG",
+      "rs_score": -0.0616,
+      "cached": false
+    },
+    {
+      "ticker": "CMBT",
+      "rs_score": -0.0619,
+      "cached": false
+    },
+    {
+      "ticker": "CAKE",
+      "rs_score": -0.0619,
+      "cached": false
+    },
+    {
+      "ticker": "CMC",
+      "rs_score": -0.0622,
+      "cached": false
+    },
+    {
+      "ticker": "MTB",
+      "rs_score": -0.0623,
+      "cached": false
+    },
+    {
+      "ticker": "UPBD",
+      "rs_score": -0.0624,
+      "cached": false
+    },
+    {
+      "ticker": "BCAT",
+      "rs_score": -0.0626,
+      "cached": false
+    },
+    {
+      "ticker": "DRI",
+      "rs_score": -0.0627,
+      "cached": false
+    },
+    {
+      "ticker": "DAWN",
+      "rs_score": -0.0633,
+      "cached": false
+    },
+    {
+      "ticker": "CME",
+      "rs_score": -0.064,
+      "cached": false
+    },
+    {
+      "ticker": "SYY",
+      "rs_score": -0.0643,
+      "cached": false
+    },
+    {
+      "ticker": "RMBS",
+      "rs_score": -0.0652,
+      "cached": false
+    },
+    {
+      "ticker": "MGY",
+      "rs_score": -0.0652,
+      "cached": false
+    },
+    {
+      "ticker": "SEM",
+      "rs_score": -0.0656,
+      "cached": false
+    },
+    {
+      "ticker": "CWST",
+      "rs_score": -0.0662,
+      "cached": false
+    },
+    {
+      "ticker": "LMND",
+      "rs_score": -0.0666,
+      "cached": false
+    },
+    {
+      "ticker": "TKR",
+      "rs_score": -0.0667,
+      "cached": false
+    },
+    {
+      "ticker": "AEM",
+      "rs_score": -0.0669,
+      "cached": false
+    },
+    {
+      "ticker": "ARCC",
+      "rs_score": -0.0674,
+      "cached": false
+    },
+    {
+      "ticker": "RLI",
+      "rs_score": -0.0675,
+      "cached": false
+    },
+    {
+      "ticker": "FULT",
+      "rs_score": -0.0675,
+      "cached": false
+    },
+    {
+      "ticker": "AUB",
+      "rs_score": -0.0676,
+      "cached": false
+    },
+    {
+      "ticker": "VIPS",
+      "rs_score": -0.0678,
+      "cached": false
+    },
+    {
+      "ticker": "OLN",
+      "rs_score": -0.068,
+      "cached": false
+    },
+    {
+      "ticker": "WMG",
+      "rs_score": -0.0688,
+      "cached": false
+    },
+    {
+      "ticker": "NVS",
+      "rs_score": -0.0692,
+      "cached": false
+    },
+    {
+      "ticker": "OLLI",
+      "rs_score": -0.0693,
+      "cached": false
+    },
+    {
+      "ticker": "SU",
+      "rs_score": -0.0694,
+      "cached": false
+    },
+    {
+      "ticker": "PG",
+      "rs_score": -0.0696,
+      "cached": false
+    },
+    {
+      "ticker": "NTES",
+      "rs_score": -0.0697,
+      "cached": false
+    },
+    {
+      "ticker": "ONB",
+      "rs_score": -0.0699,
+      "cached": false
+    },
+    {
+      "ticker": "PDO",
+      "rs_score": -0.0705,
+      "cached": false
+    },
+    {
+      "ticker": "BNS",
+      "rs_score": -0.0706,
+      "cached": false
+    },
+    {
+      "ticker": "SPGI",
+      "rs_score": -0.0707,
+      "cached": false
+    },
+    {
+      "ticker": "SMG",
+      "rs_score": -0.071,
+      "cached": false
+    },
+    {
+      "ticker": "IAUM",
+      "rs_score": -0.0712,
+      "cached": false
+    },
+    {
+      "ticker": "PHYS",
+      "rs_score": -0.0713,
+      "cached": false
+    },
+    {
+      "ticker": "GLDM",
+      "rs_score": -0.0715,
+      "cached": false
+    },
+    {
+      "ticker": "TENB",
+      "rs_score": -0.0716,
+      "cached": false
+    },
+    {
+      "ticker": "SGOL",
+      "rs_score": -0.0718,
+      "cached": false
+    },
+    {
+      "ticker": "OUNZ",
+      "rs_score": -0.0719,
+      "cached": false
+    },
+    {
+      "ticker": "BAR",
+      "rs_score": -0.0721,
+      "cached": false
+    },
+    {
+      "ticker": "NDAQ",
+      "rs_score": -0.0724,
+      "cached": false
+    },
+    {
+      "ticker": "SFNC",
+      "rs_score": -0.0725,
+      "cached": false
+    },
+    {
+      "ticker": "IAU",
+      "rs_score": -0.0728,
+      "cached": false
+    },
+    {
+      "ticker": "BMO",
+      "rs_score": -0.0735,
+      "cached": false
+    },
+    {
+      "ticker": "GCMG",
+      "rs_score": -0.0735,
+      "cached": false
+    },
+    {
+      "ticker": "TYL",
+      "rs_score": -0.0737,
+      "cached": false
+    },
+    {
+      "ticker": "YUM",
+      "rs_score": -0.074,
+      "cached": true
+    },
+    {
+      "ticker": "EMN",
+      "rs_score": -0.074,
+      "cached": false
+    },
+    {
+      "ticker": "NVRI",
+      "rs_score": -0.0744,
+      "cached": false
+    },
+    {
+      "ticker": "EPD",
+      "rs_score": -0.0748,
+      "cached": false
+    },
+    {
+      "ticker": "ZIM",
+      "rs_score": -0.075,
+      "cached": false
+    },
+    {
+      "ticker": "NLY",
+      "rs_score": -0.0753,
+      "cached": false
+    },
+    {
+      "ticker": "KNTK",
+      "rs_score": -0.0754,
+      "cached": false
+    },
+    {
+      "ticker": "SKM",
+      "rs_score": -0.0756,
+      "cached": false
+    },
+    {
+      "ticker": "RF",
+      "rs_score": -0.0765,
+      "cached": false
+    },
+    {
+      "ticker": "AGNC",
+      "rs_score": -0.0765,
+      "cached": false
+    },
+    {
+      "ticker": "ASH",
+      "rs_score": -0.0767,
+      "cached": false
+    },
+    {
+      "ticker": "GOOGL",
+      "rs_score": -0.0773,
+      "cached": true
+    },
+    {
+      "ticker": "CF",
+      "rs_score": -0.0775,
+      "cached": false
+    },
+    {
+      "ticker": "DINO",
+      "rs_score": -0.0775,
+      "cached": false
+    },
+    {
+      "ticker": "GOOG",
+      "rs_score": -0.0777,
+      "cached": false
+    },
+    {
+      "ticker": "ROIV",
+      "rs_score": -0.0781,
+      "cached": false
+    },
+    {
+      "ticker": "CNO",
+      "rs_score": -0.0792,
+      "cached": false
+    },
+    {
+      "ticker": "ISSC",
+      "rs_score": -0.0792,
+      "cached": false
+    },
+    {
+      "ticker": "ATMU",
+      "rs_score": -0.0799,
+      "cached": false
+    },
+    {
+      "ticker": "OMC",
+      "rs_score": -0.0801,
+      "cached": false
+    },
+    {
+      "ticker": "GTLB",
+      "rs_score": -0.0801,
+      "cached": false
+    },
+    {
+      "ticker": "ESS",
+      "rs_score": -0.0805,
+      "cached": false
+    },
+    {
+      "ticker": "GMED",
+      "rs_score": -0.0806,
+      "cached": false
+    },
+    {
+      "ticker": "UCO",
+      "rs_score": -0.0809,
+      "cached": false
+    },
+    {
+      "ticker": "FDS",
+      "rs_score": -0.0814,
+      "cached": false
+    },
+    {
+      "ticker": "WKC",
+      "rs_score": -0.0817,
+      "cached": false
+    },
+    {
+      "ticker": "PRAA",
+      "rs_score": -0.0817,
+      "cached": false
+    },
+    {
+      "ticker": "KBR",
+      "rs_score": -0.0822,
+      "cached": false
+    },
+    {
+      "ticker": "RY",
+      "rs_score": -0.0825,
+      "cached": false
+    },
+    {
+      "ticker": "JBHT",
+      "rs_score": -0.0828,
+      "cached": false
+    },
+    {
+      "ticker": "SSNC",
+      "rs_score": -0.0831,
+      "cached": false
+    },
+    {
+      "ticker": "AL",
+      "rs_score": -0.0832,
+      "cached": false
+    },
+    {
+      "ticker": "CHRD",
+      "rs_score": -0.0834,
+      "cached": false
+    },
+    {
+      "ticker": "CDE",
+      "rs_score": -0.0838,
+      "cached": false
+    },
+    {
+      "ticker": "RQI",
+      "rs_score": -0.0838,
+      "cached": false
+    },
+    {
+      "ticker": "DX",
+      "rs_score": -0.0841,
+      "cached": false
+    },
+    {
+      "ticker": "GFL",
+      "rs_score": -0.0848,
+      "cached": false
+    },
+    {
+      "ticker": "AVNT",
+      "rs_score": -0.085,
+      "cached": false
+    },
+    {
+      "ticker": "MIDD",
+      "rs_score": -0.0853,
+      "cached": false
+    },
+    {
+      "ticker": "LAUR",
+      "rs_score": -0.0853,
+      "cached": false
+    },
+    {
+      "ticker": "EXEL",
+      "rs_score": -0.0856,
+      "cached": false
+    },
+    {
+      "ticker": "REYN",
+      "rs_score": -0.0856,
+      "cached": false
+    },
+    {
+      "ticker": "JKHY",
+      "rs_score": -0.0863,
+      "cached": false
+    },
+    {
+      "ticker": "GLOB",
+      "rs_score": -0.0876,
+      "cached": false
+    },
+    {
+      "ticker": "ZBRA",
+      "rs_score": -0.0878,
+      "cached": false
+    },
+    {
+      "ticker": "ORI",
+      "rs_score": -0.0878,
+      "cached": false
+    },
+    {
+      "ticker": "AVO",
+      "rs_score": -0.0879,
+      "cached": false
+    },
+    {
+      "ticker": "PDD",
+      "rs_score": -0.0883,
+      "cached": false
+    },
+    {
+      "ticker": "BC",
+      "rs_score": -0.0883,
+      "cached": false
+    },
+    {
+      "ticker": "MUX",
+      "rs_score": -0.0884,
+      "cached": false
+    },
+    {
+      "ticker": "BUSE",
+      "rs_score": -0.0885,
+      "cached": false
+    },
+    {
+      "ticker": "ALM",
+      "rs_score": -0.0894,
+      "cached": false
+    },
+    {
+      "ticker": "CEF",
+      "rs_score": -0.0897,
+      "cached": false
+    },
+    {
+      "ticker": "RNG",
+      "rs_score": -0.0901,
+      "cached": true
+    },
+    {
+      "ticker": "RELY",
+      "rs_score": -0.0903,
+      "cached": false
+    },
+    {
+      "ticker": "BNO",
+      "rs_score": -0.0903,
+      "cached": false
+    },
+    {
+      "ticker": "EXR",
+      "rs_score": -0.0906,
+      "cached": false
+    },
+    {
+      "ticker": "BEN",
+      "rs_score": -0.0907,
+      "cached": false
+    },
+    {
+      "ticker": "BZ",
+      "rs_score": -0.0907,
+      "cached": false
+    },
+    {
+      "ticker": "EXLS",
+      "rs_score": -0.0908,
+      "cached": false
+    },
+    {
+      "ticker": "PPTA",
+      "rs_score": -0.0909,
+      "cached": false
+    },
+    {
+      "ticker": "LYB",
+      "rs_score": -0.0912,
+      "cached": false
+    },
+    {
+      "ticker": "AMH",
+      "rs_score": -0.0912,
+      "cached": false
+    },
+    {
+      "ticker": "FLR",
+      "rs_score": -0.0916,
+      "cached": false
+    },
+    {
+      "ticker": "STZ",
+      "rs_score": -0.0921,
+      "cached": false
+    },
+    {
+      "ticker": "FIVE",
+      "rs_score": -0.0921,
+      "cached": false
+    },
+    {
+      "ticker": "OZK",
+      "rs_score": -0.0923,
+      "cached": false
+    },
+    {
+      "ticker": "OPLN",
+      "rs_score": -0.0923,
+      "cached": false
+    },
+    {
+      "ticker": "TEL",
+      "rs_score": -0.0924,
+      "cached": false
+    },
+    {
+      "ticker": "AAP",
+      "rs_score": -0.0924,
+      "cached": false
+    },
+    {
+      "ticker": "AGI",
+      "rs_score": -0.0926,
+      "cached": false
+    },
+    {
+      "ticker": "MELI",
+      "rs_score": -0.0927,
+      "cached": true
+    },
+    {
+      "ticker": "UE",
+      "rs_score": -0.0946,
+      "cached": false
+    },
+    {
+      "ticker": "SLAB",
+      "rs_score": -0.0947,
+      "cached": false
+    },
+    {
+      "ticker": "ARI",
+      "rs_score": -0.0947,
+      "cached": false
+    },
+    {
+      "ticker": "HEI",
+      "rs_score": -0.0954,
+      "cached": false
+    },
+    {
+      "ticker": "NVG",
+      "rs_score": -0.0955,
+      "cached": false
+    },
+    {
+      "ticker": "CTVA",
+      "rs_score": -0.0959,
+      "cached": false
+    },
+    {
+      "ticker": "IONQ",
+      "rs_score": -0.0965,
+      "cached": false
+    },
+    {
+      "ticker": "KRP",
+      "rs_score": -0.0968,
+      "cached": false
+    },
+    {
+      "ticker": "MITK",
+      "rs_score": -0.097,
+      "cached": false
+    },
+    {
+      "ticker": "STAG",
+      "rs_score": -0.0972,
+      "cached": false
+    },
+    {
+      "ticker": "UPWK",
+      "rs_score": -0.0973,
+      "cached": false
+    },
+    {
+      "ticker": "CSGP",
+      "rs_score": -0.098,
+      "cached": false
+    },
+    {
+      "ticker": "ELV",
+      "rs_score": -0.0984,
+      "cached": true
+    },
+    {
+      "ticker": "STWD",
+      "rs_score": -0.0984,
+      "cached": false
+    },
+    {
+      "ticker": "TTMI",
+      "rs_score": -0.0985,
+      "cached": false
+    },
+    {
+      "ticker": "FWONK",
+      "rs_score": -0.0987,
+      "cached": false
+    },
+    {
+      "ticker": "PHG",
+      "rs_score": -0.0999,
+      "cached": false
+    },
+    {
+      "ticker": "SNX",
+      "rs_score": -0.1,
+      "cached": false
+    },
+    {
+      "ticker": "ADI",
+      "rs_score": -0.1002,
+      "cached": false
+    },
+    {
+      "ticker": "ING",
+      "rs_score": -0.1004,
+      "cached": false
+    },
+    {
+      "ticker": "NZF",
+      "rs_score": -0.1005,
+      "cached": false
+    },
+    {
+      "ticker": "SPSC",
+      "rs_score": -0.1005,
+      "cached": false
+    },
+    {
+      "ticker": "MCHP",
+      "rs_score": -0.1008,
+      "cached": false
+    },
+    {
+      "ticker": "CUZ",
+      "rs_score": -0.1011,
+      "cached": false
+    },
+    {
+      "ticker": "MASI",
+      "rs_score": -0.1013,
+      "cached": false
+    },
+    {
+      "ticker": "ERO",
+      "rs_score": -0.1014,
+      "cached": false
+    },
+    {
+      "ticker": "CUBE",
+      "rs_score": -0.1015,
+      "cached": false
+    },
+    {
+      "ticker": "ALMU",
+      "rs_score": -0.1015,
+      "cached": false
+    },
+    {
+      "ticker": "TER",
+      "rs_score": -0.102,
+      "cached": false
+    },
+    {
+      "ticker": "TIGO",
+      "rs_score": -0.1022,
+      "cached": false
+    },
+    {
+      "ticker": "MDT",
+      "rs_score": -0.1027,
+      "cached": true
+    },
+    {
+      "ticker": "MNST",
+      "rs_score": -0.1028,
+      "cached": false
+    },
+    {
+      "ticker": "T",
+      "rs_score": -0.1035,
+      "cached": true
+    },
+    {
+      "ticker": "WYNN",
+      "rs_score": -0.1039,
+      "cached": false
+    },
+    {
+      "ticker": "MSCI",
+      "rs_score": -0.104,
+      "cached": false
+    },
+    {
+      "ticker": "PFG",
+      "rs_score": -0.104,
+      "cached": false
+    },
+    {
+      "ticker": "THO",
+      "rs_score": -0.104,
+      "cached": false
+    },
+    {
+      "ticker": "AXTA",
+      "rs_score": -0.1043,
+      "cached": false
+    },
+    {
+      "ticker": "TRNO",
+      "rs_score": -0.1044,
+      "cached": false
+    },
+    {
+      "ticker": "INVH",
+      "rs_score": -0.1045,
+      "cached": false
+    },
+    {
+      "ticker": "EA",
+      "rs_score": -0.1048,
+      "cached": false
+    },
+    {
+      "ticker": "RBLX",
+      "rs_score": -0.1048,
+      "cached": false
+    },
+    {
+      "ticker": "TRP",
+      "rs_score": -0.1058,
+      "cached": false
+    },
+    {
+      "ticker": "VIRT",
+      "rs_score": -0.1064,
+      "cached": false
+    },
+    {
+      "ticker": "LSCC",
+      "rs_score": -0.1068,
+      "cached": false
+    },
+    {
+      "ticker": "DLO",
+      "rs_score": -0.1071,
+      "cached": false
+    },
+    {
+      "ticker": "DG",
+      "rs_score": -0.1074,
+      "cached": true
+    },
+    {
+      "ticker": "TRN",
+      "rs_score": -0.1082,
+      "cached": false
+    },
+    {
+      "ticker": "AMT",
+      "rs_score": -0.1083,
+      "cached": false
+    },
+    {
+      "ticker": "RNST",
+      "rs_score": -0.1083,
+      "cached": false
+    },
+    {
+      "ticker": "FHB",
+      "rs_score": -0.1084,
+      "cached": false
+    },
+    {
+      "ticker": "TEX",
+      "rs_score": -0.1086,
+      "cached": false
+    },
+    {
+      "ticker": "STVN",
+      "rs_score": -0.1092,
+      "cached": false
+    },
+    {
+      "ticker": "LH",
+      "rs_score": -0.1094,
+      "cached": false
+    },
+    {
+      "ticker": "HXL",
+      "rs_score": -0.11,
+      "cached": false
+    },
+    {
+      "ticker": "APLE",
+      "rs_score": -0.11,
+      "cached": false
+    },
+    {
+      "ticker": "ADP",
+      "rs_score": -0.1102,
+      "cached": false
+    },
+    {
+      "ticker": "LC",
+      "rs_score": -0.1104,
+      "cached": false
+    },
+    {
+      "ticker": "PHR",
+      "rs_score": -0.1107,
+      "cached": false
+    },
+    {
+      "ticker": "AVB",
+      "rs_score": -0.1108,
+      "cached": false
+    },
+    {
+      "ticker": "VRSK",
+      "rs_score": -0.1112,
+      "cached": false
+    },
+    {
+      "ticker": "NMZ",
+      "rs_score": -0.1117,
+      "cached": false
+    },
+    {
+      "ticker": "RMD",
+      "rs_score": -0.1118,
+      "cached": false
+    },
+    {
+      "ticker": "PEG",
+      "rs_score": -0.1119,
+      "cached": false
+    },
+    {
+      "ticker": "DTE",
+      "rs_score": -0.112,
+      "cached": false
+    },
+    {
+      "ticker": "OLED",
+      "rs_score": -0.112,
+      "cached": false
+    },
+    {
+      "ticker": "NAC",
+      "rs_score": -0.1123,
+      "cached": false
+    },
+    {
+      "ticker": "MSM",
+      "rs_score": -0.1133,
+      "cached": false
+    },
+    {
+      "ticker": "MMSI",
+      "rs_score": -0.1133,
+      "cached": false
+    },
+    {
+      "ticker": "TECH",
+      "rs_score": -0.1134,
+      "cached": false
+    },
+    {
+      "ticker": "HLN",
+      "rs_score": -0.1135,
+      "cached": false
+    },
+    {
+      "ticker": "TAP",
+      "rs_score": -0.1137,
+      "cached": false
+    },
+    {
+      "ticker": "TTE",
+      "rs_score": -0.1138,
+      "cached": false
+    },
+    {
+      "ticker": "KMI",
+      "rs_score": -0.1139,
+      "cached": false
+    },
+    {
+      "ticker": "BBY",
+      "rs_score": -0.1141,
+      "cached": false
+    },
+    {
+      "ticker": "HALO",
+      "rs_score": -0.1145,
+      "cached": false
+    },
+    {
+      "ticker": "PECO",
+      "rs_score": -0.1148,
+      "cached": false
+    },
+    {
+      "ticker": "NGG",
+      "rs_score": -0.1153,
+      "cached": false
+    },
+    {
+      "ticker": "UBSI",
+      "rs_score": -0.1153,
+      "cached": false
+    },
+    {
+      "ticker": "HPQ",
+      "rs_score": -0.1154,
+      "cached": false
+    },
+    {
+      "ticker": "USAR",
+      "rs_score": -0.1154,
+      "cached": false
+    },
+    {
+      "ticker": "WHD",
+      "rs_score": -0.1165,
+      "cached": false
+    },
+    {
+      "ticker": "BXP",
+      "rs_score": -0.1175,
+      "cached": false
+    },
+    {
+      "ticker": "PSA",
+      "rs_score": -0.118,
+      "cached": false
+    },
+    {
+      "ticker": "TECK",
+      "rs_score": -0.1183,
+      "cached": false
+    },
+    {
+      "ticker": "F",
+      "rs_score": -0.1195,
+      "cached": false
+    },
+    {
+      "ticker": "DAL",
+      "rs_score": -0.12,
+      "cached": false
+    },
+    {
+      "ticker": "SHEL",
+      "rs_score": -0.1209,
+      "cached": false
+    },
+    {
+      "ticker": "PPL",
+      "rs_score": -0.1212,
+      "cached": false
+    },
+    {
+      "ticker": "JCI",
+      "rs_score": -0.1222,
+      "cached": false
+    },
+    {
+      "ticker": "KRC",
+      "rs_score": -0.1222,
+      "cached": false
+    },
+    {
+      "ticker": "LEGN",
+      "rs_score": -0.1222,
+      "cached": false
+    },
+    {
+      "ticker": "WSC",
+      "rs_score": -0.1223,
+      "cached": false
+    },
+    {
+      "ticker": "FCX",
+      "rs_score": -0.1226,
+      "cached": true
+    },
+    {
+      "ticker": "SIGI",
+      "rs_score": -0.1226,
+      "cached": false
+    },
+    {
+      "ticker": "DOCS",
+      "rs_score": -0.1226,
+      "cached": false
+    },
+    {
+      "ticker": "TXN",
+      "rs_score": -0.1231,
+      "cached": true
+    },
+    {
+      "ticker": "NSA",
+      "rs_score": -0.1231,
+      "cached": false
+    },
+    {
+      "ticker": "IP",
+      "rs_score": -0.1232,
+      "cached": false
+    },
+    {
+      "ticker": "OHI",
+      "rs_score": -0.1232,
+      "cached": false
+    },
+    {
+      "ticker": "HP",
+      "rs_score": -0.1232,
+      "cached": false
+    },
+    {
+      "ticker": "EQR",
+      "rs_score": -0.1243,
+      "cached": false
+    },
+    {
+      "ticker": "GIL",
+      "rs_score": -0.1245,
+      "cached": false
+    },
+    {
+      "ticker": "NEA",
+      "rs_score": -0.1248,
+      "cached": false
+    },
+    {
+      "ticker": "CWK",
+      "rs_score": -0.1248,
+      "cached": false
+    },
+    {
+      "ticker": "HOMB",
+      "rs_score": -0.1249,
+      "cached": false
+    },
+    {
+      "ticker": "NCNO",
+      "rs_score": -0.125,
+      "cached": false
+    },
+    {
+      "ticker": "FR",
+      "rs_score": -0.1252,
+      "cached": false
+    },
+    {
+      "ticker": "SIVR",
+      "rs_score": -0.1256,
+      "cached": false
+    },
+    {
+      "ticker": "BIRK",
+      "rs_score": -0.1259,
+      "cached": false
+    },
+    {
+      "ticker": "TERN",
+      "rs_score": -0.1259,
+      "cached": false
+    },
+    {
+      "ticker": "CLX",
+      "rs_score": -0.1261,
+      "cached": false
+    },
+    {
+      "ticker": "DOCU",
+      "rs_score": -0.1264,
+      "cached": false
+    },
+    {
+      "ticker": "CMCSA",
+      "rs_score": -0.1267,
+      "cached": false
+    },
+    {
+      "ticker": "DOX",
+      "rs_score": -0.127,
+      "cached": false
+    },
+    {
+      "ticker": "NOG",
+      "rs_score": -0.1271,
+      "cached": false
+    },
+    {
+      "ticker": "MCD",
+      "rs_score": -0.1272,
+      "cached": true
+    },
+    {
+      "ticker": "WRBY",
+      "rs_score": -0.1272,
+      "cached": false
+    },
+    {
+      "ticker": "FRT",
+      "rs_score": -0.1273,
+      "cached": false
+    },
+    {
+      "ticker": "LADR",
+      "rs_score": -0.1273,
+      "cached": false
+    },
+    {
+      "ticker": "PAX",
+      "rs_score": -0.1276,
+      "cached": false
+    },
+    {
+      "ticker": "RHI",
+      "rs_score": -0.1281,
+      "cached": false
+    },
+    {
+      "ticker": "TGTX",
+      "rs_score": -0.1284,
+      "cached": false
+    },
+    {
+      "ticker": "CVS",
+      "rs_score": -0.1286,
+      "cached": true
+    },
+    {
+      "ticker": "CCOI",
+      "rs_score": -0.1288,
+      "cached": false
+    },
+    {
+      "ticker": "CFR",
+      "rs_score": -0.1293,
+      "cached": false
+    },
+    {
+      "ticker": "HWC",
+      "rs_score": -0.1293,
+      "cached": false
+    },
+    {
+      "ticker": "ARE",
+      "rs_score": -0.1296,
+      "cached": false
+    },
+    {
+      "ticker": "HGV",
+      "rs_score": -0.1298,
+      "cached": false
+    },
+    {
+      "ticker": "BRX",
+      "rs_score": -0.1301,
+      "cached": false
+    },
+    {
+      "ticker": "RVTY",
+      "rs_score": -0.1302,
+      "cached": false
+    },
+    {
+      "ticker": "EXE",
+      "rs_score": -0.1304,
+      "cached": false
+    },
+    {
+      "ticker": "OCSL",
+      "rs_score": -0.1306,
+      "cached": false
+    },
+    {
+      "ticker": "DK",
+      "rs_score": -0.1307,
+      "cached": false
+    },
+    {
+      "ticker": "APLD",
+      "rs_score": -0.1308,
+      "cached": false
+    },
+    {
+      "ticker": "NNN",
+      "rs_score": -0.1309,
+      "cached": false
+    },
+    {
+      "ticker": "NAD",
+      "rs_score": -0.1309,
+      "cached": false
+    },
+    {
+      "ticker": "CTRA",
+      "rs_score": -0.1315,
+      "cached": false
+    },
+    {
+      "ticker": "KEYS",
+      "rs_score": -0.132,
+      "cached": false
+    },
+    {
+      "ticker": "GOF",
+      "rs_score": -0.1327,
+      "cached": false
+    },
+    {
+      "ticker": "ORCL",
+      "rs_score": -0.1329,
+      "cached": true
+    },
+    {
+      "ticker": "NTRS",
+      "rs_score": -0.133,
+      "cached": false
+    },
+    {
+      "ticker": "ETR",
+      "rs_score": -0.1332,
+      "cached": false
+    },
+    {
+      "ticker": "CMS",
+      "rs_score": -0.1335,
+      "cached": false
+    },
+    {
+      "ticker": "ALKS",
+      "rs_score": -0.1335,
+      "cached": false
+    },
+    {
+      "ticker": "ACM",
+      "rs_score": -0.1339,
+      "cached": false
+    },
+    {
+      "ticker": "ERIC",
+      "rs_score": -0.1341,
+      "cached": false
+    },
+    {
+      "ticker": "HOLX",
+      "rs_score": -0.1345,
+      "cached": false
+    },
+    {
+      "ticker": "RTX",
+      "rs_score": -0.1348,
+      "cached": true
+    },
+    {
+      "ticker": "SUI",
+      "rs_score": -0.1348,
+      "cached": false
+    },
+    {
+      "ticker": "MS",
+      "rs_score": -0.1349,
+      "cached": true
+    },
+    {
+      "ticker": "GSG",
+      "rs_score": -0.1351,
+      "cached": false
+    },
+    {
+      "ticker": "MMS",
+      "rs_score": -0.1352,
+      "cached": false
+    },
+    {
+      "ticker": "FUN",
+      "rs_score": -0.1358,
+      "cached": false
+    },
+    {
+      "ticker": "XNCR",
+      "rs_score": -0.1358,
+      "cached": false
+    },
+    {
+      "ticker": "FSK",
+      "rs_score": -0.136,
+      "cached": false
+    },
+    {
+      "ticker": "BUD",
+      "rs_score": -0.1367,
+      "cached": false
+    },
+    {
+      "ticker": "TSN",
+      "rs_score": -0.1368,
+      "cached": false
+    },
+    {
+      "ticker": "HUN",
+      "rs_score": -0.1374,
+      "cached": false
+    },
+    {
+      "ticker": "SWK",
+      "rs_score": -0.1376,
+      "cached": false
+    },
+    {
+      "ticker": "HUBG",
+      "rs_score": -0.138,
+      "cached": false
+    },
+    {
+      "ticker": "EXPD",
+      "rs_score": -0.1382,
+      "cached": false
+    },
+    {
+      "ticker": "HON",
+      "rs_score": -0.1394,
+      "cached": true
+    },
+    {
+      "ticker": "XOM",
+      "rs_score": -0.1395,
+      "cached": true
+    },
+    {
+      "ticker": "SGHC",
+      "rs_score": -0.1398,
+      "cached": false
+    },
+    {
+      "ticker": "BROS",
+      "rs_score": -0.1405,
+      "cached": false
+    },
+    {
+      "ticker": "AEP",
+      "rs_score": -0.1412,
+      "cached": false
+    },
+    {
+      "ticker": "TTWO",
+      "rs_score": -0.1419,
+      "cached": false
+    },
+    {
+      "ticker": "ENB",
+      "rs_score": -0.1422,
+      "cached": false
+    },
+    {
+      "ticker": "DUK",
+      "rs_score": -0.1423,
+      "cached": false
+    },
+    {
+      "ticker": "GPC",
+      "rs_score": -0.1423,
+      "cached": false
+    },
+    {
+      "ticker": "HSBC",
+      "rs_score": -0.1424,
+      "cached": false
+    },
+    {
+      "ticker": "EIX",
+      "rs_score": -0.1426,
+      "cached": false
+    },
+    {
+      "ticker": "CBSH",
+      "rs_score": -0.1426,
+      "cached": false
+    },
+    {
+      "ticker": "CRC",
+      "rs_score": -0.1428,
+      "cached": false
+    },
+    {
+      "ticker": "IRT",
+      "rs_score": -0.1432,
+      "cached": false
+    },
+    {
+      "ticker": "EPRT",
+      "rs_score": -0.1442,
+      "cached": false
+    },
+    {
+      "ticker": "COP",
+      "rs_score": -0.1443,
+      "cached": false
+    },
+    {
+      "ticker": "IFF",
+      "rs_score": -0.1445,
+      "cached": false
+    },
+    {
+      "ticker": "GTLS",
+      "rs_score": -0.1446,
+      "cached": false
+    },
+    {
+      "ticker": "NE",
+      "rs_score": -0.1447,
+      "cached": false
+    },
+    {
+      "ticker": "ZTS",
+      "rs_score": -0.1451,
+      "cached": false
+    },
+    {
+      "ticker": "AGQ",
+      "rs_score": -0.1451,
+      "cached": false
+    },
+    {
+      "ticker": "ZBH",
+      "rs_score": -0.1452,
+      "cached": false
+    },
+    {
+      "ticker": "MAT",
+      "rs_score": -0.1453,
+      "cached": false
+    },
+    {
+      "ticker": "LKQ",
+      "rs_score": -0.1457,
+      "cached": false
+    },
+    {
+      "ticker": "HASI",
+      "rs_score": -0.1459,
+      "cached": false
+    },
+    {
+      "ticker": "FDX",
+      "rs_score": -0.146,
+      "cached": false
+    },
+    {
+      "ticker": "PAYX",
+      "rs_score": -0.146,
+      "cached": false
+    },
+    {
+      "ticker": "BSY",
+      "rs_score": -0.1463,
+      "cached": false
+    },
+    {
+      "ticker": "OKLO",
+      "rs_score": -0.1469,
+      "cached": false
+    },
+    {
+      "ticker": "PB",
+      "rs_score": -0.1469,
+      "cached": false
+    },
+    {
+      "ticker": "AXSM",
+      "rs_score": -0.1471,
+      "cached": false
+    },
+    {
+      "ticker": "MDLZ",
+      "rs_score": -0.1475,
+      "cached": false
+    },
+    {
+      "ticker": "IVZ",
+      "rs_score": -0.1475,
+      "cached": false
+    },
+    {
+      "ticker": "PSLV",
+      "rs_score": -0.1476,
+      "cached": false
+    },
+    {
+      "ticker": "LVS",
+      "rs_score": -0.1481,
+      "cached": false
+    },
+    {
+      "ticker": "BXMT",
+      "rs_score": -0.1485,
+      "cached": false
+    },
+    {
+      "ticker": "NYT",
+      "rs_score": -0.1488,
+      "cached": false
+    },
+    {
+      "ticker": "WST",
+      "rs_score": -0.1489,
+      "cached": false
+    },
+    {
+      "ticker": "ORLA",
+      "rs_score": -0.149,
+      "cached": false
+    },
+    {
+      "ticker": "GPCR",
+      "rs_score": -0.149,
+      "cached": false
+    },
+    {
+      "ticker": "LSTR",
+      "rs_score": -0.1491,
+      "cached": false
+    },
+    {
+      "ticker": "FE",
+      "rs_score": -0.1493,
+      "cached": false
+    },
+    {
+      "ticker": "FFBC",
+      "rs_score": -0.1495,
+      "cached": false
+    },
+    {
+      "ticker": "RCI",
+      "rs_score": -0.1498,
+      "cached": false
+    },
+    {
+      "ticker": "BKU",
+      "rs_score": -0.1498,
+      "cached": false
+    },
+    {
+      "ticker": "JNJ",
+      "rs_score": -0.1499,
+      "cached": false
+    },
+    {
+      "ticker": "NWBI",
+      "rs_score": -0.15,
+      "cached": false
+    },
+    {
+      "ticker": "TD",
+      "rs_score": -0.1502,
+      "cached": false
+    },
+    {
+      "ticker": "RTO",
+      "rs_score": -0.1506,
+      "cached": false
+    },
+    {
+      "ticker": "HAL",
+      "rs_score": -0.1509,
+      "cached": true
+    },
+    {
+      "ticker": "AEIS",
+      "rs_score": -0.151,
+      "cached": false
+    },
+    {
+      "ticker": "OPCH",
+      "rs_score": -0.1518,
+      "cached": false
+    },
+    {
+      "ticker": "SWKS",
+      "rs_score": -0.1524,
+      "cached": false
+    },
+    {
+      "ticker": "OII",
+      "rs_score": -0.1528,
+      "cached": false
+    },
+    {
+      "ticker": "IONS",
+      "rs_score": -0.153,
+      "cached": false
+    },
+    {
+      "ticker": "DBO",
+      "rs_score": -0.1533,
+      "cached": false
+    },
+    {
+      "ticker": "CHH",
+      "rs_score": -0.1537,
+      "cached": false
+    },
+    {
+      "ticker": "CPER",
+      "rs_score": -0.1547,
+      "cached": false
+    },
+    {
+      "ticker": "FOLD",
+      "rs_score": -0.1552,
+      "cached": false
+    },
+    {
+      "ticker": "FHI",
+      "rs_score": -0.1563,
+      "cached": false
+    },
+    {
+      "ticker": "SON",
+      "rs_score": -0.1566,
+      "cached": false
+    },
+    {
+      "ticker": "COLM",
+      "rs_score": -0.1567,
+      "cached": false
+    },
+    {
+      "ticker": "ATO",
+      "rs_score": -0.1568,
+      "cached": false
+    },
+    {
+      "ticker": "EC",
+      "rs_score": -0.1568,
+      "cached": false
+    },
+    {
+      "ticker": "MUR",
+      "rs_score": -0.1571,
+      "cached": false
+    },
+    {
+      "ticker": "OXY",
+      "rs_score": -0.1573,
+      "cached": true
+    },
+    {
+      "ticker": "KIM",
+      "rs_score": -0.1574,
+      "cached": false
+    },
+    {
+      "ticker": "KN",
+      "rs_score": -0.1585,
+      "cached": false
+    },
+    {
+      "ticker": "LION",
+      "rs_score": -0.1587,
+      "cached": false
+    },
+    {
+      "ticker": "SMTC",
+      "rs_score": -0.1589,
+      "cached": false
+    },
+    {
+      "ticker": "PPG",
+      "rs_score": -0.1597,
+      "cached": false
+    },
+    {
+      "ticker": "QGEN",
+      "rs_score": -0.1606,
+      "cached": false
+    },
+    {
+      "ticker": "ATAT",
+      "rs_score": -0.1606,
+      "cached": false
+    },
+    {
+      "ticker": "NI",
+      "rs_score": -0.1608,
+      "cached": false
+    },
+    {
+      "ticker": "RXO",
+      "rs_score": -0.1611,
+      "cached": false
+    },
+    {
+      "ticker": "DV",
+      "rs_score": -0.1618,
+      "cached": false
+    },
+    {
+      "ticker": "ROK",
+      "rs_score": -0.1625,
+      "cached": true
+    },
+    {
+      "ticker": "EQT",
+      "rs_score": -0.1625,
+      "cached": false
+    },
+    {
+      "ticker": "KMB",
+      "rs_score": -0.1629,
+      "cached": false
+    },
+    {
+      "ticker": "TFSL",
+      "rs_score": -0.163,
+      "cached": false
+    },
+    {
+      "ticker": "CDP",
+      "rs_score": -0.163,
+      "cached": false
+    },
+    {
+      "ticker": "UL",
+      "rs_score": -0.1631,
+      "cached": false
+    },
+    {
+      "ticker": "PM",
+      "rs_score": -0.1633,
+      "cached": false
+    },
+    {
+      "ticker": "BP",
+      "rs_score": -0.1634,
+      "cached": false
+    },
+    {
+      "ticker": "ACAD",
+      "rs_score": -0.1636,
+      "cached": false
+    },
+    {
+      "ticker": "CPRI",
+      "rs_score": -0.1639,
+      "cached": false
+    },
+    {
+      "ticker": "MGM",
+      "rs_score": -0.1645,
+      "cached": false
+    },
+    {
+      "ticker": "MRNA",
+      "rs_score": -0.1647,
+      "cached": true
+    },
+    {
+      "ticker": "EOG",
+      "rs_score": -0.1648,
+      "cached": true
+    },
+    {
+      "ticker": "UDR",
+      "rs_score": -0.1648,
+      "cached": false
+    },
+    {
+      "ticker": "EQX",
+      "rs_score": -0.165,
+      "cached": false
+    },
+    {
+      "ticker": "LASR",
+      "rs_score": -0.1652,
+      "cached": false
+    },
+    {
+      "ticker": "KO",
+      "rs_score": -0.1655,
+      "cached": false
+    },
+    {
+      "ticker": "SBCF",
+      "rs_score": -0.1656,
+      "cached": false
+    },
+    {
+      "ticker": "UUP",
+      "rs_score": -0.1668,
+      "cached": false
+    },
+    {
+      "ticker": "SO",
+      "rs_score": -0.1669,
+      "cached": false
+    },
+    {
+      "ticker": "CVE",
+      "rs_score": -0.1671,
+      "cached": false
+    },
+    {
+      "ticker": "AVT",
+      "rs_score": -0.1673,
+      "cached": false
+    },
+    {
+      "ticker": "VOD",
+      "rs_score": -0.1677,
+      "cached": false
+    },
+    {
+      "ticker": "AZN",
+      "rs_score": -0.1682,
+      "cached": false
+    },
+    {
+      "ticker": "WH",
+      "rs_score": -0.1682,
+      "cached": false
+    },
+    {
+      "ticker": "SNN",
+      "rs_score": -0.1684,
+      "cached": false
+    },
+    {
+      "ticker": "COCO",
+      "rs_score": -0.1685,
+      "cached": false
+    },
+    {
+      "ticker": "KNX",
+      "rs_score": -0.1688,
+      "cached": false
+    },
+    {
+      "ticker": "WPM",
+      "rs_score": -0.1692,
+      "cached": false
+    },
+    {
+      "ticker": "EPR",
+      "rs_score": -0.1693,
+      "cached": false
+    },
+    {
+      "ticker": "HG",
+      "rs_score": -0.1715,
+      "cached": false
+    },
+    {
+      "ticker": "REG",
+      "rs_score": -0.1718,
+      "cached": false
+    },
+    {
+      "ticker": "MGA",
+      "rs_score": -0.1719,
+      "cached": false
+    },
+    {
+      "ticker": "TFPM",
+      "rs_score": -0.172,
+      "cached": false
+    },
+    {
+      "ticker": "CCI",
+      "rs_score": -0.1721,
+      "cached": false
+    },
+    {
+      "ticker": "NOC",
+      "rs_score": -0.173,
+      "cached": true
+    },
+    {
+      "ticker": "HSIC",
+      "rs_score": -0.1731,
+      "cached": false
+    },
+    {
+      "ticker": "GPGI",
+      "rs_score": -0.1731,
+      "cached": false
+    },
+    {
+      "ticker": "LBTYA",
+      "rs_score": -0.1735,
+      "cached": false
+    },
+    {
+      "ticker": "FTS",
+      "rs_score": -0.1736,
+      "cached": false
+    },
+    {
+      "ticker": "EBC",
+      "rs_score": -0.1736,
+      "cached": false
+    },
+    {
+      "ticker": "EPC",
+      "rs_score": -0.1738,
+      "cached": false
+    },
+    {
+      "ticker": "CPT",
+      "rs_score": -0.174,
+      "cached": false
+    },
+    {
+      "ticker": "BYD",
+      "rs_score": -0.1743,
+      "cached": false
+    },
+    {
+      "ticker": "APLS",
+      "rs_score": -0.1747,
+      "cached": false
+    },
+    {
+      "ticker": "RCUS",
+      "rs_score": -0.1748,
+      "cached": false
+    },
+    {
+      "ticker": "SOFI",
+      "rs_score": -0.1756,
+      "cached": false
+    },
+    {
+      "ticker": "WCC",
+      "rs_score": -0.1765,
+      "cached": false
+    },
+    {
+      "ticker": "XPRO",
+      "rs_score": -0.1769,
+      "cached": false
+    },
+    {
+      "ticker": "DD",
+      "rs_score": -0.1774,
+      "cached": false
+    },
+    {
+      "ticker": "AAL",
+      "rs_score": -0.1776,
+      "cached": false
+    },
+    {
+      "ticker": "FIBK",
+      "rs_score": -0.1781,
+      "cached": false
+    },
+    {
+      "ticker": "CNP",
+      "rs_score": -0.1788,
+      "cached": false
+    },
+    {
+      "ticker": "ZD",
+      "rs_score": -0.179,
+      "cached": false
+    },
+    {
+      "ticker": "TSEM",
+      "rs_score": -0.1794,
+      "cached": false
+    },
+    {
+      "ticker": "KRG",
+      "rs_score": -0.1798,
+      "cached": false
+    },
+    {
+      "ticker": "MO",
+      "rs_score": -0.18,
+      "cached": false
+    },
+    {
+      "ticker": "UPST",
+      "rs_score": -0.1807,
+      "cached": false
+    },
+    {
+      "ticker": "VAL",
+      "rs_score": -0.1808,
+      "cached": false
+    },
+    {
+      "ticker": "ELS",
+      "rs_score": -0.1821,
+      "cached": false
+    },
+    {
+      "ticker": "VTR",
+      "rs_score": -0.1822,
+      "cached": false
+    },
+    {
+      "ticker": "AON",
+      "rs_score": -0.1823,
+      "cached": false
+    },
+    {
+      "ticker": "IAC",
+      "rs_score": -0.1824,
+      "cached": false
+    },
+    {
+      "ticker": "SUPN",
+      "rs_score": -0.1825,
+      "cached": false
+    },
+    {
+      "ticker": "BIP",
+      "rs_score": -0.1826,
+      "cached": false
+    },
+    {
+      "ticker": "CSCO",
+      "rs_score": -0.1829,
+      "cached": true
+    },
+    {
+      "ticker": "REXR",
+      "rs_score": -0.1833,
+      "cached": false
+    },
+    {
+      "ticker": "CVBF",
+      "rs_score": -0.1837,
+      "cached": false
+    },
+    {
+      "ticker": "QFIN",
+      "rs_score": -0.1837,
+      "cached": false
+    },
+    {
+      "ticker": "RPRX",
+      "rs_score": -0.1841,
+      "cached": false
+    },
+    {
+      "ticker": "BDSX",
+      "rs_score": -0.1841,
+      "cached": false
+    },
+    {
+      "ticker": "AGRO",
+      "rs_score": -0.1849,
+      "cached": false
+    },
+    {
+      "ticker": "STM",
+      "rs_score": -0.185,
+      "cached": false
+    },
+    {
+      "ticker": "TKO",
+      "rs_score": -0.185,
+      "cached": false
+    },
+    {
+      "ticker": "ED",
+      "rs_score": -0.1854,
+      "cached": false
+    },
+    {
+      "ticker": "LBTYK",
+      "rs_score": -0.1858,
+      "cached": false
+    },
+    {
+      "ticker": "SLB",
+      "rs_score": -0.1862,
+      "cached": true
+    },
+    {
+      "ticker": "OTEX",
+      "rs_score": -0.1866,
+      "cached": false
+    },
+    {
+      "ticker": "SNY",
+      "rs_score": -0.1874,
+      "cached": false
+    },
+    {
+      "ticker": "NTST",
+      "rs_score": -0.1874,
+      "cached": false
+    },
+    {
+      "ticker": "LITE",
+      "rs_score": -0.1881,
+      "cached": false
+    },
+    {
+      "ticker": "BDX",
+      "rs_score": -0.1883,
+      "cached": false
+    },
+    {
+      "ticker": "WGO",
+      "rs_score": -0.1891,
+      "cached": false
+    },
+    {
+      "ticker": "CVX",
+      "rs_score": -0.1892,
+      "cached": true
+    },
+    {
+      "ticker": "YELP",
+      "rs_score": -0.1894,
+      "cached": false
+    },
+    {
+      "ticker": "THR",
+      "rs_score": -0.1898,
+      "cached": false
+    },
+    {
+      "ticker": "ATEN",
+      "rs_score": -0.1899,
+      "cached": false
+    },
+    {
+      "ticker": "D",
+      "rs_score": -0.19,
+      "cached": false
+    },
+    {
+      "ticker": "BKSY",
+      "rs_score": -0.1912,
+      "cached": false
+    },
+    {
+      "ticker": "SEE",
+      "rs_score": -0.1917,
+      "cached": false
+    },
+    {
+      "ticker": "GLBE",
+      "rs_score": -0.1919,
+      "cached": false
+    },
+    {
+      "ticker": "DBC",
+      "rs_score": -0.1919,
+      "cached": false
+    },
+    {
+      "ticker": "BBT",
+      "rs_score": -0.1919,
+      "cached": false
+    },
+    {
+      "ticker": "SVM",
+      "rs_score": -0.192,
+      "cached": false
+    },
+    {
+      "ticker": "MAA",
+      "rs_score": -0.1921,
+      "cached": false
+    },
+    {
+      "ticker": "SIRI",
+      "rs_score": -0.1922,
+      "cached": false
+    },
+    {
+      "ticker": "TBBK",
+      "rs_score": -0.1924,
+      "cached": false
+    },
+    {
+      "ticker": "LPTH",
+      "rs_score": -0.1927,
+      "cached": false
+    },
+    {
+      "ticker": "STT",
+      "rs_score": -0.1928,
+      "cached": false
+    },
+    {
+      "ticker": "FCF",
+      "rs_score": -0.1947,
+      "cached": false
+    },
+    {
+      "ticker": "BATL",
+      "rs_score": -0.195,
+      "cached": false
+    },
+    {
+      "ticker": "FMS",
+      "rs_score": -0.1952,
+      "cached": false
+    },
+    {
+      "ticker": "GNRC",
+      "rs_score": -0.1952,
+      "cached": false
+    },
+    {
+      "ticker": "MAN",
+      "rs_score": -0.1956,
+      "cached": false
+    },
+    {
+      "ticker": "AA",
+      "rs_score": -0.1959,
+      "cached": false
+    },
+    {
+      "ticker": "GLNG",
+      "rs_score": -0.1959,
+      "cached": false
+    },
+    {
+      "ticker": "KMT",
+      "rs_score": -0.1959,
+      "cached": false
+    },
+    {
+      "ticker": "TFX",
+      "rs_score": -0.196,
+      "cached": false
+    },
+    {
+      "ticker": "AMX",
+      "rs_score": -0.1964,
+      "cached": false
+    },
+    {
+      "ticker": "DVN",
+      "rs_score": -0.1966,
+      "cached": true
+    },
+    {
+      "ticker": "KHC",
+      "rs_score": -0.1971,
+      "cached": false
+    },
+    {
+      "ticker": "RIO",
+      "rs_score": -0.1977,
+      "cached": false
+    },
+    {
+      "ticker": "BHP",
+      "rs_score": -0.1978,
+      "cached": false
+    },
+    {
+      "ticker": "RH",
+      "rs_score": -0.1978,
+      "cached": false
+    },
+    {
+      "ticker": "NFG",
+      "rs_score": -0.1984,
+      "cached": false
+    },
+    {
+      "ticker": "VSH",
+      "rs_score": -0.1989,
+      "cached": false
+    },
+    {
+      "ticker": "TTC",
+      "rs_score": -0.1994,
+      "cached": false
+    },
+    {
+      "ticker": "SRE",
+      "rs_score": -0.2,
+      "cached": false
+    },
+    {
+      "ticker": "TLK",
+      "rs_score": -0.2001,
+      "cached": false
+    },
+    {
+      "ticker": "PRKS",
+      "rs_score": -0.2005,
+      "cached": false
+    },
+    {
+      "ticker": "ERAS",
+      "rs_score": -0.2009,
+      "cached": false
+    },
+    {
+      "ticker": "UGI",
+      "rs_score": -0.2014,
+      "cached": false
+    },
+    {
+      "ticker": "GILD",
+      "rs_score": -0.2018,
+      "cached": true
+    },
+    {
+      "ticker": "SKE",
+      "rs_score": -0.202,
+      "cached": false
+    },
+    {
+      "ticker": "SONY",
+      "rs_score": -0.2021,
+      "cached": false
+    },
+    {
+      "ticker": "FTDR",
+      "rs_score": -0.2028,
+      "cached": false
+    },
+    {
+      "ticker": "DLB",
+      "rs_score": -0.203,
+      "cached": false
+    },
+    {
+      "ticker": "DE",
+      "rs_score": -0.2037,
+      "cached": true
+    },
+    {
+      "ticker": "INCY",
+      "rs_score": -0.2039,
+      "cached": true
+    },
+    {
+      "ticker": "GSAT",
+      "rs_score": -0.2045,
+      "cached": false
+    },
+    {
+      "ticker": "TAK",
+      "rs_score": -0.2049,
+      "cached": false
+    },
+    {
+      "ticker": "CGAU",
+      "rs_score": -0.2052,
+      "cached": false
+    },
+    {
+      "ticker": "FPI",
+      "rs_score": -0.2056,
+      "cached": false
+    },
+    {
+      "ticker": "SLGN",
+      "rs_score": -0.206,
+      "cached": false
+    },
+    {
+      "ticker": "MTN",
+      "rs_score": -0.2063,
+      "cached": false
+    },
+    {
+      "ticker": "MT",
+      "rs_score": -0.2066,
+      "cached": false
+    },
+    {
+      "ticker": "OGE",
+      "rs_score": -0.2066,
+      "cached": false
+    },
+    {
+      "ticker": "UCB",
+      "rs_score": -0.207,
+      "cached": false
+    },
+    {
+      "ticker": "RYAM",
+      "rs_score": -0.2075,
+      "cached": false
+    },
+    {
+      "ticker": "PGNY",
+      "rs_score": -0.2077,
+      "cached": false
+    },
+    {
+      "ticker": "ELVN",
+      "rs_score": -0.2078,
+      "cached": false
+    },
+    {
+      "ticker": "FCPT",
+      "rs_score": -0.2087,
+      "cached": false
+    },
+    {
+      "ticker": "RGLD",
+      "rs_score": -0.2091,
+      "cached": false
+    },
+    {
+      "ticker": "PCG",
+      "rs_score": -0.2094,
+      "cached": false
+    },
+    {
+      "ticker": "AMCR",
+      "rs_score": -0.2096,
+      "cached": false
+    },
+    {
+      "ticker": "DEO",
+      "rs_score": -0.21,
+      "cached": false
+    },
+    {
+      "ticker": "ACI",
+      "rs_score": -0.2103,
+      "cached": false
+    },
+    {
+      "ticker": "VOYA",
+      "rs_score": -0.2104,
+      "cached": false
+    },
+    {
+      "ticker": "LMT",
+      "rs_score": -0.2112,
+      "cached": true
+    },
+    {
+      "ticker": "PLTM",
+      "rs_score": -0.2119,
+      "cached": false
+    },
+    {
+      "ticker": "ARR",
+      "rs_score": -0.2127,
+      "cached": false
+    },
+    {
+      "ticker": "STEL",
+      "rs_score": -0.213,
+      "cached": false
+    },
+    {
+      "ticker": "PPLT",
+      "rs_score": -0.2131,
+      "cached": false
+    },
+    {
+      "ticker": "HAS",
+      "rs_score": -0.2136,
+      "cached": false
+    },
+    {
+      "ticker": "KLIC",
+      "rs_score": -0.2138,
+      "cached": false
+    },
+    {
+      "ticker": "RLAY",
+      "rs_score": -0.214,
+      "cached": false
+    },
+    {
+      "ticker": "GLPI",
+      "rs_score": -0.2144,
+      "cached": false
+    },
+    {
+      "ticker": "LNT",
+      "rs_score": -0.2145,
+      "cached": false
+    },
+    {
+      "ticker": "TU",
+      "rs_score": -0.2146,
+      "cached": false
+    },
+    {
+      "ticker": "CRGY",
+      "rs_score": -0.2148,
+      "cached": false
+    },
+    {
+      "ticker": "LIND",
+      "rs_score": -0.2149,
+      "cached": false
+    },
+    {
+      "ticker": "MIRM",
+      "rs_score": -0.2151,
+      "cached": false
+    },
+    {
+      "ticker": "FSM",
+      "rs_score": -0.2153,
+      "cached": false
+    },
+    {
+      "ticker": "BKR",
+      "rs_score": -0.2155,
+      "cached": false
+    },
+    {
+      "ticker": "BTI",
+      "rs_score": -0.2159,
+      "cached": false
+    },
+    {
+      "ticker": "LXP",
+      "rs_score": -0.2159,
+      "cached": false
+    },
+    {
+      "ticker": "CWAN",
+      "rs_score": -0.216,
+      "cached": false
+    },
+    {
+      "ticker": "WAFD",
+      "rs_score": -0.2164,
+      "cached": false
+    },
+    {
+      "ticker": "DOLE",
+      "rs_score": -0.2166,
+      "cached": false
+    },
+    {
+      "ticker": "LNG",
+      "rs_score": -0.2169,
+      "cached": false
+    },
+    {
+      "ticker": "HTBK",
+      "rs_score": -0.2174,
+      "cached": false
+    },
+    {
+      "ticker": "HRL",
+      "rs_score": -0.218,
+      "cached": false
+    },
+    {
+      "ticker": "ABM",
+      "rs_score": -0.218,
+      "cached": false
+    },
+    {
+      "ticker": "FAF",
+      "rs_score": -0.2182,
+      "cached": false
+    },
+    {
+      "ticker": "PRGS",
+      "rs_score": -0.2188,
+      "cached": false
+    },
+    {
+      "ticker": "XRAY",
+      "rs_score": -0.219,
+      "cached": false
+    },
+    {
+      "ticker": "DBX",
+      "rs_score": -0.2191,
+      "cached": false
+    },
+    {
+      "ticker": "ENPH",
+      "rs_score": -0.2192,
+      "cached": true
+    },
+    {
+      "ticker": "MEOH",
+      "rs_score": -0.2195,
+      "cached": false
+    },
+    {
+      "ticker": "ADNT",
+      "rs_score": -0.2196,
+      "cached": false
+    },
+    {
+      "ticker": "BKH",
+      "rs_score": -0.2201,
+      "cached": false
+    },
+    {
+      "ticker": "KVUE",
+      "rs_score": -0.2204,
+      "cached": false
+    },
+    {
+      "ticker": "B",
+      "rs_score": -0.2208,
+      "cached": false
+    },
+    {
+      "ticker": "JBTM",
+      "rs_score": -0.2215,
+      "cached": false
+    },
+    {
+      "ticker": "DGX",
+      "rs_score": -0.2222,
+      "cached": false
+    },
+    {
+      "ticker": "PLNT",
+      "rs_score": -0.2228,
+      "cached": false
+    },
+    {
+      "ticker": "PCRX",
+      "rs_score": -0.223,
+      "cached": false
+    },
+    {
+      "ticker": "EVRG",
+      "rs_score": -0.2237,
+      "cached": false
+    },
+    {
+      "ticker": "WEC",
+      "rs_score": -0.224,
+      "cached": false
+    },
+    {
+      "ticker": "SEI",
+      "rs_score": -0.2241,
+      "cached": false
+    },
+    {
+      "ticker": "INSP",
+      "rs_score": -0.2242,
+      "cached": true
+    },
+    {
+      "ticker": "AAPL",
+      "rs_score": -0.2246,
+      "cached": true
+    },
+    {
+      "ticker": "ALEX",
+      "rs_score": -0.2252,
+      "cached": false
+    },
+    {
+      "ticker": "DT",
+      "rs_score": -0.2261,
+      "cached": false
+    },
+    {
+      "ticker": "EFC",
+      "rs_score": -0.2261,
+      "cached": false
+    },
+    {
+      "ticker": "ZM",
+      "rs_score": -0.2267,
+      "cached": false
+    },
+    {
+      "ticker": "DNP",
+      "rs_score": -0.2268,
+      "cached": false
+    },
+    {
+      "ticker": "PEP",
+      "rs_score": -0.2277,
+      "cached": false
+    },
+    {
+      "ticker": "BIPC",
+      "rs_score": -0.2282,
+      "cached": false
+    },
+    {
+      "ticker": "PZZA",
+      "rs_score": -0.2289,
+      "cached": false
+    },
+    {
+      "ticker": "PEN",
+      "rs_score": -0.23,
+      "cached": false
+    },
+    {
+      "ticker": "VAC",
+      "rs_score": -0.23,
+      "cached": false
+    },
+    {
+      "ticker": "NATL",
+      "rs_score": -0.231,
+      "cached": false
+    },
+    {
+      "ticker": "CTLP",
+      "rs_score": -0.231,
+      "cached": false
+    },
+    {
+      "ticker": "UNH",
+      "rs_score": -0.2314,
+      "cached": true
+    },
+    {
+      "ticker": "UPS",
+      "rs_score": -0.2321,
+      "cached": false
+    },
+    {
+      "ticker": "WDS",
+      "rs_score": -0.233,
+      "cached": false
+    },
+    {
+      "ticker": "TGNA",
+      "rs_score": -0.2337,
+      "cached": false
+    },
+    {
+      "ticker": "BMY",
+      "rs_score": -0.2339,
+      "cached": false
+    },
+    {
+      "ticker": "NJR",
+      "rs_score": -0.2344,
+      "cached": false
+    },
+    {
+      "ticker": "VICI",
+      "rs_score": -0.2352,
+      "cached": false
+    },
+    {
+      "ticker": "VRE",
+      "rs_score": -0.2352,
+      "cached": false
+    },
+    {
+      "ticker": "PCTY",
+      "rs_score": -0.2362,
+      "cached": false
+    },
+    {
+      "ticker": "ATRC",
+      "rs_score": -0.2363,
+      "cached": false
+    },
+    {
+      "ticker": "ES",
+      "rs_score": -0.2366,
+      "cached": false
+    },
+    {
+      "ticker": "HAE",
+      "rs_score": -0.2371,
+      "cached": false
+    },
+    {
+      "ticker": "POR",
+      "rs_score": -0.2376,
+      "cached": false
+    },
+    {
+      "ticker": "CPB",
+      "rs_score": -0.2382,
+      "cached": false
+    },
+    {
+      "ticker": "IMAX",
+      "rs_score": -0.2387,
+      "cached": false
+    },
+    {
+      "ticker": "O",
+      "rs_score": -0.2394,
+      "cached": false
+    },
+    {
+      "ticker": "ON",
+      "rs_score": -0.2394,
+      "cached": true
+    },
+    {
+      "ticker": "NOV",
+      "rs_score": -0.2404,
+      "cached": false
+    },
+    {
+      "ticker": "SBAC",
+      "rs_score": -0.2407,
+      "cached": false
+    },
+    {
+      "ticker": "SBUX",
+      "rs_score": -0.2408,
+      "cached": true
+    },
+    {
+      "ticker": "PRVA",
+      "rs_score": -0.2413,
+      "cached": false
+    },
+    {
+      "ticker": "AVA",
+      "rs_score": -0.2416,
+      "cached": false
+    },
+    {
+      "ticker": "ATHM",
+      "rs_score": -0.2416,
+      "cached": false
+    },
+    {
+      "ticker": "NWE",
+      "rs_score": -0.2418,
+      "cached": false
+    },
+    {
+      "ticker": "EXC",
+      "rs_score": -0.2422,
+      "cached": false
+    },
+    {
+      "ticker": "FSLR",
+      "rs_score": -0.2422,
+      "cached": true
+    },
+    {
+      "ticker": "KVYO",
+      "rs_score": -0.2437,
+      "cached": false
+    },
+    {
+      "ticker": "CLPT",
+      "rs_score": -0.2438,
+      "cached": false
+    },
+    {
+      "ticker": "UAL",
+      "rs_score": -0.2444,
+      "cached": false
+    },
+    {
+      "ticker": "PHAT",
+      "rs_score": -0.247,
+      "cached": false
+    },
+    {
+      "ticker": "WTRG",
+      "rs_score": -0.2471,
+      "cached": false
+    },
+    {
+      "ticker": "CGNX",
+      "rs_score": -0.2474,
+      "cached": false
+    },
+    {
+      "ticker": "PRGO",
+      "rs_score": -0.2474,
+      "cached": false
+    },
+    {
+      "ticker": "ALGM",
+      "rs_score": -0.2477,
+      "cached": false
+    },
+    {
+      "ticker": "SHC",
+      "rs_score": -0.2488,
+      "cached": false
+    },
+    {
+      "ticker": "ADC",
+      "rs_score": -0.2492,
+      "cached": false
+    },
+    {
+      "ticker": "MMM",
+      "rs_score": -0.2496,
+      "cached": false
+    },
+    {
+      "ticker": "EQNR",
+      "rs_score": -0.2499,
+      "cached": false
+    },
+    {
+      "ticker": "INTA",
+      "rs_score": -0.2501,
+      "cached": false
+    },
+    {
+      "ticker": "PYPL",
+      "rs_score": -0.2502,
+      "cached": true
+    },
+    {
+      "ticker": "AGCO",
+      "rs_score": -0.251,
+      "cached": false
+    },
+    {
+      "ticker": "VALE",
+      "rs_score": -0.2534,
+      "cached": false
+    },
+    {
+      "ticker": "MTCH",
+      "rs_score": -0.2534,
+      "cached": false
+    },
+    {
+      "ticker": "FOXA",
+      "rs_score": -0.2537,
+      "cached": false
+    },
+    {
+      "ticker": "GIS",
+      "rs_score": -0.255,
+      "cached": false
+    },
+    {
+      "ticker": "MNRO",
+      "rs_score": -0.2552,
+      "cached": false
+    },
+    {
+      "ticker": "CNH",
+      "rs_score": -0.2553,
+      "cached": false
+    },
+    {
+      "ticker": "LEU",
+      "rs_score": -0.2553,
+      "cached": false
+    },
+    {
+      "ticker": "OCFC",
+      "rs_score": -0.2554,
+      "cached": false
+    },
+    {
+      "ticker": "EL",
+      "rs_score": -0.256,
+      "cached": false
+    },
+    {
+      "ticker": "FNV",
+      "rs_score": -0.2564,
+      "cached": false
+    },
+    {
+      "ticker": "BABA",
+      "rs_score": -0.2569,
+      "cached": false
+    },
+    {
+      "ticker": "DNLI",
+      "rs_score": -0.2571,
+      "cached": false
+    },
+    {
+      "ticker": "BG",
+      "rs_score": -0.2575,
+      "cached": false
+    },
+    {
+      "ticker": "MKC",
+      "rs_score": -0.2576,
+      "cached": false
+    },
+    {
+      "ticker": "G",
+      "rs_score": -0.2584,
+      "cached": false
+    },
+    {
+      "ticker": "GOLD",
+      "rs_score": -0.2587,
+      "cached": false
+    },
+    {
+      "ticker": "BNL",
+      "rs_score": -0.2591,
+      "cached": false
+    },
+    {
+      "ticker": "HSY",
+      "rs_score": -0.2611,
+      "cached": false
+    },
+    {
+      "ticker": "TWLO",
+      "rs_score": -0.2619,
+      "cached": false
+    },
+    {
+      "ticker": "BMRN",
+      "rs_score": -0.2626,
+      "cached": false
+    },
+    {
+      "ticker": "BHF",
+      "rs_score": -0.2628,
+      "cached": false
+    },
+    {
+      "ticker": "WERN",
+      "rs_score": -0.2641,
+      "cached": false
+    },
+    {
+      "ticker": "WPP",
+      "rs_score": -0.2648,
+      "cached": false
+    },
+    {
+      "ticker": "AEE",
+      "rs_score": -0.265,
+      "cached": false
+    },
+    {
+      "ticker": "MRTN",
+      "rs_score": -0.2652,
+      "cached": false
+    },
+    {
+      "ticker": "CHDN",
+      "rs_score": -0.2653,
+      "cached": false
+    },
+    {
+      "ticker": "ST",
+      "rs_score": -0.2657,
+      "cached": false
+    },
+    {
+      "ticker": "JAZZ",
+      "rs_score": -0.2661,
+      "cached": false
+    },
+    {
+      "ticker": "VCYT",
+      "rs_score": -0.2672,
+      "cached": false
+    },
+    {
+      "ticker": "CAE",
+      "rs_score": -0.268,
+      "cached": false
+    },
+    {
+      "ticker": "YOU",
+      "rs_score": -0.2681,
+      "cached": false
+    },
+    {
+      "ticker": "BEP",
+      "rs_score": -0.2687,
+      "cached": false
+    },
+    {
+      "ticker": "ATEC",
+      "rs_score": -0.2687,
+      "cached": false
+    },
+    {
+      "ticker": "CORT",
+      "rs_score": -0.2689,
+      "cached": false
+    },
+    {
+      "ticker": "FOX",
+      "rs_score": -0.2689,
+      "cached": false
+    },
+    {
+      "ticker": "CAG",
+      "rs_score": -0.2693,
+      "cached": false
+    },
+    {
+      "ticker": "YETI",
+      "rs_score": -0.2696,
+      "cached": false
+    },
+    {
+      "ticker": "BF-B",
+      "rs_score": -0.2698,
+      "cached": false
+    },
+    {
+      "ticker": "PII",
+      "rs_score": -0.2699,
+      "cached": false
+    },
+    {
+      "ticker": "INVX",
+      "rs_score": -0.2699,
+      "cached": false
+    },
+    {
+      "ticker": "PAAS",
+      "rs_score": -0.2724,
+      "cached": false
+    },
+    {
+      "ticker": "GFS",
+      "rs_score": -0.2741,
+      "cached": false
+    },
+    {
+      "ticker": "BRSL",
+      "rs_score": -0.2743,
+      "cached": false
+    },
+    {
+      "ticker": "DOC",
+      "rs_score": -0.2757,
+      "cached": false
+    },
+    {
+      "ticker": "NKE",
+      "rs_score": -0.2761,
+      "cached": true
+    },
+    {
+      "ticker": "OSPN",
+      "rs_score": -0.277,
+      "cached": false
+    },
+    {
+      "ticker": "VRSN",
+      "rs_score": -0.2774,
+      "cached": false
+    },
+    {
+      "ticker": "AG",
+      "rs_score": -0.2775,
+      "cached": false
+    },
+    {
+      "ticker": "COHU",
+      "rs_score": -0.2776,
+      "cached": false
+    },
+    {
+      "ticker": "ECVT",
+      "rs_score": -0.2778,
+      "cached": false
+    },
+    {
+      "ticker": "SMPL",
+      "rs_score": -0.2779,
+      "cached": false
+    },
+    {
+      "ticker": "PTCT",
+      "rs_score": -0.278,
+      "cached": false
+    },
+    {
+      "ticker": "POWI",
+      "rs_score": -0.2794,
+      "cached": false
+    },
+    {
+      "ticker": "HTHT",
+      "rs_score": -0.2798,
+      "cached": false
+    },
+    {
+      "ticker": "SPPP",
+      "rs_score": -0.2807,
+      "cached": false
+    },
+    {
+      "ticker": "TALO",
+      "rs_score": -0.2808,
+      "cached": false
+    },
+    {
+      "ticker": "GILT",
+      "rs_score": -0.283,
+      "cached": false
+    },
+    {
+      "ticker": "VRDN",
+      "rs_score": -0.2832,
+      "cached": false
+    },
+    {
+      "ticker": "PFS",
+      "rs_score": -0.2834,
+      "cached": false
+    },
+    {
+      "ticker": "SRAD",
+      "rs_score": -0.2836,
+      "cached": false
+    },
+    {
+      "ticker": "RKLB",
+      "rs_score": -0.2837,
+      "cached": true
+    },
+    {
+      "ticker": "COLD",
+      "rs_score": -0.2841,
+      "cached": false
+    },
+    {
+      "ticker": "KDP",
+      "rs_score": -0.2846,
+      "cached": false
+    },
+    {
+      "ticker": "BA",
+      "rs_score": -0.2848,
+      "cached": true
+    },
+    {
+      "ticker": "GOOS",
+      "rs_score": -0.2853,
+      "cached": false
+    },
+    {
+      "ticker": "DQ",
+      "rs_score": -0.2855,
+      "cached": false
+    },
+    {
+      "ticker": "ILMN",
+      "rs_score": -0.2857,
+      "cached": false
+    },
+    {
+      "ticker": "VET",
+      "rs_score": -0.2859,
+      "cached": false
+    },
+    {
+      "ticker": "BEPC",
+      "rs_score": -0.2864,
+      "cached": false
+    },
+    {
+      "ticker": "LTH",
+      "rs_score": -0.2865,
+      "cached": false
+    },
+    {
+      "ticker": "CCK",
+      "rs_score": -0.2872,
+      "cached": false
+    },
+    {
+      "ticker": "SJM",
+      "rs_score": -0.2873,
+      "cached": false
+    },
+    {
+      "ticker": "SNDR",
+      "rs_score": -0.2873,
+      "cached": false
+    },
+    {
+      "ticker": "BCE",
+      "rs_score": -0.2878,
+      "cached": false
+    },
+    {
+      "ticker": "JACK",
+      "rs_score": -0.2887,
+      "cached": false
+    },
+    {
+      "ticker": "WHR",
+      "rs_score": -0.2889,
+      "cached": false
+    },
+    {
+      "ticker": "SATS",
+      "rs_score": -0.291,
+      "cached": false
+    },
+    {
+      "ticker": "ALK",
+      "rs_score": -0.2914,
+      "cached": false
+    },
+    {
+      "ticker": "OI",
+      "rs_score": -0.2916,
+      "cached": false
+    },
+    {
+      "ticker": "UUUU",
+      "rs_score": -0.2918,
+      "cached": false
+    },
+    {
+      "ticker": "OUST",
+      "rs_score": -0.2918,
+      "cached": false
+    },
+    {
+      "ticker": "ORA",
+      "rs_score": -0.2938,
+      "cached": false
+    },
+    {
+      "ticker": "NSP",
+      "rs_score": -0.2949,
+      "cached": false
+    },
+    {
+      "ticker": "CZR",
+      "rs_score": -0.2964,
+      "cached": false
+    },
+    {
+      "ticker": "ENR",
+      "rs_score": -0.2966,
+      "cached": false
+    },
+    {
+      "ticker": "HUT",
+      "rs_score": -0.297,
+      "cached": false
+    },
+    {
+      "ticker": "DRVN",
+      "rs_score": -0.2974,
+      "cached": false
+    },
+    {
+      "ticker": "CALY",
+      "rs_score": -0.2984,
+      "cached": false
+    },
+    {
+      "ticker": "NTR",
+      "rs_score": -0.2985,
+      "cached": false
+    },
+    {
+      "ticker": "WPC",
+      "rs_score": -0.2996,
+      "cached": false
+    },
+    {
+      "ticker": "NEE",
+      "rs_score": -0.3009,
+      "cached": false
+    },
+    {
+      "ticker": "PALL",
+      "rs_score": -0.3016,
+      "cached": false
+    },
+    {
+      "ticker": "MXL",
+      "rs_score": -0.3027,
+      "cached": false
+    },
+    {
+      "ticker": "CBRL",
+      "rs_score": -0.3027,
+      "cached": false
+    },
+    {
+      "ticker": "APD",
+      "rs_score": -0.3033,
+      "cached": false
+    },
+    {
+      "ticker": "SGRY",
+      "rs_score": -0.3039,
+      "cached": false
+    },
+    {
+      "ticker": "HRMY",
+      "rs_score": -0.3045,
+      "cached": false
+    },
+    {
+      "ticker": "ETSY",
+      "rs_score": -0.3054,
+      "cached": false
+    },
+    {
+      "ticker": "APPN",
+      "rs_score": -0.307,
+      "cached": false
+    },
+    {
+      "ticker": "GTY",
+      "rs_score": -0.3076,
+      "cached": false
+    },
+    {
+      "ticker": "WK",
+      "rs_score": -0.3079,
+      "cached": false
+    },
+    {
+      "ticker": "CIM",
+      "rs_score": -0.3084,
+      "cached": false
+    },
+    {
+      "ticker": "STAA",
+      "rs_score": -0.3096,
+      "cached": false
+    },
+    {
+      "ticker": "TDC",
+      "rs_score": -0.3101,
+      "cached": false
+    },
+    {
+      "ticker": "CWEN",
+      "rs_score": -0.3103,
+      "cached": false
+    },
+    {
+      "ticker": "AWK",
+      "rs_score": -0.3112,
+      "cached": false
+    },
+    {
+      "ticker": "ZSL",
+      "rs_score": -0.3127,
+      "cached": false
+    },
+    {
+      "ticker": "HDB",
+      "rs_score": -0.3131,
+      "cached": false
+    },
+    {
+      "ticker": "LAND",
+      "rs_score": -0.3131,
+      "cached": false
+    },
+    {
+      "ticker": "AVNS",
+      "rs_score": -0.3132,
+      "cached": false
+    },
+    {
+      "ticker": "DXC",
+      "rs_score": -0.3133,
+      "cached": false
+    },
+    {
+      "ticker": "COLB",
+      "rs_score": -0.3142,
+      "cached": false
+    },
+    {
+      "ticker": "GXO",
+      "rs_score": -0.3187,
+      "cached": false
+    },
+    {
+      "ticker": "CLMT",
+      "rs_score": -0.3209,
+      "cached": false
+    },
+    {
+      "ticker": "LNTH",
+      "rs_score": -0.3215,
+      "cached": false
+    },
+    {
+      "ticker": "APA",
+      "rs_score": -0.322,
+      "cached": false
+    },
+    {
+      "ticker": "XMTR",
+      "rs_score": -0.3223,
+      "cached": false
+    },
+    {
+      "ticker": "GMAB",
+      "rs_score": -0.3228,
+      "cached": false
+    },
+    {
+      "ticker": "BIIB",
+      "rs_score": -0.3237,
+      "cached": true
+    },
+    {
+      "ticker": "VLY",
+      "rs_score": -0.3245,
+      "cached": false
+    },
+    {
+      "ticker": "BWA",
+      "rs_score": -0.3246,
+      "cached": false
+    },
+    {
+      "ticker": "YUMC",
+      "rs_score": -0.3273,
+      "cached": false
+    },
+    {
+      "ticker": "NTLA",
+      "rs_score": -0.3273,
+      "cached": false
+    },
+    {
+      "ticker": "SDGR",
+      "rs_score": -0.3292,
+      "cached": false
+    },
+    {
+      "ticker": "NEM",
+      "rs_score": -0.3295,
+      "cached": true
+    },
+    {
+      "ticker": "TXNM",
+      "rs_score": -0.3298,
+      "cached": false
+    },
+    {
+      "ticker": "AES",
+      "rs_score": -0.3302,
+      "cached": false
+    },
+    {
+      "ticker": "AMBA",
+      "rs_score": -0.3313,
+      "cached": false
+    },
+    {
+      "ticker": "VC",
+      "rs_score": -0.3329,
+      "cached": false
+    },
+    {
+      "ticker": "ZTO",
+      "rs_score": -0.3332,
+      "cached": false
+    },
+    {
+      "ticker": "HYMC",
+      "rs_score": -0.3332,
+      "cached": false
+    },
+    {
+      "ticker": "PUMP",
+      "rs_score": -0.3345,
+      "cached": false
+    },
+    {
+      "ticker": "CC",
+      "rs_score": -0.3356,
+      "cached": false
+    },
+    {
+      "ticker": "HL",
+      "rs_score": -0.3361,
+      "cached": false
+    },
+    {
+      "ticker": "GLL",
+      "rs_score": -0.3365,
+      "cached": false
+    },
+    {
+      "ticker": "PRA",
+      "rs_score": -0.3371,
+      "cached": false
+    },
+    {
+      "ticker": "EHAB",
+      "rs_score": -0.3371,
+      "cached": false
+    },
+    {
+      "ticker": "IPGP",
+      "rs_score": -0.3382,
+      "cached": false
+    },
+    {
+      "ticker": "VFC",
+      "rs_score": -0.3387,
+      "cached": false
+    },
+    {
+      "ticker": "FMC",
+      "rs_score": -0.3389,
+      "cached": false
+    },
+    {
+      "ticker": "SIBN",
+      "rs_score": -0.3393,
+      "cached": false
+    },
+    {
+      "ticker": "ALGT",
+      "rs_score": -0.3399,
+      "cached": false
+    },
+    {
+      "ticker": "DAN",
+      "rs_score": -0.3417,
+      "cached": false
+    },
+    {
+      "ticker": "EH",
+      "rs_score": -0.3417,
+      "cached": false
+    },
+    {
+      "ticker": "PKST",
+      "rs_score": -0.3424,
+      "cached": false
+    },
+    {
+      "ticker": "XEL",
+      "rs_score": -0.3427,
+      "cached": false
+    },
+    {
+      "ticker": "INOD",
+      "rs_score": -0.3454,
+      "cached": false
+    },
+    {
+      "ticker": "EXAS",
+      "rs_score": -0.3455,
+      "cached": false
+    },
+    {
+      "ticker": "APTV",
+      "rs_score": -0.3456,
+      "cached": false
+    },
+    {
+      "ticker": "PFE",
+      "rs_score": -0.347,
+      "cached": true
+    },
+    {
+      "ticker": "BNAI",
+      "rs_score": -0.3502,
+      "cached": false
+    },
+    {
+      "ticker": "CRK",
+      "rs_score": -0.3516,
+      "cached": false
+    },
+    {
+      "ticker": "MNSO",
+      "rs_score": -0.3519,
+      "cached": false
+    },
+    {
+      "ticker": "PODD",
+      "rs_score": -0.3538,
+      "cached": true
+    },
+    {
+      "ticker": "MOS",
+      "rs_score": -0.3545,
+      "cached": false
+    },
+    {
+      "ticker": "FIGS",
+      "rs_score": -0.3551,
+      "cached": false
+    },
+    {
+      "ticker": "PUK",
+      "rs_score": -0.3582,
+      "cached": false
+    },
+    {
+      "ticker": "GME",
+      "rs_score": -0.359,
+      "cached": false
+    },
+    {
+      "ticker": "U",
+      "rs_score": -0.3603,
+      "cached": false
+    },
+    {
+      "ticker": "HR",
+      "rs_score": -0.3626,
+      "cached": false
+    },
+    {
+      "ticker": "NVAX",
+      "rs_score": -0.3631,
+      "cached": false
+    },
+    {
+      "ticker": "TBPH",
+      "rs_score": -0.3639,
+      "cached": false
+    },
+    {
+      "ticker": "BNTX",
+      "rs_score": -0.3655,
+      "cached": false
+    },
+    {
+      "ticker": "TXG",
+      "rs_score": -0.3679,
+      "cached": false
+    },
+    {
+      "ticker": "FSLY",
+      "rs_score": -0.3719,
+      "cached": false
+    },
+    {
+      "ticker": "ROKU",
+      "rs_score": -0.3759,
+      "cached": false
+    },
+    {
+      "ticker": "FIVN",
+      "rs_score": -0.3761,
+      "cached": true
+    },
+    {
+      "ticker": "GDXU",
+      "rs_score": -0.379,
+      "cached": false
+    },
+    {
+      "ticker": "VSCO",
+      "rs_score": -0.3795,
+      "cached": false
+    },
+    {
+      "ticker": "ALNY",
+      "rs_score": -0.3812,
+      "cached": true
+    },
+    {
+      "ticker": "SNCY",
+      "rs_score": -0.382,
+      "cached": false
+    },
+    {
+      "ticker": "TAC",
+      "rs_score": -0.3825,
+      "cached": false
+    },
+    {
+      "ticker": "BILL",
+      "rs_score": -0.3831,
+      "cached": true
+    },
+    {
+      "ticker": "INMD",
+      "rs_score": -0.3831,
+      "cached": false
+    },
+    {
+      "ticker": "DAR",
+      "rs_score": -0.3832,
+      "cached": false
+    },
+    {
+      "ticker": "XPEV",
+      "rs_score": -0.384,
+      "cached": false
+    },
+    {
+      "ticker": "MKTX",
+      "rs_score": -0.3842,
+      "cached": false
+    },
+    {
+      "ticker": "ALHC",
+      "rs_score": -0.3854,
+      "cached": false
+    },
+    {
+      "ticker": "JKS",
+      "rs_score": -0.3863,
+      "cached": false
+    },
+    {
+      "ticker": "NVCR",
+      "rs_score": -0.3882,
+      "cached": false
+    },
+    {
+      "ticker": "BILI",
+      "rs_score": -0.3919,
+      "cached": false
+    },
+    {
+      "ticker": "ACLS",
+      "rs_score": -0.393,
+      "cached": false
+    },
+    {
+      "ticker": "VOR",
+      "rs_score": -0.3961,
+      "cached": false
+    },
+    {
+      "ticker": "VICR",
+      "rs_score": -0.3971,
+      "cached": false
+    },
+    {
+      "ticker": "CALX",
+      "rs_score": -0.398,
+      "cached": false
+    },
+    {
+      "ticker": "BEKE",
+      "rs_score": -0.3983,
+      "cached": false
+    },
+    {
+      "ticker": "FVRR",
+      "rs_score": -0.4006,
+      "cached": false
+    },
+    {
+      "ticker": "MRCY",
+      "rs_score": -0.4028,
+      "cached": false
+    },
+    {
+      "ticker": "EXK",
+      "rs_score": -0.403,
+      "cached": false
+    },
+    {
+      "ticker": "TSLA",
+      "rs_score": -0.4042,
+      "cached": true
+    },
+    {
+      "ticker": "BIDU",
+      "rs_score": -0.4053,
+      "cached": false
+    },
+    {
+      "ticker": "MD",
+      "rs_score": -0.4066,
+      "cached": false
+    },
+    {
+      "ticker": "RUN",
+      "rs_score": -0.4077,
+      "cached": false
+    },
+    {
+      "ticker": "CNMD",
+      "rs_score": -0.4094,
+      "cached": false
+    },
+    {
+      "ticker": "CHTR",
+      "rs_score": -0.41,
+      "cached": false
+    },
+    {
+      "ticker": "JD",
+      "rs_score": -0.4126,
+      "cached": false
+    },
+    {
+      "ticker": "PSIX",
+      "rs_score": -0.4127,
+      "cached": false
+    },
+    {
+      "ticker": "SQM",
+      "rs_score": -0.416,
+      "cached": false
+    },
+    {
+      "ticker": "PAYC",
+      "rs_score": -0.4192,
+      "cached": false
+    },
+    {
+      "ticker": "MP",
+      "rs_score": -0.4325,
+      "cached": false
+    },
+    {
+      "ticker": "OIS",
+      "rs_score": -0.4326,
+      "cached": false
+    },
+    {
+      "ticker": "LEG",
+      "rs_score": -0.4405,
+      "cached": false
+    },
+    {
+      "ticker": "AMN",
+      "rs_score": -0.4428,
+      "cached": false
+    },
+    {
+      "ticker": "PENN",
+      "rs_score": -0.4437,
+      "cached": false
+    },
+    {
+      "ticker": "LVLU",
+      "rs_score": -0.4451,
+      "cached": false
+    },
+    {
+      "ticker": "GPRE",
+      "rs_score": -0.4459,
+      "cached": false
+    },
+    {
+      "ticker": "ADM",
+      "rs_score": -0.4461,
+      "cached": false
+    },
+    {
+      "ticker": "CSIQ",
+      "rs_score": -0.4477,
+      "cached": false
+    },
+    {
+      "ticker": "GDXD",
+      "rs_score": -0.4491,
+      "cached": false
+    },
+    {
+      "ticker": "LXU",
+      "rs_score": -0.4496,
+      "cached": false
+    },
+    {
+      "ticker": "RIVN",
+      "rs_score": -0.4516,
+      "cached": false
+    },
+    {
+      "ticker": "NVST",
+      "rs_score": -0.4518,
+      "cached": false
+    },
+    {
+      "ticker": "LTBR",
+      "rs_score": -0.4616,
+      "cached": false
+    },
+    {
+      "ticker": "WBD",
+      "rs_score": -0.4668,
+      "cached": false
+    },
+    {
+      "ticker": "CNXC",
+      "rs_score": -0.4674,
+      "cached": false
+    },
+    {
+      "ticker": "ALB",
+      "rs_score": -0.4695,
+      "cached": true
+    },
+    {
+      "ticker": "LBRDK",
+      "rs_score": -0.4702,
+      "cached": false
+    },
+    {
+      "ticker": "PL",
+      "rs_score": -0.4765,
+      "cached": false
+    },
+    {
+      "ticker": "IE",
+      "rs_score": -0.478,
+      "cached": false
+    },
+    {
+      "ticker": "TVTX",
+      "rs_score": -0.4801,
+      "cached": false
+    },
+    {
+      "ticker": "CHWY",
+      "rs_score": -0.4821,
+      "cached": false
+    },
+    {
+      "ticker": "HUM",
+      "rs_score": -0.4832,
+      "cached": false
+    },
+    {
+      "ticker": "GDOT",
+      "rs_score": -0.4865,
+      "cached": false
+    },
+    {
+      "ticker": "ANGO",
+      "rs_score": -0.4914,
+      "cached": false
+    },
+    {
+      "ticker": "PSKY",
+      "rs_score": -0.4933,
+      "cached": false
+    },
+    {
+      "ticker": "GH",
+      "rs_score": -0.5014,
+      "cached": false
+    },
+    {
+      "ticker": "FLNC",
+      "rs_score": -0.5107,
+      "cached": false
+    },
+    {
+      "ticker": "BE",
+      "rs_score": -0.5165,
+      "cached": false
+    },
+    {
+      "ticker": "HE",
+      "rs_score": -0.5169,
+      "cached": false
+    },
+    {
+      "ticker": "VSAT",
+      "rs_score": -0.5191,
+      "cached": false
+    },
+    {
+      "ticker": "ZLAB",
+      "rs_score": -0.5232,
+      "cached": false
+    },
+    {
+      "ticker": "UNG",
+      "rs_score": -0.5247,
+      "cached": false
+    },
+    {
+      "ticker": "GRRR",
+      "rs_score": -0.5376,
+      "cached": false
+    },
+    {
+      "ticker": "COGT",
+      "rs_score": -0.5554,
+      "cached": false
+    },
+    {
+      "ticker": "HLF",
+      "rs_score": -0.5603,
+      "cached": false
+    },
+    {
+      "ticker": "FOXF",
+      "rs_score": -0.5628,
+      "cached": false
+    },
+    {
+      "ticker": "ADPT",
+      "rs_score": -0.5637,
+      "cached": false
+    },
+    {
+      "ticker": "EXTR",
+      "rs_score": -0.5655,
+      "cached": false
+    },
+    {
+      "ticker": "QDEL",
+      "rs_score": -0.5685,
+      "cached": false
+    },
+    {
+      "ticker": "OMCL",
+      "rs_score": -0.5697,
+      "cached": false
+    },
+    {
+      "ticker": "UNFI",
+      "rs_score": -0.5719,
+      "cached": false
+    },
+    {
+      "ticker": "MOVE",
+      "rs_score": -0.5741,
+      "cached": false
+    },
+    {
+      "ticker": "PAVM",
+      "rs_score": -0.5744,
+      "cached": false
+    },
+    {
+      "ticker": "KC",
+      "rs_score": -0.5745,
+      "cached": false
+    },
+    {
+      "ticker": "IRDM",
+      "rs_score": -0.5932,
+      "cached": false
+    },
+    {
+      "ticker": "ASTS",
+      "rs_score": -0.5963,
+      "cached": true
+    },
+    {
+      "ticker": "GDS",
+      "rs_score": -0.6012,
+      "cached": false
+    },
+    {
+      "ticker": "SEDG",
+      "rs_score": -0.6057,
+      "cached": false
+    },
+    {
+      "ticker": "AUPH",
+      "rs_score": -0.6101,
+      "cached": false
+    },
+    {
+      "ticker": "NG",
+      "rs_score": -0.614,
+      "cached": false
+    },
+    {
+      "ticker": "AMPX",
+      "rs_score": -0.6142,
+      "cached": false
+    },
+    {
+      "ticker": "HSAI",
+      "rs_score": -0.6567,
+      "cached": false
+    },
+    {
+      "ticker": "QURE",
+      "rs_score": -0.6674,
+      "cached": false
+    },
+    {
+      "ticker": "AEHR",
+      "rs_score": -0.677,
+      "cached": false
+    },
+    {
+      "ticker": "RAPT",
+      "rs_score": -0.7345,
+      "cached": false
+    },
+    {
+      "ticker": "VISN",
+      "rs_score": -0.7532,
+      "cached": false
+    },
+    {
+      "ticker": "FNGD",
+      "rs_score": -0.7676,
+      "cached": false
+    },
+    {
+      "ticker": "SGML",
+      "rs_score": -0.7728,
+      "cached": false
+    },
+    {
+      "ticker": "FWRD",
+      "rs_score": -0.7918,
+      "cached": false
+    },
+    {
+      "ticker": "FLG",
+      "rs_score": -0.8284,
+      "cached": false
+    },
+    {
+      "ticker": "BOIL",
+      "rs_score": -0.8342,
+      "cached": false
+    },
+    {
+      "ticker": "SSRM",
+      "rs_score": -0.8487,
+      "cached": false
+    },
+    {
+      "ticker": "VELO",
+      "rs_score": -0.8838,
+      "cached": false
+    },
+    {
+      "ticker": "AMLX",
+      "rs_score": -1.0134,
+      "cached": false
+    },
+    {
+      "ticker": "SMX",
+      "rs_score": -1.0909,
+      "cached": false
+    },
+    {
+      "ticker": "GEV",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SNDK",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CRWV",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MDLN",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "AMRZ",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "VIK",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "RDDT",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "Q",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "VG",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "NBIS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "AS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CRCL",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ALAB",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "JBS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ULS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "LTM",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "FIG",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SOLV",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SOLS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "KRMN",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "RBRK",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SARO",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "LINE",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MICC",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SFD",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "AHR",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "TEM",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BMNR",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CHYM",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "GLXY",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "FPS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SAIL",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BTSG",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "EQPT",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "AMTM",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "AUGO",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "TTAN",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SOBO",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "LOAR",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MWH",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "LGN",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "PONY",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ECG",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "LB",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "OS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CAI",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "PACS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "FIGR",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CORZ",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "OTF",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MRP",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "RAL",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "KLAR",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "WAY",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "INGM",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CGON",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "VSNT",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BLSH",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ALH",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BETA",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "NTSK",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "TBBB",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "LIF",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "AAUC",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "NIQ",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MIAX",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ALMS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "TCGL",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "HNGE",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "YSS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BKV",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MRX",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CTRI",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CON",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "FLY",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CURB",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BOBS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "KYIV",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MH",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ARX",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ETOR",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "NESR",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "INFQ",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SLDE",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "GRAL",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CHA",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "HTFL",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "AGBK",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SMA",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "VOYG",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MBX",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ZBIO",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "VIA",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "NNE",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "LMRI",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MSDL",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "WBI",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BTGO",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "DEC",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "OFRM",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BIOA",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "WOLF",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "EVMN",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "LIFE",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "EIKN",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MNTN",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "OMDA",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "WYFI",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "DXYZ",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BBNX",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "UMAC",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BCAR",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "CEPT",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BRCB",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "NPT",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "NCI",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BPRE",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BITB",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BRRR",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "PICS",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "IBIT",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ETHA",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BTC",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ETH",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "XRP",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "BSOL",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "FSSL",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "STRC",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MCHPP",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "FNGU",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SSACU",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "MEVOU",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "HACQU",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "ACAAU",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "TMTSU",
+      "rs_score": null,
+      "cached": false
+    },
+    {
+      "ticker": "SVIVU",
+      "rs_score": null,
+      "cached": false
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "generated_at": "2026-03-10T02:02:11.714568+00:00",
+  "study_name": "trading_optimizer_v4",
+  "best_trial": 558,
+  "best_score": 0.593151,
+  "parameters": {
+    "ATR_MULTIPLIER": 1.278311,
+    "VCP_TIGHTNESS_RANGE": 0.035939,
+    "BREAKOUT_BUFFER_ATR": 0.540044,
+    "BREAKOUT_VOL_MULT": 1.107806,
+    "TARGET_RR": 2.784718,
+    "TRAIL_ATR_MULT": 4.162382,
+    "REGIME_BULL_THRESHOLD": 59,
+    "ENGINE3_RS_THRESHOLD": -0.012191,
+    "MAX_OPEN_POSITIONS": 5,
+    "CCI_STRICT_FLOOR": -39.104226,
+    "CCI_RLX_FLOOR": -1.954801
+  },
+  "oos_metrics": {
+    "total_trades": 43,
+    "win_rate": 48.84,
+    "expectancy": 0.2896,
+    "profit_factor": 2.9985,
+    "max_drawdown_pct": 2.15,
+    "net_profit_pct": 14.31,
+    "calmar_ratio": 3.388
+  },
+  "plateau_report": {
+    "plateau_count": 75,
+    "total_completed": 715,
+    "threshold": 0.474521,
+    "best_score": 0.593151,
+    "per_param": {
+      "ATR_MULTIPLIER": {
+        "min": 1.2,
+        "max": 1.3154,
+        "mean": 1.2671,
+        "std": 0.0249,
+        "best": 1.2783,
+        "at_boundary": false
+      },
+      "VCP_TIGHTNESS_RANGE": {
+        "min": 0.0351,
+        "max": 0.0696,
+        "mean": 0.0444,
+        "std": 0.0102,
+        "best": 0.0359,
+        "at_boundary": true
+      },
+      "BREAKOUT_BUFFER_ATR": {
+        "min": 0.4678,
+        "max": 0.5493,
+        "mean": 0.5283,
+        "std": 0.0191,
+        "best": 0.54,
+        "at_boundary": true
+      },
+      "BREAKOUT_VOL_MULT": {
+        "min": 1.0351,
+        "max": 1.1467,
+        "mean": 1.0969,
+        "std": 0.0277,
+        "best": 1.1078,
+        "at_boundary": false
+      },
+      "TARGET_RR": {
+        "min": 2.622,
+        "max": 2.8,
+        "mean": 2.7586,
+        "std": 0.0386,
+        "best": 2.7847,
+        "at_boundary": true
+      },
+      "TRAIL_ATR_MULT": {
+        "min": 4.0655,
+        "max": 4.4691,
+        "mean": 4.2428,
+        "std": 0.0983,
+        "best": 4.1624,
+        "at_boundary": false
+      },
+      "REGIME_BULL_THRESHOLD": {
+        "min": 59,
+        "max": 59,
+        "mean": 59,
+        "std": 0.0,
+        "best": 59,
+        "at_boundary": false
+      },
+      "ENGINE3_RS_THRESHOLD": {
+        "min": -0.0972,
+        "max": -0.0001,
+        "mean": -0.0191,
+        "std": 0.0241,
+        "best": -0.0122,
+        "at_boundary": false
+      },
+      "MAX_OPEN_POSITIONS": {
+        "min": 5,
+        "max": 5,
+        "mean": 5,
+        "std": 0.0,
+        "best": 5,
+        "at_boundary": true
+      },
+      "CCI_STRICT_FLOOR": {
+        "min": -50.3263,
+        "max": -35.7706,
+        "mean": -42.7823,
+        "std": 2.9956,
+        "best": -39.1042,
+        "at_boundary": false
+      },
+      "CCI_RLX_FLOOR": {
+        "min": -14.3247,
+        "max": -0.2063,
+        "mean": -5.5104,
+        "std": 2.9296,
+        "best": -1.9548,
+        "at_boundary": true
+      }
+    },
+    "ceiling_flags": [
+      "VCP_TIGHTNESS_RANGE",
+      "BREAKOUT_BUFFER_ATR",
+      "TARGET_RR",
+      "MAX_OPEN_POSITIONS",
+      "CCI_RLX_FLOOR"
+    ]
+  },
+  "param_importance": {}
+}
