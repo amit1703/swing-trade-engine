@@ -45,6 +45,15 @@ from constants import (
     MAX_OPEN_POSITIONS,
 )
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
+
+# V5: per-setup ATR trail multipliers — matched to _enrich_trade() in main.py
+_TRAIL_ATR_BY_SETUP = {
+    "VCP":          lambda: _constants.VCP_TRAIL_ATR_MULT,
+    "PULLBACK":     lambda: _constants.PULLBACK_TRAIL_ATR_MULT,
+    "RES_BREAKOUT": lambda: _constants.RES_BREAKOUT_TRAIL_ATR_MULT,
+    "BASE":         lambda: _constants.BASE_TRAIL_ATR_MULT,
+}
+
 from filters import compute_regime_series, passes_liquidity, in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 
@@ -319,7 +328,10 @@ def _manage_open_trade(
     # 3. Update trailing stop: ratchet to max(EMA20, ATR-based trail) when in profit
     if close > entry:
         atr14 = bar.get("atr14", 0.0)
-        atr_trail = (close - _constants.TRAIL_ATR_MULT * atr14) if atr14 > 0 else ema20
+        setup_type = state.get("setup_type", "")
+        mult_fn = _TRAIL_ATR_BY_SETUP.get(setup_type)
+        mult = mult_fn() if mult_fn else _constants.TRAIL_ATR_MULT
+        atr_trail = (close - mult * atr14) if atr14 > 0 else ema20
         new_trail = max(ema20, atr_trail)
         if new_trail > stop:
             state["trailing_stop"] = new_trail
