@@ -62,7 +62,13 @@ function EquityCurve({ data }) {
       priceLineVisible: false,
     })
 
-    series.setData(data.map((v, i) => ({ time: i + 1, value: v })))
+    // Generate synthetic ISO dates starting from 2020-01-01 (one per trade)
+    const startMs = new Date('2020-01-01').getTime()
+    const DAY_MS  = 86400 * 1000
+    series.setData(data.map((v, i) => ({
+      time:  new Date(startMs + i * DAY_MS).toISOString().slice(0, 10),
+      value: v,
+    })))
     chart.timeScale().fitContent()
 
     return () => chart.remove()
@@ -200,9 +206,9 @@ function RegimePerformance({ perf }) {
             </div>
             {[
               ['Trades',     m.trades],
-              ['Win Rate',   `${(m.win_rate * 100).toFixed(1)}%`],
-              ['Avg R',      `${m.avg_R >= 0 ? '+' : ''}${m.avg_R.toFixed(2)}R`],
-              ['Expectancy', `${m.expectancy >= 0 ? '+' : ''}${m.expectancy.toFixed(2)}R`],
+              ['Win Rate',   m.win_rate   != null ? `${((m.win_rate ?? 0) * 100).toFixed(1)}%`  : '—'],
+              ['Avg R',      m.avg_R      != null ? `${(m.avg_R ?? 0) >= 0 ? '+' : ''}${(m.avg_R ?? 0).toFixed(2)}R`      : '—'],
+              ['Expectancy', m.expectancy != null ? `${(m.expectancy ?? 0) >= 0 ? '+' : ''}${(m.expectancy ?? 0).toFixed(2)}R` : '—'],
             ].map(([k, v]) => (
               <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 3 }}>
                 <span style={{ color: 'var(--muted)' }}>{k}</span>
@@ -223,10 +229,12 @@ export default function DiagnosticsTab() {
   const [error, setError]     = useState(null)
 
   useEffect(() => {
-    fetch('/api/diagnostics/report')
+    const controller = new AbortController()
+    fetch('/api/diagnostics/report', { signal: controller.signal })
       .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
       .then(data => { setReport(data); setLoading(false) })
-      .catch(e  => { setError(String(e)); setLoading(false) })
+      .catch(e  => { if (e.name !== 'AbortError') { setError(String(e)); setLoading(false) } })
+    return () => controller.abort()
   }, [])
 
   if (loading) return (
