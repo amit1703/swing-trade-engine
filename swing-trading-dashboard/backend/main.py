@@ -40,7 +40,7 @@ import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -112,6 +112,11 @@ from constants import (
     RES_BREAKOUT_TRAIL_ATR_MULT,
     BASE_TRAIL_ATR_MULT,
     TRAIL_ATR_MULT,
+    # Backtest diagnostics
+    BACKTEST_DIAG_START_DATE,
+    BACKTEST_DIAG_END_DATE,
+    BACKTEST_V4_TRAIL_MULT,
+    BACKTEST_DIAG_CACHE_FILE,
 )
 from database import (
     complete_scan_run,
@@ -162,7 +167,7 @@ from analytics import (
 from email_digest import send_digest
 from services.macro_service import get_market_overview
 from services.narrative import generate_narrative
-from backtest_engine import BacktestEngine
+from backtest_engine import BacktestEngine, run_backtest_universe
 
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration (imported from constants.py for centralized management)
@@ -390,6 +395,29 @@ _scan_state: Dict = {
 }
 _semaphore: Optional[asyncio.Semaphore] = None
 _ticker_cache: dict = {}  # ticker → (timestamp: float, df: Optional[pd.DataFrame])
+
+# ── Backtest diagnostics state ────────────────────────────────────────────────
+BACKTEST_DIAG_CACHE_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), BACKTEST_DIAG_CACHE_FILE))
+
+_backtest_diag_status: dict = {
+    "status":   "idle",   # "idle" | "running" | "completed" | "failed"
+    "done":     0,
+    "total":    0,
+    "last_run": None,     # ISO timestamp of last completed run
+}
+
+
+def _backtest_trade_to_analytics(tr: dict) -> dict:
+    """Map TradeRecord.to_dict() fields to analytics.py contract."""
+    return {
+        "ticker":       tr["ticker"],
+        "setup_type":   tr["setup_type"],
+        "entry_price":  tr["entry_price"],
+        "stop_loss":    tr["initial_stop"],   # initial_stop → stop_loss
+        "close_price":  tr["exit_price"],     # exit_price  → close_price
+        "status":       "closed",
+        "regime_score": None,
+    }
 
 # WFO in-memory state
 _wfo_download_jobs: Dict[str, Dict] = {}   # job_id → progress dict
@@ -2972,6 +3000,93 @@ async def diagnostics_report():
     except Exception as exc:
         log.error("diagnostics_report failed: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to generate diagnostics report")
+
+
+@app.post("/api/diagnostics/backtest/run", status_code=202)
+async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
+    """
+    Trigger a background V4 strategy baseline backtest over the full universe.
+    Returns immediately with 202. Poll /api/diagnostics/backtest/status for progress.
+    Returns 409 if a run is already in progress.
+    """
+    global _backtest_diag_status
+    if _backtest_diag_status["status"] == "running":
+        raise HTTPException(status_code=409, detail="Backtest already running")
+
+    tickers = list(ACTIVE_UNIVERSE) if ACTIVE_UNIVERSE else list(SCAN_UNIVERSE)
+
+    async def _do_backtest():
+        global _backtest_diag_status
+        _backtest_diag_status.update({"status": "running", "done": 0, "total": len(tickers)})
+        try:
+            async def _progress(done: int, total: int):
+                _backtest_diag_status["done"] = done
+
+            raw_trades = await run_backtest_universe(
+                tickers,
+                BACKTEST_DIAG_START_DATE,
+                BACKTEST_DIAG_END_DATE,
+                trail_mult_override=BACKTEST_V4_TRAIL_MULT,
+                progress_cb=_progress,
+            )
+            adapted = [_backtest_trade_to_analytics(t) for t in raw_trades]
+
+            report = {
+                "generated_at":        datetime.now(timezone.utc).isoformat(),
+                "start_date":          BACKTEST_DIAG_START_DATE,
+                "end_date":            BACKTEST_DIAG_END_DATE,
+                "tickers_run":         len(tickers),
+                "total_trades":        len(adapted),
+                "summary":             compute_live_diagnostics(adapted),
+                "setup_breakdown":     compute_setup_breakdown(adapted),
+                "ticker_distribution": compute_ticker_distribution(adapted),
+                "regime_performance":  compute_regime_performance(adapted),
+            }
+
+            os.makedirs(os.path.dirname(BACKTEST_DIAG_CACHE_PATH), exist_ok=True)
+            with open(BACKTEST_DIAG_CACHE_PATH, "w") as f:
+                json.dump(report, f)
+
+            now_iso = datetime.now(timezone.utc).isoformat()
+            _backtest_diag_status.update({"status": "completed", "last_run": now_iso})
+            log.info("Backtest diagnostics complete: %d trades from %d tickers",
+                     len(adapted), len(tickers))
+        except Exception as exc:
+            _backtest_diag_status["status"] = "failed"
+            log.error("Backtest diagnostics failed: %s", exc)
+
+    background_tasks.add_task(_do_backtest)
+    return {"status": "started", "message": f"V4 backtest running over {len(tickers)} tickers"}
+
+
+@app.get("/api/diagnostics/backtest/status")
+async def backtest_diagnostics_status():
+    """Poll progress of the background V4 backtest run."""
+    return {
+        "status":   _backtest_diag_status["status"],
+        "done":     _backtest_diag_status["done"],
+        "total":    _backtest_diag_status["total"],
+        "last_run": _backtest_diag_status["last_run"],
+    }
+
+
+@app.get("/api/diagnostics/backtest")
+async def backtest_diagnostics_report():
+    """
+    Return the cached V4 baseline backtest diagnostics report.
+    Returns 404 if no run has been completed yet.
+    """
+    if not os.path.exists(BACKTEST_DIAG_CACHE_PATH):
+        raise HTTPException(
+            status_code=404,
+            detail="No backtest cache found. POST /api/diagnostics/backtest/run to generate.",
+        )
+    try:
+        with open(BACKTEST_DIAG_CACHE_PATH, "r") as f:
+            return json.load(f)
+    except Exception as exc:
+        log.error("Failed to read backtest diagnostics cache: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to read backtest cache")
 
 
 @app.delete("/api/trades/{trade_id}", status_code=200)
