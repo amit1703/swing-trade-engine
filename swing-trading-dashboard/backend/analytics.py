@@ -227,7 +227,7 @@ def print_backtest_diagnostics(trades: list) -> str:
     sep = "═" * 44
 
     if not trades:
-        return f"\n{sep}\n BACKTEST DIAGNOSTICS\n{sep}\n No trades generated.\n{sep}\n"
+        return f"{sep}\n BACKTEST DIAGNOSTICS\n{sep}\n No trades generated.\n{sep}"
 
     wins        = [t for t in trades if t.get("is_win")]
     win_rate    = len(wins) / len(trades) * 100
@@ -239,7 +239,6 @@ def print_backtest_diagnostics(trades: list) -> str:
     profit_factor = (gross_pos / abs(gross_neg)) if gross_neg != 0 else float("inf")
 
     lines = [
-        "",
         sep,
         " BACKTEST DIAGNOSTICS",
         sep,
@@ -278,5 +277,5 @@ def print_backtest_diagnostics(trades: list) -> str:
             f"   min / max score   : {min(scores):.1f} / {max(scores):.1f}",
         ]
 
-    lines += [sep, ""]
+    lines.append(sep)
     return "\n".join(lines)
