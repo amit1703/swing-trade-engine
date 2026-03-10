@@ -96,7 +96,6 @@ export default function App() {
     ...resBreakoutSetups,
     ...htfSetups,
     ...lceSetups,
-    ...optionsSetups,
   ]
 
   const selectedSetup = allSetups.find(s => s.ticker === selectedTicker) ?? null
@@ -192,7 +191,6 @@ export default function App() {
       ...pullbackSetups,
       ...baseSetups,
       ...resBreakoutSetups,
-      ...optionsSetups,
       ...htfSetups,
       ...lceSetups,
     ].map((s) => s.ticker)
@@ -206,7 +204,7 @@ export default function App() {
     } catch (err) {
       console.warn('[App] fetchLivePrices:', err)
     }
-  }, [vcpSetups, pullbackSetups, baseSetups, resBreakoutSetups, optionsSetups, htfSetups, lceSetups])
+  }, [vcpSetups, pullbackSetups, baseSetups, resBreakoutSetups, htfSetups, lceSetups])
 
   useEffect(() => {
     fetchLivePrices()

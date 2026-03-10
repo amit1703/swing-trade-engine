@@ -9,7 +9,6 @@ const SETUP_TYPE_LABEL = {
   'RES-BREAKOUT':     'BRK',
   HTF:                'HTF',
   LCE:                'LCE',
-  'OPTIONS-CATALYST': 'OPT',
 }
 
 const TYPE_COLOR = {
@@ -20,7 +19,6 @@ const TYPE_COLOR = {
   'RES-BREAKOUT':     '#00c87a',
   HTF:                '#FF6EC7',
   LCE:                '#9B6EFF',
-  'OPTIONS-CATALYST': '#00C8FF',
 }
 
 function SortIcon({ col, sortCol, sortDir }) {
@@ -50,8 +48,7 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
         if (f === 'RES-BRK')  return t === 'RES-BREAKOUT'
         if (f === 'HTF')      return t === 'HTF'
         if (f === 'LCE')      return t === 'LCE'
-        if (f === 'OPTIONS')  return t === 'OPTIONS-CATALYST'
-        return true
+return true
       })
     }
     if (filters.minScore > 0) data = data.filter(s => (s.setup_score ?? 0) >= filters.minScore)

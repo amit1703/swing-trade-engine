@@ -1,6 +1,6 @@
 import { Filter, Flame } from 'lucide-react'
 
-const SETUP_TYPES = ['ALL', 'VCP', 'PULLBACK', 'BASE', 'RES-BRK', 'HTF', 'LCE', 'OPTIONS']
+const SETUP_TYPES = ['ALL', 'VCP', 'PULLBACK', 'BASE', 'RES-BRK', 'HTF', 'LCE']
 
 export default function ScannerFilters({ filters, onFiltersChange }) {
   const { minScore, setupType, hotOnly, searchQuery } = filters
