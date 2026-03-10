@@ -2,9 +2,7 @@ import { Search, Play, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
 const PAGE_TITLES = {
-  dashboard: 'Dashboard',
   scanner:   'Scanner',
-  setups:    'Setups',
   watchlist: 'Watchlist',
   portfolio: 'Portfolio',
   analytics: 'Analytics',

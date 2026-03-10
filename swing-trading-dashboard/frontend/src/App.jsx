@@ -421,8 +421,8 @@ export default function App() {
           </div>
         )}
 
-        {/* ── DASHBOARD / SETUPS / SETTINGS — stubs ────────── */}
-        {['dashboard', 'setups', 'settings'].includes(activePage) && (
+        {/* ── SETTINGS — stub ───────────────────────────────── */}
+        {['settings'].includes(activePage) && (
           <div style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: 'var(--muted)', flexDirection: 'column', gap: 8,

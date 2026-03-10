@@ -1,7 +1,5 @@
 import {
-  LayoutDashboard,
   ScanLine,
-  ListFilter,
   Star,
   Briefcase,
   BarChart2,
@@ -9,12 +7,10 @@ import {
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { id: 'dashboard',  icon: LayoutDashboard, label: 'Dashboard' },
-  { id: 'scanner',    icon: ScanLine,        label: 'Scanner'   },
-  { id: 'setups',     icon: ListFilter,      label: 'Setups'    },
-  { id: 'watchlist',  icon: Star,            label: 'Watchlist' },
-  { id: 'portfolio',  icon: Briefcase,       label: 'Portfolio' },
-  { id: 'analytics',  icon: BarChart2,       label: 'Analytics' },
+  { id: 'scanner',   icon: ScanLine,  label: 'Scanner'   },
+  { id: 'watchlist', icon: Star,      label: 'Watchlist' },
+  { id: 'portfolio', icon: Briefcase, label: 'Portfolio' },
+  { id: 'analytics', icon: BarChart2, label: 'Analytics' },
 ]
 
 export default function Sidebar({ activePage, onNavigate }) {
