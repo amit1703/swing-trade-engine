@@ -1,17 +1,15 @@
 /**
  * App.jsx — root layout and state orchestrator
  *
- * Tabs:
- *  SCANNER   → left panel (VCP + Pullback tables) + right panel (TradingChart)
- *  PORTFOLIO → full-width PortfolioTab (active trades, health signals, P/L)
- *
- * Layout (CSS Grid):
- *  ┌────────────────────────── Header (full-width, 62px) ──────────────────┐
- *  │  [ SCANNER ]  [ PORTFOLIO ]  ← tab bar (28px)                         │
- *  │ Left panel (400px)        │  Right panel (flex-1)                     │
- *  │  VCP SetupTable           │   TradingChart / PortfolioTab             │
- *  │  Pullback SetupTable      │                                           │
- *  └───────────────────────────┴───────────────────────────────────────────┘
+ * Layout:
+ *  ┌─ Sidebar (60px) ─┬─────────────── Main content ───────────────────┐
+ *  │  nav icons        │  TopBar (regime + scan controls)                │
+ *  │                   │  ── SCANNER PAGE ───────────────────────────── │
+ *  │                   │   StatCards row                                 │
+ *  │                   │   [ Chart ] [ StockIntelPanel ]                 │
+ *  │                   │   [ ScannerFilters + ScannerTable ]             │
+ *  │                   │  ── WATCHLIST / PORTFOLIO / ANALYTICS ──────── │
+ *  └───────────────────┴─────────────────────────────────────────────────┘
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -26,17 +24,22 @@ import {
   fetchDebugTicker,
   fetchOptionsSetups,
   fetchPrices,
+  fetchAnalysis,
 } from './api.js'
 
-import Header        from './components/Header.jsx'
-import SetupTable    from './components/SetupTable.jsx'
-import TradingChart  from './components/TradingChart.jsx'
-import PortfolioTab  from './components/PortfolioTab.jsx'
-import WatchlistPanel from './components/WatchlistPanel.jsx'
+import Sidebar          from './components/Sidebar.jsx'
+import TopBar           from './components/TopBar.jsx'
+import StatCards        from './components/StatCards.jsx'
+import StockIntelPanel  from './components/StockIntelPanel.jsx'
+import ScannerTable     from './components/ScannerTable.jsx'
+import ScannerFilters   from './components/ScannerFilters.jsx'
+import TradingChart     from './components/TradingChart.jsx'
+import PortfolioTab     from './components/PortfolioTab.jsx'
+import WatchlistPanel   from './components/WatchlistPanel.jsx'
 import SystemGuideModal from './components/SystemGuideModal.jsx'
 import EngineHealthPanel from './components/EngineHealthPanel.jsx'
 import DebugDrawer      from './components/DebugDrawer.jsx'
-import BacktestPanel from './components/BacktestPanel.jsx'
+import BacktestPanel    from './components/BacktestPanel.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -51,7 +54,7 @@ const DEFAULT_SCAN_STATUS = {
 }
 
 export default function App() {
-  const [activeTab,      setActiveTab     ] = useState('scanner')
+  const [activePage,      setActivePage     ] = useState('scanner')
   const [regime,         setRegime        ] = useState(null)
   const [vcpSetups,      setVcpSetups     ] = useState([])
   const [pullbackSetups, setPullbackSetups] = useState([])
@@ -72,12 +75,31 @@ export default function App() {
   const [debugTicker,    setDebugTicker   ] = useState(null)
   const [debugData,      setDebugData     ] = useState(null)
   const [debugLoading,   setDebugLoading  ] = useState(false)
-  const [sortBy,         setSortBy        ] = useState('default')
-  const [hotOnly,        setHotOnly       ] = useState(false)
   const [livePrices,     setLivePrices    ] = useState({})
   const [chartFocus,     setChartFocus    ] = useState(false)
+  const [filters,        setFilters       ] = useState({
+    minScore: 0,
+    setupType: 'ALL',
+    hotOnly: false,
+    searchQuery: '',
+  })
+  const [analysis,        setAnalysis       ] = useState(null)
+  const [analysisLoading, setAnalysisLoading] = useState(false)
 
   const pollTimerRef = useRef(null)
+
+  // ── Computed values ───────────────────────────────────────────────────────
+  const allSetups = [
+    ...vcpSetups,
+    ...pullbackSetups,
+    ...baseSetups,
+    ...resBreakoutSetups,
+    ...htfSetups,
+    ...lceSetups,
+    ...optionsSetups,
+  ]
+
+  const selectedSetup = allSetups.find(s => s.ticker === selectedTicker) ?? null
 
   // ── Load regime + setups from DB ─────────────────────────────────────────
   const loadAllData = useCallback(async () => {
@@ -110,21 +132,23 @@ export default function App() {
     }
   }, [])
 
-  // ── Ticker click → load chart data; optionally switch to scanner tab ──────
+  // ── Ticker click → load chart data + analysis; optionally switch to scanner
   const handleTickerClick = useCallback(async (ticker, switchTab = true) => {
-    if (switchTab) setActiveTab('scanner')
+    if (switchTab) setActivePage('scanner')
     setSelectedTicker(ticker)
     setChartData(null)
     setLoadingChart(true)
-    try {
-      const data = await fetchChartData(ticker)
-      setChartData(data)
-    } catch (err) {
-      console.error('[App] fetchChartData:', err)
-      setChartData(null)
-    } finally {
-      setLoadingChart(false)
-    }
+    setAnalysis(null)
+    setAnalysisLoading(true)
+
+    const [chartResult, analysisResult] = await Promise.allSettled([
+      fetchChartData(ticker),
+      fetchAnalysis(ticker),
+    ])
+    if (chartResult.status === 'fulfilled') setChartData(chartResult.value)
+    if (analysisResult.status === 'fulfilled') setAnalysis(analysisResult.value)
+    setLoadingChart(false)
+    setAnalysisLoading(false)
   }, [])
 
   // ── Run scan ──────────────────────────────────────────────────────────────
@@ -136,26 +160,6 @@ export default function App() {
       console.error('[App] triggerScan:', err)
     }
   }, [devMode, dryRun])
-
-  const applySort = useCallback((setups) => {
-    const filtered = hotOnly ? setups.filter(s => s.hot_sector) : setups
-    if (sortBy === 'default') return filtered
-    const s = [...filtered]
-    const riskPct = (x) => {
-      const r = (x.entry ?? 0) - (x.stop_loss ?? 0)
-      return x.entry > 0 ? r / x.entry : 999
-    }
-    switch (sortBy) {
-      case 'risk_pct':        return s.sort((a, b) => riskPct(a) - riskPct(b))
-      case 'risk_pct_desc':   return s.sort((a, b) => riskPct(b) - riskPct(a))
-      case 'rr_desc':         return s.sort((a, b) => (b.rr ?? 0) - (a.rr ?? 0))
-      case 'vol_desc':        return s.sort((a, b) => (b.volume_ratio ?? 0) - (a.volume_ratio ?? 0))
-      case 'entry_asc':       return s.sort((a, b) => (a.entry ?? 0) - (b.entry ?? 0))
-      case 'ticker':          return s.sort((a, b) => a.ticker.localeCompare(b.ticker))
-      case 'rs_score_desc':   return s.sort((a, b) => (b.rs_score ?? -999) - (a.rs_score ?? -999))
-      default:                return filtered
-    }
-  }, [sortBy, hotOnly])
 
   const handleScanTicker = useCallback(async (ticker) => {
     try {
@@ -266,13 +270,13 @@ export default function App() {
       .catch(() => {})
   }, [loadAllData])
 
-  // ── '?' key opens the guide (when no input element is focused) ───────────
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
-      if (e.key === '?' && document.activeElement.tagName !== 'INPUT') {
-        setShowGuide((v) => !v)
-      }
-      if ((e.key === 'f' || e.key === 'F') && document.activeElement.tagName !== 'INPUT') setChartFocus((v) => !v)
+      if (document.activeElement.tagName === 'INPUT') return
+      if (e.key === '?') setShowGuide(v => !v)
+      if (e.key === 'f' || e.key === 'F') setChartFocus(v => !v)
+      if (e.key === 'Escape') setDebugTicker(null)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -280,274 +284,160 @@ export default function App() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div
-      className="flex flex-col"
-      style={{ height: '100vh', background: 'var(--bg)', overflow: 'hidden' }}
-    >
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <Header
-        regime={regime}
-        scanStatus={scanStatus}
-        onRunScan={handleRunScan}
-        onSearchTicker={handleTickerClick}
-        onOpenGuide={() => setShowGuide(true)}
-        devMode={devMode}
-        dryRun={dryRun}
-        onToggleDev={() => {
-          const next = !devMode
-          setDevMode(next)
-          if (!next) {
-            setDryRun(false)
-            if (activeTab === 'backtest') setActiveTab('scanner')
-          }
-        }}
-        onToggleDryRun={() => setDryRun(v => !v)}
-      />
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
 
-      {/* ── Tab bar ────────────────────────────────────────────────────── */}
-      <div
-        className="flex items-stretch flex-shrink-0"
-        style={{
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--surface)',
-          height: 30,
-        }}
-      >
-        {['scanner', 'portfolio'].map((tab) => {
-          const active = activeTab === tab
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                fontFamily: 'Barlow Condensed, sans-serif',
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: '0.15em',
-                textTransform: 'uppercase',
-                padding: '0 18px',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
-                color: active ? 'var(--accent)' : 'var(--muted)',
-                cursor: 'pointer',
-                transition: 'color 0.12s, border-color 0.12s',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              {tab === 'scanner' ? 'SCANNER' : 'PORTFOLIO'}
-              {tab === 'portfolio' && (
-                <span
-                  style={{
-                    fontSize: 9,
-                    background: active ? 'rgba(245,166,35,0.2)' : 'var(--border)',
-                    color: active ? 'var(--accent)' : 'var(--muted)',
-                    padding: '1px 5px',
-                    borderRadius: 2,
-                  }}
-                >
-                  TRADES
-                </span>
-              )}
-            </button>
-          )
-        })}
-        {devMode && (
-          <button
-            onClick={() => setActiveTab('backtest')}
-            style={{
-              fontFamily: 'Barlow Condensed, sans-serif',
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: '0.15em',
-              textTransform: 'uppercase',
-              padding: '0 18px',
-              background: 'transparent',
-              border: 'none',
-              borderBottom: activeTab === 'backtest' ? '2px solid var(--halt)' : '2px solid transparent',
-              color: activeTab === 'backtest' ? 'var(--halt)' : 'var(--muted)',
-              cursor: 'pointer',
-              transition: 'color 0.12s, border-color 0.12s',
-            }}
-          >
-            BACKTEST
-          </button>
-        )}
-      </div>
+      {/* ── Sidebar ──────────────────────────────────────────── */}
+      <Sidebar activePage={activePage} onNavigate={setActivePage} />
 
-      {/* ── Body ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0">
+      {/* ── Main content ─────────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
-        {activeTab === 'scanner' && (
-          <>
-            {/* Watchlist panel (narrow, leftmost) */}
+        {/* Top bar */}
+        <TopBar
+          activePage={activePage}
+          regime={regime}
+          scanStatus={scanStatus}
+          onRunScan={handleRunScan}
+          onSearchTicker={(t) => handleTickerClick(t, false)}
+          devMode={devMode}
+          dryRun={dryRun}
+          onToggleDev={() => {
+            const next = !devMode
+            setDevMode(next)
+            if (!next) {
+              setDryRun(false)
+              if (activePage === 'analytics') setActivePage('scanner')
+            }
+          }}
+          onToggleDryRun={() => setDryRun(v => !v)}
+          onOpenGuide={() => setShowGuide(true)}
+        />
+
+        {/* ── SCANNER PAGE ──────────────────────────────────── */}
+        {activePage === 'scanner' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+
+            {/* Stat cards row */}
             {!chartFocus && (
-              <WatchlistPanel
-                items={watchlistItems}
-                selectedTicker={selectedTicker}
-                onSelectTicker={handleTickerClick}
-                loading={loadingSetups}
-              />
+              <StatCards regime={regime} allSetups={allSetups} />
             )}
 
-            {/* Left panel — setup tables (400px) */}
-            <aside
-              className="flex flex-col overflow-y-auto flex-shrink-0"
-              style={{
-                width: 400,
-                borderRight: '2px solid var(--border-light)',
-                background: 'var(--surface)',
-                display: chartFocus ? 'none' : undefined,
-              }}
-            >
-              {/* Sort bar */}
-              <SortBar sortBy={sortBy} onSort={setSortBy} hotOnly={hotOnly} onToggleHot={() => setHotOnly(v => !v)} />
-
-              {/* ── Derive VCP sub-categories ─────────────────────────── */}
-              {(() => {
-                const rsLeads      = vcpSetups.filter(s => s.is_rs_lead)
-                const confirmedBrk = vcpSetups.filter(s => s.is_breakout && !s.is_rs_lead && !s.is_trendline_breakout && !s.is_kde_breakout)
-                const tdlBreaks    = vcpSetups.filter(s => s.is_trendline_breakout)
-                const drySetups    = vcpSetups.filter(s => !s.is_breakout && !s.is_rs_lead)
-
-                const tblProps = {
-                  selectedTicker,
-                  onSelectTicker: handleTickerClick,
-                  loading: loadingSetups,
-                  devMode,
-                  onDebug: handleDebug,
-                  livePrices,
-                }
-
-                return (
-                  <>
-                    {/* ── Group 1: Breakouts ─────────────────────────── */}
-                    <SectionLabel label="BREAKOUTS" color="var(--t-blue)" />
-
-                    {rsLeads.length > 0 && (
-                      <SetupTable title="RS Leaders" accentColor="blue"
-                        setups={applySort(rsLeads)} {...tblProps} />
-                    )}
-
-                    {confirmedBrk.length > 0 && (
-                      <SetupTable title="Confirmed BRK" accentColor="blue"
-                        setups={applySort(confirmedBrk)} {...tblProps} />
-                    )}
-
-                    {tdlBreaks.length > 0 && (
-                      <SetupTable title="TDL Breaks" accentColor="blue"
-                        setups={applySort(tdlBreaks)} {...tblProps} />
-                    )}
-
-                    {rsLeads.length === 0 && confirmedBrk.length === 0 && tdlBreaks.length === 0 && (
-                      <EmptyGroup label="No active breakouts" />
-                    )}
-
-                    {/* ── Group 2: Approaching (DRY / coiling) ──────── */}
-                    <SectionLabel label="COILING" color="var(--t-accent, #F5A623)" />
-
-                    {drySetups.length > 0 ? (
-                      <SetupTable title="Near Pivot (DRY)" accentColor="accent"
-                        setups={applySort(drySetups)} {...tblProps} />
-                    ) : (
-                      <EmptyGroup label="No coiling setups" />
-                    )}
-
-                    {/* ── Group 3: Pullbacks ─────────────────────────── */}
-                    <SectionLabel label="PULLBACKS" color="var(--t-accent, #F5A623)" />
-
-                    <SetupTable title="Tactical Pullbacks" accentColor="accent"
-                      setups={applySort(pullbackSetups)} {...tblProps} />
-
-                    {/* ── Group 4: Bases & Resistance ────────────────── */}
-                    <SectionLabel label="BASES & BREAKOUTS" color="var(--t-green, #4CAF50)" />
-
-                    <SetupTable title="Base Patterns" accentColor="green"
-                      setups={applySort(baseSetups)} {...tblProps} />
-
-                    <SetupTable title="Resistance Breakouts" accentColor="green"
-                      setups={applySort(resBreakoutSetups)} {...tblProps} />
-
-                    {/* ── Group 5: Momentum ──────────────────────────── */}
-                    <SectionLabel label="MOMENTUM" color="var(--t-blue, #2196F3)" />
-
-                    <SetupTable title="High Tight Flags" accentColor="blue"
-                      setups={applySort(htfSetups)} {...tblProps} />
-
-                    <SetupTable title="Low Cheat Entries" accentColor="blue"
-                      setups={applySort(lceSetups)} {...tblProps} />
-                  </>
-                )
-              })()}
-
-              <div className="mt-auto border-t border-t-border">
-                <div className="px-3 py-3">
-                  <ScanFooter
-                    vcpCount={vcpSetups.length}
-                    pbCount={pullbackSetups.length}
-                    baseCount={baseSetups.length}
-                    resCount={resBreakoutSetups.length}
-                    scanTimestamp={scanStatus.last_completed}
-                  />
-                </div>
-                {devMode && (
-                  <EngineHealthPanel stats={scanStatus.engine_stats} />
-                )}
-              </div>
-            </aside>
-
-            {/* Right panel — chart */}
-            <main className="flex-1 min-w-0 overflow-hidden" style={{ background: 'var(--bg)', position: 'relative' }}>
+            {/* Middle: Chart + Intel Panel */}
+            <div style={{
+              flex: chartFocus ? 1 : '0 0 420px',
+              display: 'flex', gap: 12,
+              padding: '0 16px 12px',
+              minHeight: 0,
+              position: 'relative',
+            }}>
+              {/* Chart focus hint */}
               {chartFocus && (
                 <div style={{
-                  position: 'absolute',
-                  top: 8,
-                  right: 12,
-                  zIndex: 10,
-                  fontSize: 8,
-                  color: 'rgba(245,166,35,0.5)',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                  letterSpacing: '0.08em',
+                  position: 'absolute', top: 8, right: 28, zIndex: 10,
+                  fontSize: 8, color: 'rgba(245,166,35,0.5)',
+                  fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '0.08em',
                   pointerEvents: 'none',
                 }}>
                   F — EXIT FOCUS
                 </div>
               )}
-              <TradingChart
-                ticker={selectedTicker}
-                chartData={chartData}
-                loading={loadingChart}
-                setups={selectedTicker ? [
-                  ...vcpSetups, ...pullbackSetups, ...baseSetups,
-                  ...resBreakoutSetups, ...htfSetups, ...lceSetups,
-                ].filter(s => s.ticker === selectedTicker) : []}
-              />
-            </main>
-          </>
-        )}
 
-        {activeTab === 'portfolio' && (
-          /* Portfolio tab — full width */
-          <div className="flex-1 min-w-0 overflow-hidden">
-            <PortfolioTab onTickerClick={handleTickerClick} />
+              {/* Chart card */}
+              <div
+                className="card"
+                style={{ flex: 1, minWidth: 0, overflow: 'hidden', padding: 0, position: 'relative' }}
+              >
+                <TradingChart
+                  ticker={selectedTicker}
+                  chartData={chartData}
+                  loading={loadingChart}
+                  setups={selectedTicker ? allSetups.filter(s => s.ticker === selectedTicker) : []}
+                />
+              </div>
+
+              {/* Right panel — hidden in focus mode */}
+              {!chartFocus && (
+                <StockIntelPanel
+                  setup={selectedSetup}
+                  livePrices={livePrices}
+                  analysis={analysis}
+                  analysisLoading={analysisLoading}
+                />
+              )}
+            </div>
+
+            {/* Bottom: Filter bar + Scanner table */}
+            {!chartFocus && (
+              <div style={{
+                flex: 1, display: 'flex', flexDirection: 'column',
+                margin: '0 16px 16px',
+                background: 'var(--card)',
+                border: '1px solid var(--card-border)',
+                borderRadius: 12,
+                overflow: 'hidden',
+                minHeight: 0,
+              }}>
+                <ScannerFilters filters={filters} onFiltersChange={setFilters} />
+                <ScannerTable
+                  allSetups={allSetups}
+                  filters={filters}
+                  selectedTicker={selectedTicker}
+                  onSelectTicker={handleTickerClick}
+                  livePrices={livePrices}
+                />
+              </div>
+            )}
           </div>
         )}
 
-        {activeTab === 'backtest' && devMode && (
-          <div className="flex-1 min-w-0 overflow-y-auto" style={{ background: 'var(--bg)', padding: 24 }}>
+        {/* ── WATCHLIST PAGE ────────────────────────────────── */}
+        {activePage === 'watchlist' && (
+          <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+            <WatchlistPanel
+              items={watchlistItems}
+              selectedTicker={selectedTicker}
+              onSelectTicker={handleTickerClick}
+              loading={loadingSetups}
+            />
+          </div>
+        )}
+
+        {/* ── PORTFOLIO PAGE ────────────────────────────────── */}
+        {activePage === 'portfolio' && (
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <PortfolioTab
+              regime={regime}
+              scanStatus={scanStatus}
+              onTickerClick={handleTickerClick}
+              devMode={devMode}
+            />
+          </div>
+        )}
+
+        {/* ── ANALYTICS PAGE ───────────────────────────────── */}
+        {activePage === 'analytics' && (
+          <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
             <BacktestPanel />
           </div>
         )}
 
+        {/* ── DASHBOARD / SETUPS / SETTINGS — stubs ────────── */}
+        {['dashboard', 'setups', 'settings'].includes(activePage) && (
+          <div style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--muted)', flexDirection: 'column', gap: 8,
+          }}>
+            <span style={{ fontSize: 32 }}>🚧</span>
+            <span style={{ fontSize: 13, fontFamily: '"IBM Plex Mono", monospace' }}>
+              {activePage.toUpperCase()} — coming soon
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* System Guide modal */}
+      {/* ── Overlays (all pages) ─────────────────────────────── */}
       <SystemGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
-
-      {/* DebugDrawer — slides in from the right when a [?] button is clicked */}
-      {debugTicker && (
+      {devMode && debugTicker && (
         <DebugDrawer
           ticker={debugTicker}
           data={debugData}
@@ -555,140 +445,6 @@ export default function App() {
           onClose={() => { setDebugTicker(null); setDebugData(null) }}
         />
       )}
-    </div>
-  )
-}
-
-// ── Sort bar ──────────────────────────────────────────────────────────────
-
-const SORT_OPTIONS = [
-  { key: 'default',        label: 'Default' },
-  { key: 'risk_pct',       label: 'Risk % ↑' },
-  { key: 'risk_pct_desc',  label: 'Risk % ↓' },
-  { key: 'rr_desc',        label: 'R:R ↓'   },
-  { key: 'vol_desc',       label: 'Vol ↓'   },
-  { key: 'entry_asc',      label: '$ ↑'     },
-  { key: 'ticker',         label: 'A–Z'     },
-  { key: 'rs_score_desc',  label: 'RS ↓'   },
-]
-
-function SortBar({ sortBy, onSort, hotOnly, onToggleHot }) {
-  return (
-    <div
-      style={{
-        display: 'flex', alignItems: 'center', gap: 4,
-        padding: '5px 8px',
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--surface)',
-        flexShrink: 0,
-        flexWrap: 'wrap',
-      }}
-    >
-      <span style={{
-        fontFamily: 'Barlow Condensed, sans-serif',
-        fontSize: 9, fontWeight: 700, letterSpacing: '0.15em',
-        textTransform: 'uppercase', color: 'var(--muted)',
-        marginRight: 4, whiteSpace: 'nowrap',
-      }}>
-        Sort
-      </span>
-      {SORT_OPTIONS.map((opt) => {
-        const active = sortBy === opt.key
-        return (
-          <button
-            key={opt.key}
-            onClick={() => onSort(opt.key)}
-            style={{
-              fontFamily: 'IBM Plex Mono, monospace',
-              fontSize: 9, fontWeight: active ? 700 : 500,
-              letterSpacing: '0.06em',
-              padding: '2px 7px',
-              background: active ? 'rgba(245,166,35,0.15)' : 'transparent',
-              border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-              color: active ? 'var(--accent)' : 'var(--muted)',
-              cursor: 'pointer',
-              transition: 'all 0.12s',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {opt.label}
-          </button>
-        )
-      })}
-      <button
-        onClick={onToggleHot}
-        title="Show only hot-sector setups (3+ setups in same sector)"
-        style={{
-          fontFamily: 'IBM Plex Mono, monospace',
-          fontSize: 9, fontWeight: hotOnly ? 700 : 500,
-          letterSpacing: '0.06em',
-          padding: '2px 7px',
-          background: hotOnly ? 'rgba(255,100,0,0.15)' : 'transparent',
-          border: `1px solid ${hotOnly ? 'rgba(255,100,0,0.7)' : 'var(--border)'}`,
-          color: hotOnly ? '#FF6400' : 'var(--muted)',
-          cursor: 'pointer',
-          transition: 'all 0.12s',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        🔥 Hot
-      </button>
-    </div>
-  )
-}
-
-// ── Section label divider ─────────────────────────────────────────────────
-
-function SectionLabel({ label, color = 'var(--muted)' }) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-1"
-         style={{ borderTop: '1px solid var(--border)', background: 'rgba(255,255,255,0.015)' }}>
-      <span style={{
-        fontSize: 8, fontWeight: 700, letterSpacing: '0.12em',
-        color, fontFamily: 'IBM Plex Mono, monospace',
-      }}>
-        {label}
-      </span>
-    </div>
-  )
-}
-
-function EmptyGroup({ label }) {
-  return (
-    <div className="px-3 py-2 text-[9px] tracking-widest uppercase"
-         style={{ color: 'var(--muted)', opacity: 0.45 }}>
-      — {label}
-    </div>
-  )
-}
-
-// ── Scan footer ───────────────────────────────────────────────────────────
-
-function ScanFooter({ vcpCount, pbCount, baseCount = 0, resCount = 0, scanTimestamp }) {
-  const fmtTs = (ts) => {
-    if (!ts) return 'Never'
-    try {
-      const d = new Date(ts + 'Z')
-      return d.toLocaleString('en-US', {
-        month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', hour12: false,
-      })
-    } catch { return ts }
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex justify-between text-[9px] text-t-muted uppercase tracking-widest">
-        <span>Last scan</span>
-        <span className="text-t-text">{fmtTs(scanTimestamp)}</span>
-      </div>
-      <div className="flex gap-3 text-[9px] text-t-muted">
-        <span><span className="text-t-blue font-600">{vcpCount}</span> VCP</span>
-        <span><span className="text-t-accent font-600">{pbCount}</span> Pullback</span>
-        <span><span className="text-t-green font-600">{baseCount}</span> Base</span>
-        <span><span className="text-[var(--go)] font-600">{resCount}</span> ResBreak</span>
-        <span className="ml-auto text-t-border">v1.0</span>
-      </div>
     </div>
   )
 }
