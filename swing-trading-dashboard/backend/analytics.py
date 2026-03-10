@@ -16,9 +16,7 @@ Trade dict shape (minimum required keys):
     regime_score  : int | None
 """
 
-from typing import Any
-
-LOW_SAMPLE_THRESHOLD = 20   # warn when a setup type has fewer than this many trades
+from constants import LOW_SAMPLE_THRESHOLD
 
 
 def _is_closed(trade: dict) -> bool:
@@ -201,6 +199,7 @@ def compute_regime_performance(trades: list) -> dict:
     result = {}
     for label, group in buckets.items():
         if not group:
+            result[label] = None   # empty bucket — no trades in this regime tier
             continue
         m = compute_live_diagnostics(group)
         result[label] = {

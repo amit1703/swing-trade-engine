@@ -547,7 +547,7 @@ async def get_closed_trades(db_path: str, limit: int = 50) -> List[Dict]:
     async with aiosqlite.connect(db_path) as db:
         async with db.execute(
             """SELECT id, ticker, entry_price, quantity, stop_loss, target, targets_json,
-                      entry_date, notes, exit_price, exit_date, created_at
+                      entry_date, notes, exit_price, exit_date, created_at, setup_type
                FROM trades WHERE status = 'closed'
                ORDER BY exit_date DESC, created_at DESC LIMIT ?""",
             (limit,),
@@ -589,6 +589,7 @@ async def get_closed_trades(db_path: str, limit: int = 50) -> List[Dict]:
                     "pl_pct":      pl_pct,
                     "days_held":   days_held,
                     "created_at":  r[11],
+                    "setup_type":  r[12] if r[12] is not None else "",
                 })
             return result
 

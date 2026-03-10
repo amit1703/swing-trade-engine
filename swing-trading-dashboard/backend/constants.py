@@ -113,6 +113,7 @@ TOP_SECTORS_N           = 8     # top N sectors by avg RS (raised from 5; scorin
 # effective quality drop observed near ~59 — keeping the behaviour as a soft
 # scoring effect preserves flexibility vs a hard cutoff.
 MIN_SETUP_SCORE         = 70    # gate: discard setups with unified score < 70
+LOW_SAMPLE_THRESHOLD    = 20    # min trades per setup type for reliable diagnostics
 
 # Score component weights (upper bounds; raw sum = 120, capped to 100 in compute_setup_score)
 SCORE_WEIGHT_RS_RANK    = 30    # RS percentile rank
