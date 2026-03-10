@@ -7,6 +7,8 @@
   --bg:           #000000;
   --surface:      #080c12;
   --panel:        #0c111a;
+  --card:         #0f1520;
+  --card-border:  #1e2d42;
   --border:       #1a2535;
   --border-light: #253347;
   --text:         #c8cdd6;
@@ -15,7 +17,9 @@
   --go:           #00c87a;
   --halt:         #ff2d55;
   --blue:         #00C8FF;
-  --purple:       #9B6EFF;   /* RS strength / momentum indicator */
+  --purple:       #9B6EFF;
+  --radius-card:  12px;
+  --shadow-card:  0 4px 24px rgba(0,0,0,0.5);
 }
 
 /* ── Base ────────────────────────────────────────────── */
@@ -26,248 +30,157 @@ html, body, #root {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px;
-  line-height: 1.4;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Scanline overlay ────────────────────────────────── */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 3px,
-    rgba(0, 0, 0, 0.06) 3px,
-    rgba(0, 0, 0, 0.06) 4px
-  );
-  pointer-events: none;
-  z-index: 9999;
-}
+.font-mono, .tabular-nums { font-family: 'IBM Plex Mono', monospace; }
 
 /* ── Custom scrollbar ────────────────────────────────── */
-::-webkit-scrollbar            { width: 3px; height: 3px; }
+::-webkit-scrollbar            { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track      { background: var(--surface); }
-::-webkit-scrollbar-thumb      { background: var(--border-light); border-radius: 2px; }
+::-webkit-scrollbar-thumb      { background: var(--border-light); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover{ background: var(--accent); }
 
 /* ── Selection ───────────────────────────────────────── */
-::selection { background: rgba(245, 166, 35, 0.25); color: #fff; }
+::selection { background: rgba(245,166,35,0.25); color: #fff; }
 
-/* ── Table basics ────────────────────────────────────── */
+/* ── Card utility ────────────────────────────────────── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* ── Badge ───────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ── Section label ───────────────────────────────────── */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Progress bar ────────────────────────────────────── */
+.progress-bar      { height: 2px; background: var(--border); position: relative; overflow: hidden; }
+.progress-bar-fill { height: 100%; background: var(--go); transition: width 0.5s ease; }
+
+/* ── Shimmer skeleton ────────────────────────────────── */
+.shimmer-row {
+  height: 22px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--border) 25%, var(--border-light) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s linear infinite;
+}
+
+/* ── Terminal table ──────────────────────────────────── */
 .terminal-table {
   width: 100%;
   border-collapse: collapse;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
 }
 .terminal-table th {
-  font-family: 'Barlow Condensed', sans-serif;
+  padding: 4px 8px;
+  text-align: left;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  z-index: 1;
+}
+.terminal-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(26,37,53,0.5);
+  vertical-align: middle;
+}
+.terminal-table tr { cursor: pointer; transition: background 0.1s; }
+.terminal-table tr:hover td { background: rgba(255,255,255,0.025); }
+.terminal-table tr.selected td { background: rgba(245,166,35,0.06); }
+.terminal-table tr.selected td:first-child { border-left: 2px solid var(--accent); }
+
+/* ── Near-entry row glow ─────────────────────────────── */
+.row-near-entry td { background: rgba(245,166,35,0.035) !important; }
+.row-near-entry td:first-child {
+  border-left: 3px solid rgba(245,166,35,0.65) !important;
+  padding-left: 5px;
+}
+
+/* ── Sidebar nav button ──────────────────────────────── */
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border: none;
+  background: transparent;
+}
+.nav-btn:hover  { background: rgba(255,255,255,0.06); color: var(--text); }
+.nav-btn.active { background: rgba(0,200,122,0.12);   color: var(--go);  }
+
+/* ── Stat card ───────────────────────────────────────── */
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-card);
+  flex: 1;
+  min-width: 0;
+}
+.stat-card-label {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
-  padding: 5px 8px;
-  text-align: right;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-  user-select: none;
 }
-.terminal-table th:first-child { text-align: left; }
-.terminal-table td {
-  padding: 4px 8px;
-  border-bottom: 1px solid rgba(26, 37, 53, 0.6);
-  font-size: 11px;
-  text-align: right;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.terminal-table td:first-child { text-align: left; }
-.terminal-table tr {
-  cursor: pointer;
-  transition: background 0.08s;
-}
-.terminal-table tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.012);
-}
-.terminal-table tr:hover td {
-  background: rgba(245, 166, 35, 0.07);
-}
-.terminal-table tr:hover td:first-child {
-  border-left: 2px solid rgba(245, 166, 35, 0.4);
-  padding-left: 6px;
-}
-.terminal-table tr.selected td {
-  background: rgba(245, 166, 35, 0.12);
-}
-.terminal-table tr.selected td:first-child {
-  border-left: 2px solid var(--accent);
-  padding-left: 6px;
-}
-
-/* ── Near-entry row glow ─────────────────────────────── */
-.row-near-entry td {
-  background: rgba(245, 166, 35, 0.035) !important;
-}
-.row-near-entry td:first-child {
-  border-left: 3px solid rgba(245, 166, 35, 0.65) !important;
-  padding-left: 5px;
-}
-
-/* ── Section header ──────────────────────────────────── */
-.section-label {
+.stat-card-value {
   font-family: 'Barlow Condensed', sans-serif;
-  font-size: 10px;
+  font-size: 28px;
   font-weight: 700;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 7px 8px 5px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  line-height: 1;
+  letter-spacing: -0.01em;
 }
-
-/* ── Badge ───────────────────────────────────────────── */
-.badge {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 2px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-/* ── Btn ─────────────────────────────────────────────── */
-.btn-scan {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  padding: 5px 14px;
-  background: transparent;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  cursor: pointer;
-  text-transform: uppercase;
-  transition: background 0.15s, color 0.15s;
-}
-.btn-scan:hover:not(:disabled) {
-  background: var(--accent);
-  color: #000;
-}
-.btn-scan:disabled {
-  border-color: var(--muted);
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-/* ── Progress bar ────────────────────────────────────── */
-.progress-bar {
-  height: 2px;
-  background: var(--border);
-  overflow: hidden;
-}
-.progress-bar-fill {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.3s ease;
-  box-shadow: 0 0 6px var(--accent);
-}
-
-/* ── Lightweight chart container ─────────────────────── */
-.chart-container {
-  position: relative;
-}
-.chart-legend {
-  position: absolute;
-  top: 8px;
-  left: 10px;
-  z-index: 10;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  pointer-events: none;
+.stat-card-sub {
   font-size: 10px;
-}
-.chart-legend-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.chart-legend-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-/* ── Empty / loading states ──────────────────────────── */
-.terminal-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
   color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  gap: 8px;
+  font-family: 'IBM Plex Mono', monospace;
 }
-.terminal-cursor::after {
-  content: '█';
-  color: var(--accent);
-  animation: blink 1s step-end infinite;
-}
-
-/* ── No-data shimmer ─────────────────────────────────── */
-.shimmer-row {
-  height: 24px;
-  border-radius: 2px;
-  background: linear-gradient(
-    90deg,
-    var(--surface) 25%,
-    var(--panel) 50%,
-    var(--surface) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.8s linear infinite;
-  margin: 2px 0;
-}
-
-/* ── Keyframe animations ─────────────────────────────── */
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0; }
-}
-
-@keyframes shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-@keyframes scan-pulse {
-  0%, 100% { border-color: var(--accent); box-shadow: none; }
-  50%       { border-color: var(--accent); box-shadow: 0 0 8px rgba(245, 166, 35, 0.5); }
-}
-
-/* ── Scan button — active scanning state ─────────────── */
-.btn-scan.scanning,
-.btn-scan.scanning:disabled {
-  animation: scan-pulse 1.2s ease-in-out infinite;
-  border-color: var(--accent);
-  color: var(--accent);
-  cursor: default;
-}
-
-/* ── P/L glow (portfolio table) ──────────────────────── */
-.pl-positive { text-shadow: 0 0 10px rgba(0, 200, 122, 0.5); }
-.pl-negative { text-shadow: 0 0 10px rgba(255, 45, 85, 0.45); }
-
-/* ── Regime badge glow (header) ──────────────────────── */
-.regime-go   { text-shadow: 0 0 12px rgba(0, 200, 122, 0.65); }
-.regime-halt { text-shadow: 0 0 12px rgba(255, 45, 85, 0.65); }
