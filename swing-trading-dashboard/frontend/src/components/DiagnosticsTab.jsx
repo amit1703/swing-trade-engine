@@ -282,6 +282,7 @@ export default function DiagnosticsTab() {
   }, [btRunning])
 
   async function handleRunBacktest() {
+    if (btRunning) return
     setBtRunning(true)
     setData(null)
     try {
