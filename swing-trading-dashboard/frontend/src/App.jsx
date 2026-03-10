@@ -398,7 +398,7 @@ export default function App() {
 
         {/* ── WATCHLIST PAGE ────────────────────────────────── */}
         {activePage === 'watchlist' && (
-          <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <WatchlistPanel
               items={watchlistItems}
               selectedTicker={selectedTicker}
