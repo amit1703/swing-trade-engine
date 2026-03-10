@@ -40,6 +40,7 @@ import SystemGuideModal from './components/SystemGuideModal.jsx'
 import EngineHealthPanel from './components/EngineHealthPanel.jsx'
 import DebugDrawer      from './components/DebugDrawer.jsx'
 import BacktestPanel    from './components/BacktestPanel.jsx'
+import DiagnosticsTab   from './components/DiagnosticsTab.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -424,6 +425,13 @@ export default function App() {
         {activePage === 'analytics' && (
           <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
             <BacktestPanel />
+          </div>
+        )}
+
+        {/* ── DIAGNOSTICS PAGE ─────────────────────────────── */}
+        {activePage === 'diagnostics' && (
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <DiagnosticsTab />
           </div>
         )}
 

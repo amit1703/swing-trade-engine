@@ -3,6 +3,7 @@ import {
   Star,
   Briefcase,
   BarChart2,
+  Activity,
   Settings,
 } from 'lucide-react'
 
@@ -10,7 +11,8 @@ const NAV_ITEMS = [
   { id: 'scanner',   icon: ScanLine,  label: 'Scanner'   },
   { id: 'watchlist', icon: Star,      label: 'Watchlist' },
   { id: 'portfolio', icon: Briefcase, label: 'Portfolio' },
-  { id: 'analytics', icon: BarChart2, label: 'Analytics' },
+  { id: 'analytics',    icon: BarChart2, label: 'Analytics'    },
+  { id: 'diagnostics', icon: Activity,  label: 'Diagnostics' },
 ]
 
 export default function Sidebar({ activePage, onNavigate }) {
