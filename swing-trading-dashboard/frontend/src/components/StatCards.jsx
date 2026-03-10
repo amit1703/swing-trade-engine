@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Minus, Zap, Target, Activity } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react'
 
 function RegimeCard({ regime }) {
   const regimeType  = regime?.regime
@@ -61,58 +61,6 @@ function RegimeCard({ regime }) {
   )
 }
 
-function SetupsCard({ allSetups }) {
-  const total = allSetups.length
-
-  return (
-    <div className="stat-card">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span className="stat-card-label">Active Setups</span>
-        <Zap size={14} color="var(--muted)" />
-      </div>
-      <span className="stat-card-value" style={{ color: total > 0 ? 'var(--go)' : 'var(--muted)' }}>
-        {total}
-      </span>
-      <span className="stat-card-sub">
-        {total === 0 ? 'Run a scan to populate' : 'across all engines'}
-      </span>
-    </div>
-  )
-}
-
-function TopScoreCard({ allSetups }) {
-  if (allSetups.length === 0) {
-    return (
-      <div className="stat-card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span className="stat-card-label">Top Score Today</span>
-          <Target size={14} color="var(--muted)" />
-        </div>
-        <span className="stat-card-value" style={{ color: 'var(--muted)' }}>—</span>
-        <span className="stat-card-sub">No setups yet</span>
-      </div>
-    )
-  }
-  const best = allSetups.reduce((a, b) => (b.setup_score ?? 0) > (a.setup_score ?? 0) ? b : a)
-  const score = Math.round(best.setup_score ?? 0)
-  const scoreColor = score >= 80 ? 'var(--go)' : score >= 60 ? 'var(--accent)' : 'var(--muted)'
-
-  return (
-    <div className="stat-card">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span className="stat-card-label">Top Score Today</span>
-        <Target size={14} color="var(--muted)" />
-      </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span className="stat-card-value" style={{ color: scoreColor }}>{score}</span>
-        <span style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, fontWeight: 700, color: 'var(--text)' }}>
-          {best.ticker}
-        </span>
-      </div>
-      <span className="stat-card-sub">{best.setup_type ?? '—'}</span>
-    </div>
-  )
-}
 
 function SpyCard({ regime }) {
   const close  = regime?.spy_close ?? 0
@@ -150,12 +98,10 @@ function SpyCard({ regime }) {
   )
 }
 
-export default function StatCards({ regime, allSetups }) {
+export default function StatCards({ regime }) {
   return (
     <div style={{ display: 'flex', gap: 12, padding: '12px 16px', flexShrink: 0 }}>
       <RegimeCard regime={regime} />
-      <SetupsCard allSetups={allSetups} />
-      <TopScoreCard allSetups={allSetups} />
       <SpyCard regime={regime} />
     </div>
   )

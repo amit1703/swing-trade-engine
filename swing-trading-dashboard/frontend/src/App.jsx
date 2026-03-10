@@ -319,7 +319,7 @@ export default function App() {
 
             {/* Stat cards row */}
             {!chartFocus && (
-              <StatCards regime={regime} allSetups={allSetups} />
+              <StatCards regime={regime} />
             )}
 
             {/* Middle: Chart + Intel Panel */}
