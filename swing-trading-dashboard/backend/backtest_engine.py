@@ -100,6 +100,18 @@ class BacktestParams:
     tdl_bonus:       float = 1.0       # ascending TDL support (Optuna: 0.0 → 2.0)
 
 
+# Base scores for non-pullback signals (used in scored mode post-signal gate)
+_SIGNAL_BASE_SCORES: dict = {
+    "VCP":          6.0,
+    "RES_BREAKOUT": 6.0,
+    "BASE":         5.0,
+    "HTF":          5.0,
+    "LCE":          4.0,
+    "WATCHLIST":    3.0,
+}
+_SIGNAL_BASE_SCORE_DEFAULT = 5.0
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Data structures
 # ─────────────────────────────────────────────────────────────────────────────
@@ -723,6 +735,7 @@ class BacktestEngine:
                             exit_price=exit_price,
                             exit_reason=exit_reason,
                             holding_days=holding_days,
+                            final_score=trade_state.get("_final_score"),
                         ))
                     else:
                         still_open.append(trade_state)
@@ -772,13 +785,54 @@ class BacktestEngine:
                 if _rs_t["rs_score"] < self.params.rs_threshold:
                     continue
 
-            signal = _detect_signals(
-                self.ticker, df_slice, spy_slice, self.setup_types,
-                sr_zones=_sr_zones_cache,
-                precomputed_rs=_rs_t,
-            )
+            # ── Signal detection ──────────────────────────────────────────────
+            if self.params is not None and "PULLBACK" in self.setup_types:
+                # Scored mode: route PULLBACK through scan_pullback_scored
+                from engines.engine3 import scan_pullback_scored as _sps
+                pb_setup, pb_score = _sps(
+                    self.ticker, df_slice, _sr_zones_cache, self.params,
+                    rs_score=float(_rs_t["rs_score"]),
+                )
+                if pb_setup is not None:
+                    pb_setup["_raw_score"] = pb_score
+                    signal = pb_setup
+                else:
+                    # Try non-pullback engines via normal _detect_signals path
+                    non_pb_types = [s for s in self.setup_types if s != "PULLBACK"]
+                    signal = (
+                        _detect_signals(
+                            self.ticker, df_slice, spy_slice, non_pb_types,
+                            sr_zones=_sr_zones_cache,
+                            precomputed_rs=_rs_t,
+                        )
+                        if non_pb_types else None
+                    )
+            else:
+                # Legacy mode: existing _detect_signals path unchanged
+                signal = _detect_signals(
+                    self.ticker, df_slice, spy_slice, self.setup_types,
+                    sr_zones=_sr_zones_cache,
+                    precomputed_rs=_rs_t,
+                )
             if signal is None:
                 continue
+
+            # ── Scored mode: apply signal-type weight and threshold gate ──────
+            if self.params is not None:
+                setup_type_sig = signal.get("setup_type", "")
+                raw_score = signal.get(
+                    "_raw_score",
+                    _SIGNAL_BASE_SCORES.get(setup_type_sig, _SIGNAL_BASE_SCORE_DEFAULT),
+                )
+                is_breakout = setup_type_sig in ("VCP", "RES_BREAKOUT", "HTF", "LCE")
+                weight = (
+                    self.params.breakout_weight if is_breakout
+                    else self.params.pullback_weight
+                )
+                final_score = raw_score * weight
+                if final_score < self.params.score_threshold:
+                    continue
+                signal["_final_score"] = final_score
 
             # ── 4c. Schedule entry on T+1 ─────────────────────────────────
             next_idx = full_idx + 1
@@ -806,6 +860,7 @@ class BacktestEngine:
                 "trailing_stop":      stop_loss,
                 "take_profit":        take_profit,
                 "trail_mult_override": self.trail_mult_override,
+                "_final_score":       signal.get("_final_score"),
             })
 
         # ── 5. Close any still-open trades at end of period ───────────────
@@ -828,6 +883,7 @@ class BacktestEngine:
                     exit_price=exit_price,
                     exit_reason="EOD",
                     holding_days=holding_days,
+                    final_score=trade_state.get("_final_score"),
                 ))
 
         # ── 6. Compute and return metrics ─────────────────────────────────
