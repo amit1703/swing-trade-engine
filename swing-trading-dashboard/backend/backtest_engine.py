@@ -46,7 +46,8 @@ from constants import (
 )
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
 
-# V5: per-setup ATR trail multipliers — matched to _enrich_trade() in main.py
+# V5: per-setup ATR trail multipliers.
+# Task 3 will apply the same logic to _enrich_trade() in main.py (live portfolio).
 _TRAIL_ATR_BY_SETUP = {
     "VCP":          lambda: _constants.VCP_TRAIL_ATR_MULT,
     "PULLBACK":     lambda: _constants.PULLBACK_TRAIL_ATR_MULT,
@@ -301,7 +302,9 @@ def _manage_open_trade(
     Parameters
     ----------
     state : dict with keys:
-        entry_price, trailing_stop, take_profit, entry_date
+        entry_price, trailing_stop, take_profit, entry_date,
+        setup_type (optional) — used to select the ATR trail multiplier;
+        defaults to TRAIL_ATR_MULT fallback if absent or unrecognised
     bar : dict with keys:
         date, open, high, low, close, ema20, atr14
 
