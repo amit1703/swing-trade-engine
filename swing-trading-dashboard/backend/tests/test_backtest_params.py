@@ -25,13 +25,13 @@ def test_backtest_params_custom():
 
 
 def test_backtest_engine_accepts_params():
-    p = BacktestEngine(
+    engine = BacktestEngine(
         ticker="AAPL",
         start_date="2024-01-01",
         end_date="2024-12-31",
         params=BacktestParams(),
     )
-    assert p.params is not None
+    assert engine.params is not None
 
 
 def test_backtest_engine_none_params_by_default():
@@ -52,6 +52,7 @@ def test_trade_record_final_score_defaults_none():
         exit_reason="TARGET", holding_days=7,
     )
     assert tr.final_score is None
+    assert tr.to_dict()["final_score"] is None
 
 
 def test_trade_record_final_score_set():

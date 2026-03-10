@@ -278,3 +278,6 @@ BACKTEST_DIAG_START_DATE = "2023-01-01"   # fixed 2-year baseline window start
 BACKTEST_DIAG_END_DATE   = "2024-12-31"   # fixed 2-year baseline window end
 BACKTEST_V4_TRAIL_MULT   = 4.162          # strict V4 single trail multiplier (all setup types)
 BACKTEST_DIAG_CACHE_FILE = "cache/backtest_diagnostics.json"   # relative to backend/
+
+# V5 Scored-mode defaults (Optuna-tunable, used as BacktestParams defaults)
+BACKTEST_RS_THRESHOLD_DEFAULT = -0.01219   # V4 Optuna best; RS_REJECT_THRESHOLD in engine3

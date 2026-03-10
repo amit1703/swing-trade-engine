@@ -44,6 +44,7 @@ from constants import (
     RISK_PER_TRADE_PCT,
     MAX_POSITION_SIZE_PCT,
     MAX_OPEN_POSITIONS,
+    BACKTEST_RS_THRESHOLD_DEFAULT,
 )
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
 
@@ -86,7 +87,7 @@ class BacktestParams:
     starting point.
     """
     # ── RS filter ────────────────────────────────────────────────────────────
-    rs_threshold:    float = -0.01219  # O'Neil RS floor  (Optuna: -0.05 → +0.10)
+    rs_threshold:    float = BACKTEST_RS_THRESHOLD_DEFAULT  # O'Neil RS floor  (Optuna: -0.05 → +0.10)
 
     # ── Pullback scoring thresholds ──────────────────────────────────────────
     cci_threshold:   float = -20.0     # relaxed CCI floor (Optuna: -150 → -10)
@@ -766,6 +767,8 @@ class BacktestEngine:
                 "spy_3m":      float(_spy_3m_s.iloc[full_idx]),
             }
 
+            # NOTE: self.params (if set) gates this bar via RS threshold (Task 2)
+            # and routes PULLBACK signals through scan_pullback_scored (Task 4).
             signal = _detect_signals(
                 self.ticker, df_slice, spy_slice, self.setup_types,
                 sr_zones=_sr_zones_cache,
