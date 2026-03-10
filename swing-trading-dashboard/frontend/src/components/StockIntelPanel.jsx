@@ -83,9 +83,10 @@ function V5AnalysisSection({ analysis }) {
 
   const {
     rs_rank, regime_alignment, entry_quality,
-    price_risk_pct, risk_level, reject_reasons = [],
+    price_risk_pct, risk_level, reject_reasons,
   } = analysis
 
+  const safeRejectReasons = Array.isArray(reject_reasons) ? reject_reasons : []
   const riskColor = { LOW: 'var(--go)', MODERATE: 'var(--accent)', HIGH: 'var(--halt)' }[risk_level] ?? 'var(--muted)'
 
   return (
@@ -116,9 +117,9 @@ function V5AnalysisSection({ analysis }) {
       )}
 
       {/* Reject reasons */}
-      {reject_reasons.length > 0 && (
+      {safeRejectReasons.length > 0 && (
         <div style={{ marginTop: 6 }}>
-          {reject_reasons.map((reason, i) => (
+          {safeRejectReasons.map((reason, i) => (
             <div key={i} style={{
               fontSize: 9, lineHeight: 1.5, color: 'var(--halt)',
               fontFamily: '"Inter", sans-serif',
@@ -304,8 +305,8 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
         </div>
       )}
 
-      {/* V5 Analysis section */}
-      <V5AnalysisSection analysis={analysis} />
+      {/* V5 Analysis section — hidden while loading to prevent stale-data bleed */}
+      {!analysisLoading && analysis && <V5AnalysisSection analysis={analysis} />}
 
       {/* TradingView link */}
       <div style={{ padding: '10px 16px', borderTop: '1px solid var(--card-border)' }}>
