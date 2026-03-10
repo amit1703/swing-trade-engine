@@ -39,6 +39,7 @@ import yfinance as yf
 
 sys.path.insert(0, os.path.dirname(__file__))
 from constants import (
+    CONCURRENCY_LIMIT,
     RS_BLUE_DOT_TOLERANCE_PCT,
     RISK_PER_TRADE_PCT,
     MAX_POSITION_SIZE_PCT,
@@ -801,3 +802,67 @@ class BacktestEngine:
             self.ticker, setup_label, self.start_date, self.end_date,
             completed_trades, run_id,
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Universe-level backtest runner
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def run_backtest_universe(
+    tickers: List[str],
+    start_date: str,
+    end_date: str,
+    trail_mult_override: Optional[float] = None,
+    progress_cb=None,
+) -> List[dict]:
+    """
+    Run BacktestEngine concurrently over all tickers.
+
+    Parameters
+    ----------
+    tickers             : list of ticker symbols
+    start_date          : ISO date string "YYYY-MM-DD"
+    end_date            : ISO date string "YYYY-MM-DD"
+    trail_mult_override : when set, all engines use this single ATR trail mult
+                          (bypasses V5 per-setup dict — use for V4 baseline audit)
+    progress_cb         : optional async callable(done: int, total: int)
+                          called after each ticker completes
+
+    Returns
+    -------
+    Flat list of TradeRecord.to_dict() dicts across all tickers.
+    """
+    if not tickers:
+        return []
+
+    sem   = asyncio.Semaphore(CONCURRENCY_LIMIT)
+    total = len(tickers)
+    done  = 0
+    all_trades: List[dict] = []
+    lock  = asyncio.Lock()
+
+    async def _run_one(ticker: str) -> List[dict]:
+        nonlocal done
+        async with sem:
+            try:
+                engine = BacktestEngine(
+                    ticker=ticker,
+                    start_date=start_date,
+                    end_date=end_date,
+                    trail_mult_override=trail_mult_override,
+                )
+                summary = await engine.run()
+                return [t.to_dict() for t in summary.trades]
+            except Exception as exc:
+                logger.warning("run_backtest_universe: %s failed: %s", ticker, exc)
+                return []
+            finally:
+                async with lock:
+                    done += 1
+                    if progress_cb is not None:
+                        await progress_cb(done, total)
+
+    results = await asyncio.gather(*[_run_one(t) for t in tickers])
+    for batch in results:
+        all_trades.extend(batch)
+    return all_trades
