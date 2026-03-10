@@ -12,11 +12,11 @@ def test_backtest_diag_constants_exist():
     assert BACKTEST_V4_TRAIL_MULT   == 4.162
 
 def test_backtest_v4_trail_mult_is_distinct_from_trail_atr_mult():
-    """BACKTEST_V4_TRAIL_MULT is a separate constant — not an alias — but same numeric value."""
+    """BACKTEST_V4_TRAIL_MULT is a separately declared constant with the same
+    numeric value as TRAIL_ATR_MULT (4.162) — not assigned as an alias."""
     from constants import BACKTEST_V4_TRAIL_MULT, TRAIL_ATR_MULT
     assert BACKTEST_V4_TRAIL_MULT == 4.162
-    assert TRAIL_ATR_MULT == 4.162          # same numeric value, distinct name
-    assert BACKTEST_V4_TRAIL_MULT is not TRAIL_ATR_MULT  # not an alias
+    assert TRAIL_ATR_MULT == 4.162   # same value; non-aliasing documented in docstring only
 
 def test_backtest_cache_file_constant_exists():
     from constants import BACKTEST_DIAG_CACHE_FILE

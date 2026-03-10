@@ -276,5 +276,5 @@ DISCOVERY_MAX_PCT       = 0.10  # cap discovery candidates at 10% of universe si
 # ── V4 Backtest Diagnostics ───────────────────────────────────────────────────
 BACKTEST_DIAG_START_DATE = "2023-01-01"   # fixed 2-year baseline window start
 BACKTEST_DIAG_END_DATE   = "2024-12-31"   # fixed 2-year baseline window end
-BACKTEST_V4_TRAIL_MULT   = float("4.162") # strict V4 single trail multiplier (all setup types); float(str) ensures distinct object from TRAIL_ATR_MULT
+BACKTEST_V4_TRAIL_MULT   = 4.162          # strict V4 single trail multiplier (all setup types)
 BACKTEST_DIAG_CACHE_FILE = "cache/backtest_diagnostics.json"   # relative to backend/
