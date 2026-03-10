@@ -2439,6 +2439,105 @@ async def debug_ticker(ticker: str):
     }
 
 
+def _build_v5_analysis_fields(
+    best_setup: dict | None,
+    signals: dict,
+    regime_score: int,
+) -> dict:
+    """
+    Compute V5 extended analysis fields for the /api/analyze endpoint.
+
+    Parameters
+    ----------
+    best_setup   : best matching setup from DB for this ticker, or None
+    signals      : existing signals dict (price, vol_ratio, rs_score, etc.)
+    regime_score : current Engine 0 regime score (0–100)
+
+    Returns
+    -------
+    dict with: detected_setup, setup_quality_score, rs_rank, regime_alignment,
+               entry_quality, price_risk_pct, risk_level, reject_reasons
+    """
+    reject_reasons: list[str] = []
+
+    # ── detected setup ────────────────────────────────────────────────────
+    detected_setup      = best_setup.get("setup_type")   if best_setup else None
+    setup_quality_score = int(best_setup.get("setup_score") or 0) if best_setup else None
+    rs_rank_raw         = best_setup.get("rs_rank")      if best_setup else None
+    rs_rank             = float(rs_rank_raw) if rs_rank_raw is not None else None
+
+    # ── reject reasons (ALL conditions checked, ALL failures collected) ───
+    if rs_rank is not None and rs_rank < 70:
+        reject_reasons.append(
+            "Weak relative strength — RS rank below minimum threshold (70th percentile)"
+        )
+    elif rs_rank is None:
+        reject_reasons.append(
+            "Relative strength rank unavailable — insufficient price history or no recent scan"
+        )
+
+    if detected_setup is None:
+        reject_reasons.append(
+            "No valid setup pattern detected under current strategy rules"
+        )
+
+    if regime_score < 40:
+        reject_reasons.append(
+            "Market regime is defensive — conditions do not support new entries"
+        )
+
+    if best_setup and (setup_quality_score or 0) < 70:
+        reject_reasons.append(
+            "Setup detected but unified score is below the minimum quality threshold (70)"
+        )
+
+    # ── regime alignment ─────────────────────────────────────────────────
+    if regime_score >= 70:
+        regime_alignment = "STRONG"
+    elif regime_score >= 40:
+        regime_alignment = "MODERATE"
+    else:
+        regime_alignment = "WEAK"
+
+    # ── entry quality ────────────────────────────────────────────────────
+    distance_pct = float(best_setup.get("distance_pct") or 999) if best_setup else 999
+    vol_ratio    = float(signals.get("vol_ratio") or 0)
+    rs_blue_dot  = bool(best_setup.get("rs_blue_dot")) if best_setup else False
+
+    if distance_pct < 0.01 and vol_ratio > 1.5 and rs_blue_dot:
+        entry_quality = "IDEAL"
+    elif distance_pct < 0.03 or vol_ratio > 1.0:
+        entry_quality = "ACCEPTABLE"
+    else:
+        entry_quality = "EXTENDED"
+
+    # ── price risk ────────────────────────────────────────────────────────
+    price_risk_pct: float | None = None
+    risk_level = "UNKNOWN"
+    if best_setup:
+        entry_p = best_setup.get("entry") or 0
+        stop_p  = best_setup.get("stop_loss") or 0
+        if entry_p > 0 and stop_p > 0:
+            price_risk_pct = (entry_p - stop_p) / entry_p
+            if price_risk_pct < 0.02:
+                risk_level = "LOW"
+            elif price_risk_pct < 0.04:
+                risk_level = "MODERATE"
+            else:
+                risk_level = "HIGH"
+
+    return {
+        "detected_setup":      detected_setup,
+        "setup_quality_score": setup_quality_score,
+        "rs_rank":             round(rs_rank, 1) if rs_rank is not None else None,
+        "regime_alignment":    regime_alignment,
+        "entry_quality":       entry_quality,
+        "price_risk_pct":      round(price_risk_pct * 100, 2) if price_risk_pct is not None else None,
+        "risk_level":          risk_level,
+        "reject_reasons":      reject_reasons,
+    }
+
+
 @app.get("/api/analyze/{ticker}")
 async def analyze_ticker(ticker: str):
     """Full technical analysis for any ticker."""
@@ -2447,6 +2546,7 @@ async def analyze_ticker(ticker: str):
     ticker = ticker.upper().strip()
 
     try:
+        regime_score = 50  # neutral fallback; overwritten below after DB fetch
         raw = yf.download(ticker, period="1y", auto_adjust=True, progress=False)
         if raw is None or raw.empty or len(raw) < 60:
             return {
@@ -2498,6 +2598,14 @@ async def analyze_ticker(ticker: str):
             signals["vol_ratio"] = best_setup.get("vol_ratio", signals["vol_ratio"])
             signals["rs_score"]  = best_setup.get("rs_score",  signals["rs_score"])
 
+        # Fetch current regime score for V5 alignment fields
+        try:
+            from database import get_latest_regime
+            regime_data  = await get_latest_regime(DB_PATH)
+            regime_score = int(regime_data.get("regime_score") or 50) if regime_data else 50
+        except Exception:
+            regime_score = 50  # neutral fallback
+
         analysis = _generate_analysis_narrative(ticker, signals, best_setup)
 
         return {
@@ -2510,6 +2618,7 @@ async def analyze_ticker(ticker: str):
             "rr":          best_setup.get("rr")           if best_setup else None,
             **analysis,
             "signals":     signals,
+            **_build_v5_analysis_fields(best_setup, signals, regime_score),
         }
 
     except Exception as exc:
