@@ -4,9 +4,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 def test_trail_atr_mult_constant_exists():
-    """TRAIL_ATR_MULT must exist in constants and default to 1.5."""
+    """TRAIL_ATR_MULT must exist in constants at its Optuna v4 optimised value."""
     from constants import TRAIL_ATR_MULT
-    assert TRAIL_ATR_MULT == 1.5
+    assert TRAIL_ATR_MULT == 4.162
 
 
 def test_trail_atr_mult_imported_in_backtest_engine():
