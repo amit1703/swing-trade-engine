@@ -59,6 +59,7 @@ _TRAIL_ATR_BY_SETUP = {
 
 from filters import compute_regime_series, passes_liquidity, in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
+from analytics import print_backtest_diagnostics as _print_backtest_diagnostics
 
 logger = logging.getLogger(__name__)
 
@@ -963,7 +964,6 @@ async def run_backtest_universe(
         all_trades.extend(batch)
 
     # Emit diagnostics to server log
-    from analytics import print_backtest_diagnostics as _diag
-    logger.info("%s", _diag(all_trades))
+    logger.info("%s", _print_backtest_diagnostics(all_trades))
 
     return all_trades
