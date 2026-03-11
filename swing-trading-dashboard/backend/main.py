@@ -3016,9 +3016,13 @@ async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
 
     tickers = list(ACTIVE_UNIVERSE) if ACTIVE_UNIVERSE else list(SCAN_UNIVERSE)
 
+    # Set running state synchronously before the response is sent so that
+    # an immediate /status poll after POST sees "running", not the previous
+    # "completed" / "idle" state (background task starts after response).
+    _backtest_diag_status.update({"status": "running", "done": 0, "total": len(tickers)})
+
     async def _do_backtest():
         global _backtest_diag_status
-        _backtest_diag_status.update({"status": "running", "done": 0, "total": len(tickers)})
         try:
             async def _progress(done: int, total: int):
                 _backtest_diag_status["done"] = done
