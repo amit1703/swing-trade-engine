@@ -615,14 +615,11 @@ def scan_pullback_scored(
         else:
             return None, 0.0   # hard gate: no uptrend at all
 
-        # ── Value zone score ──────────────────────────────────────────────────
-        if ll <= l8 or ll <= l20:
-            score += 2.0
-        else:
-            dist_to_8  = abs(lc - l8)  / l8  if l8  > 0 else float("inf")
-            dist_to_20 = abs(lc - l20) / l20 if l20 > 0 else float("inf")
-            if dist_to_8 <= params.ema_distance or dist_to_20 <= params.ema_distance:
-                score += 1.0
+        # ── Value zone (hard gate + score) ────────────────────────────────────
+        # Low must actually penetrate EMA8 or EMA20 — proximity alone is rejected
+        if not (ll <= l8 or ll <= l20):
+            return None, 0.0   # hard gate: price never entered the value zone
+        score += 2.0
 
         # ── CCI momentum score ────────────────────────────────────────────────
         if cci_prev < -100 and cci_today > cci_prev:

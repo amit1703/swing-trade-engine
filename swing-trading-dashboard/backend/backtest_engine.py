@@ -702,9 +702,10 @@ class BacktestEngine:
         open_trades: List[Dict]             = []   # up to MAX_OPEN_POSITIONS concurrent
 
         # Pre-compute regime label series from SPY data (empty Series if no spy_df)
+        # NOTE: use local spy_df (just fetched), not self.spy_df (None in universe runs)
         _regime_label_s: pd.Series = pd.Series(dtype=object)
-        if self.spy_df is not None and len(self.spy_df) > 0:
-            _regime_label_s = compute_regime_label_series(self.spy_df)
+        if spy_df is not None and len(spy_df) > 0:
+            _regime_label_s = compute_regime_label_series(spy_df)
 
         for T_date in replay_dates:
             full_idx = all_dates.get_loc(T_date)
