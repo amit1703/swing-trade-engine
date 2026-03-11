@@ -176,7 +176,7 @@ def compute_ticker_distribution(trades: list) -> list:
 def compute_regime_performance(trades: list) -> dict:
     """
     Performance metrics bucketed by market regime at trade entry.
-    Buckets: AGGRESSIVE (>=70), SELECTIVE (40-69), DEFENSIVE (<40), UNKNOWN (None).
+    Buckets: AGGRESSIVE, SELECTIVE, DEFENSIVE, UNKNOWN — matched from trade's 'regime' field.
     """
     buckets: dict = {
         "AGGRESSIVE": [],
