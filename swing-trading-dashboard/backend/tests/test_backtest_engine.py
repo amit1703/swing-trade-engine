@@ -585,3 +585,11 @@ def test_backtest_no_earnings_dates_no_crash():
     )
     summary = asyncio.run(engine.run())
     assert summary is not None
+
+
+def test_backtest_params_has_cooldown_days():
+    """BacktestParams has cooldown_days defaulting to 3."""
+    from backtest_engine import BacktestParams
+    p = BacktestParams()
+    assert hasattr(p, "cooldown_days")
+    assert p.cooldown_days == 3

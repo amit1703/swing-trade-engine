@@ -100,6 +100,7 @@ class BacktestParams:
     pullback_weight: float = 1.0       # PULLBACK  (Optuna: 0.5 → 3.0)
     tdl_bonus:       float = 1.0       # ascending TDL support (Optuna: 0.0 → 2.0)
     vcp_bonus:       float = 1.0   # added to pb_score when VCP co-fires (Optuna: 0.0 → 3.0)
+    cooldown_days:   int   = 3     # days blocked after a trade closes (Optuna: 1 → 15)
 
 
 # Base scores for non-pullback signals (used in scored mode post-signal gate)
@@ -602,6 +603,7 @@ class BacktestEngine:
         self.earnings_dates: Dict[str, List[str]] = earnings_dates or {}
         self.trail_mult_override = trail_mult_override
         self.params              = params
+        self._last_close_date: Optional[date] = None   # for per-ticker cooldown
 
     async def run(self) -> BacktestSummary:
         """Execute the backtest. Returns a BacktestSummary with all closed trades."""
@@ -742,6 +744,7 @@ class BacktestEngine:
                             final_score=trade_state.get("_final_score"),
                             regime=trade_state.get("_regime", "UNKNOWN"),
                         ))
+                        self._last_close_date = T_date.date()
                     else:
                         still_open.append(trade_state)
                 open_trades = still_open
@@ -757,6 +760,14 @@ class BacktestEngine:
                 if len(spy_dates_before) > 0:
                     _current_regime = str(_regime_label_s.loc[spy_dates_before[-1]])
             if _current_regime == "DEFENSIVE":
+                continue
+
+            # Cooldown gate: block re-entry within cooldown_days of last close
+            if (
+                self.params is not None
+                and self._last_close_date is not None
+                and (T_date.date() - self._last_close_date).days < self.params.cooldown_days
+            ):
                 continue
 
             df_slice  = ticker_df.iloc[:full_idx + 1]   # pre-computed cols included
@@ -906,6 +917,7 @@ class BacktestEngine:
                     final_score=trade_state.get("_final_score"),
                     regime=trade_state.get("_regime", "UNKNOWN"),
                 ))
+                self._last_close_date = last_date.date()
 
         # ── 6. Compute and return metrics ─────────────────────────────────
         setup_label = "+".join(self.setup_types)
