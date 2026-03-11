@@ -67,6 +67,54 @@ def compute_regime_series(spy_df: pd.DataFrame) -> pd.Series:
     return score >= REGIME_SELECTIVE_THRESHOLD
 
 
+# Proportionally scaled thresholds for 4/7 factor backtest regime
+# Max achievable: F1(20)+F2(15)+F3(15)+F4(10) = 60 pts
+# AGGRESSIVE = 70/100 * 60 = 42; SELECTIVE = 40/100 * 60 = 24
+_BACKTEST_REGIME_AGGRESSIVE = 42
+_BACKTEST_REGIME_SELECTIVE  = 24
+
+
+def compute_regime_label_series(spy_df: pd.DataFrame) -> pd.Series:
+    """
+    Return a pd.Series of str ('AGGRESSIVE'|'SELECTIVE'|'DEFENSIVE') per date.
+
+    Uses the same SPY-only F1-F4 scoring as compute_regime_series but returns
+    regime labels using proportionally scaled thresholds for the 60-pt max:
+      AGGRESSIVE : score >= 42  (equiv 70/100 of full 7-factor system)
+      SELECTIVE  : score >= 24  (equiv 40/100)
+      DEFENSIVE  : score <  24
+
+    Returns all-DEFENSIVE for inputs with < 200 bars.
+    """
+    if spy_df is None or len(spy_df) < 200:
+        if spy_df is not None:
+            return pd.Series("DEFENSIVE", index=spy_df.index, dtype=object)
+        return pd.Series(dtype=object)
+
+    close  = spy_df["Close"]
+    ema20  = close.ewm(span=20, adjust=False).mean()
+    sma50  = close.rolling(50).mean()
+    sma200 = close.rolling(200).mean()
+    slope5 = ema20 - ema20.shift(5)
+
+    score = pd.Series(0, index=spy_df.index, dtype=int)
+    score += (close > ema20).astype(int) * REGIME_WEIGHT_EMA20
+    score += (close > sma50).astype(int) * REGIME_WEIGHT_SMA50
+    score += (sma50 > sma200).astype(int) * REGIME_WEIGHT_MA_STACK
+
+    slope_norm = (slope5 / (sma50 * 0.01 + 1e-9)).fillna(0.0)
+    slope_pts  = (slope_norm * REGIME_WEIGHT_SLOPE).clip(0, REGIME_WEIGHT_SLOPE).astype(int)
+    score += slope_pts
+
+    # Zero out bars where SMA200 is NaN (insufficient history)
+    score = score.where(sma200.notna(), other=0)
+
+    labels = pd.Series("DEFENSIVE", index=spy_df.index, dtype=object)
+    labels = labels.where(score < _BACKTEST_REGIME_SELECTIVE,  "SELECTIVE")
+    labels = labels.where(score < _BACKTEST_REGIME_AGGRESSIVE, "AGGRESSIVE")
+    return labels
+
+
 def passes_liquidity(
     df: pd.DataFrame,
     min_avg_volume: int = LIQUIDITY_MIN_AVG_VOLUME,

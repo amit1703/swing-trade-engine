@@ -116,3 +116,45 @@ def test_earnings_blackout_empty_list():
 def test_earnings_blackout_multiple_dates():
     from filters import in_earnings_blackout
     assert in_earnings_blackout("2024-01-10", ["2024-06-01", "2024-01-14"]) is True
+
+
+def test_regime_label_series_bull_is_aggressive():
+    """Strong uptrend SPY → AGGRESSIVE labels at end."""
+    from filters import compute_regime_label_series
+    spy = _make_spy_df(300, "bull")
+    labels = compute_regime_label_series(spy)
+    assert labels.iloc[-1] == "AGGRESSIVE"
+    assert isinstance(labels, pd.Series)
+    assert labels.dtype == object
+
+
+def test_regime_label_series_bear_is_defensive():
+    """Bear trend → DEFENSIVE labels."""
+    from filters import compute_regime_label_series
+    spy = _make_spy_df(300, "bear")
+    labels = compute_regime_label_series(spy)
+    assert labels.iloc[-1] == "DEFENSIVE"
+
+
+def test_regime_label_series_index_matches_spy():
+    """Output index matches spy_df index."""
+    from filters import compute_regime_label_series
+    spy = _make_spy_df(300, "bull")
+    labels = compute_regime_label_series(spy)
+    assert labels.index.equals(spy.index)
+
+
+def test_regime_label_series_short_history_defensive():
+    """< 200 bars → all DEFENSIVE (insufficient SMA200)."""
+    from filters import compute_regime_label_series
+    spy = _make_spy_df(50, "bull")
+    labels = compute_regime_label_series(spy)
+    assert (labels == "DEFENSIVE").all()
+
+
+def test_regime_label_series_none_returns_empty():
+    """None input → empty Series."""
+    from filters import compute_regime_label_series
+    result = compute_regime_label_series(None)
+    assert isinstance(result, pd.Series)
+    assert len(result) == 0
