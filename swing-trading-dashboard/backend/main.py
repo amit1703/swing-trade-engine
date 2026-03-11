@@ -418,6 +418,7 @@ def _backtest_trade_to_analytics(tr: dict) -> dict:
         "close_price":  tr["exit_price"],     # exit_price  → close_price
         "status":       "closed",
         "regime_score": None,
+        "regime":       tr.get("regime", "UNKNOWN"),
     }
 
 # WFO in-memory state
