@@ -588,6 +588,8 @@ def scan_pullback_scored(
     +1  : close within params.ema_distance of EMA8 or EMA20
     +2  : CCI_prev < -100 (deep oversold)
     +1  : CCI_prev < params.cci_threshold AND CCI turning up
+    +2  : close >= EMA20 (full pin bar — closed back above value zone)
+    +1  : close >= EMA20 × 0.98 (near miss)
     +2  : structural support found
     +tdl_bonus : support source is ASCENDING_TDL
     """
@@ -626,6 +628,13 @@ def scan_pullback_scored(
         if cci_prev < -100 and cci_today > cci_prev:
             score += 2.0
         elif cci_prev < params.cci_threshold and cci_today > cci_prev:
+            score += 1.0
+
+        # ── Pin-bar score ──────────────────────────────────────────────────────
+        # Close recovered above (or near) EMA20 — confirms rejection of value zone
+        if lc >= l20:
+            score += 2.0
+        elif lc >= l20 * 0.98:
             score += 1.0
 
         # ── Structural support (hard gate + score) ────────────────────────────
