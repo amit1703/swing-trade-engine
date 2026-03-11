@@ -112,3 +112,11 @@ def test_breakout_weight_arithmetic():
     assert _SIGNAL_BASE_SCORES["VCP"] == 6.0
     assert 6.0 * 2.0 >= 7.0   # would pass a threshold of 7.0
     assert 6.0 * 1.0 < 7.0    # would be blocked at threshold of 7.0
+
+
+def test_backtest_params_has_vcp_bonus():
+    """BacktestParams has vcp_bonus defaulting to 1.0."""
+    from backtest_engine import BacktestParams
+    p = BacktestParams()
+    assert hasattr(p, "vcp_bonus")
+    assert p.vcp_bonus == 1.0

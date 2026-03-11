@@ -99,6 +99,7 @@ class BacktestParams:
     breakout_weight: float = 1.0       # VCP / RES_BREAKOUT / HTF / LCE (Optuna: 0.5 → 3.0)
     pullback_weight: float = 1.0       # PULLBACK  (Optuna: 0.5 → 3.0)
     tdl_bonus:       float = 1.0       # ascending TDL support (Optuna: 0.0 → 2.0)
+    vcp_bonus:       float = 1.0   # added to pb_score when VCP co-fires (Optuna: 0.0 → 3.0)
 
 
 # Base scores for non-pullback signals (used in scored mode post-signal gate)
@@ -797,11 +798,23 @@ class BacktestEngine:
                     rs_score=float(_rs_t["rs_score"]),
                 )
                 if pb_setup is not None:
+                    # VCP co-signal boost: if VCP also fires on this bar, add bonus
+                    try:
+                        from engines.engine2 import scan_vcp as _scan_vcp
+                        _vcp = _scan_vcp(
+                            self.ticker, df_slice, _sr_zones_cache,
+                            spy_3m_return=float(_rs_t["spy_3m"]),
+                            rs_score=float(_rs_t["rs_score"]),
+                        )
+                        if _vcp is not None:
+                            pb_score += self.params.vcp_bonus
+                    except Exception:
+                        pass   # VCP boost is best-effort; never block the pullback
                     pb_setup["_raw_score"] = pb_score
                     signal = pb_setup
                 else:
-                    # Try non-pullback engines via normal _detect_signals path
-                    non_pb_types = [s for s in self.setup_types if s != "PULLBACK"]
+                    # VCP disabled as standalone in scored mode (runs as booster above)
+                    non_pb_types = [s for s in self.setup_types if s not in ("PULLBACK", "VCP")]
                     signal = (
                         _detect_signals(
                             self.ticker, df_slice, spy_slice, non_pb_types,
