@@ -140,6 +140,7 @@ class TradeRecord:
 
     # Scoring (populated in scored mode only; None in legacy mode)
     final_score: Optional[float] = None
+    regime: str = "UNKNOWN"
 
     def __post_init__(self):
         risk = self.entry_price - self.initial_stop
@@ -179,6 +180,7 @@ class TradeRecord:
             "portfolio_pnl_pct": self.portfolio_pnl_pct,
             "is_win":            self.is_win,
             "final_score":       self.final_score,
+            "regime":            self.regime,
         }
 
 

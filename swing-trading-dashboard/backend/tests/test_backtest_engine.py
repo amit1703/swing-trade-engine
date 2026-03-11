@@ -522,6 +522,37 @@ def test_backtest_skips_signals_during_earnings_blackout():
     )
 
 
+def test_trade_record_has_regime_field():
+    """TradeRecord must have a regime field defaulting to 'UNKNOWN'."""
+    from backtest_engine import TradeRecord
+    trade = TradeRecord(
+        ticker="TEST", setup_type="PULLBACK",
+        signal_date="2024-01-01", entry_date="2024-01-02",
+        entry_price=100.0, initial_stop=95.0, take_profit=110.0,
+        exit_date="2024-01-10", exit_price=108.0,
+        exit_reason="TARGET", holding_days=8,
+    )
+    assert hasattr(trade, "regime")
+    assert trade.regime == "UNKNOWN"
+    assert "regime" in trade.to_dict()
+    assert trade.to_dict()["regime"] == "UNKNOWN"
+
+
+def test_trade_record_regime_stored():
+    """TradeRecord regime can be set at construction."""
+    from backtest_engine import TradeRecord
+    trade = TradeRecord(
+        ticker="TEST", setup_type="PULLBACK",
+        signal_date="2024-01-01", entry_date="2024-01-02",
+        entry_price=100.0, initial_stop=95.0, take_profit=110.0,
+        exit_date="2024-01-10", exit_price=108.0,
+        exit_reason="TARGET", holding_days=8,
+        regime="AGGRESSIVE",
+    )
+    assert trade.regime == "AGGRESSIVE"
+    assert trade.to_dict()["regime"] == "AGGRESSIVE"
+
+
 def test_backtest_no_earnings_dates_no_crash():
     """BacktestEngine without earnings_dates should run normally (backward compat)."""
     import asyncio
