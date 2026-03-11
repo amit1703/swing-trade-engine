@@ -92,7 +92,7 @@ class BacktestParams:
 
     # ── Pullback scoring thresholds ──────────────────────────────────────────
     cci_threshold:   float = -20.0     # relaxed CCI floor (Optuna: -150 → -10)
-    ema_distance:    float = 0.04      # value-zone proximity (Optuna: 0.01 → 0.08)
+    ema_distance:    float = 0.75      # value-zone proximity in ATR units (Optuna: 0.25 → 2.0)
     score_threshold: float = 5.0       # min score to open any trade (Optuna: 2 → 9)
 
     # ── Signal-type weights ──────────────────────────────────────────────────

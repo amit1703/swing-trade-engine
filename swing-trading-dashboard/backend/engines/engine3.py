@@ -374,20 +374,24 @@ def scan_relaxed_pullback(
                 )
             return None
 
-        # ── 2. Value Zone: low penetrates EMA8/20 OR close within 4% ────
+        # ── 2. Value Zone: low penetrates EMA8/20 OR close within ATR proximity ──
         # Two ways to qualify: classic value-zone penetration (strict-style)
-        # or proximity (close enough to count as a test of the zone).
-        penetrates = (ll <= l8 or ll <= l20)
-        dist_to_8  = abs(lc - l8)  / l8  if l8  > 0 else float("inf")
-        dist_to_20 = abs(lc - l20) / l20 if l20 > 0 else float("inf")
-        near_ema   = (dist_to_8 <= 0.04 or dist_to_20 <= 0.04)
+        # or proximity measured in ATR units — normalized for volatility.
+        # 4% on a low-vol stock = many ATRs away; on a high-vol stock = barely 1 ATR.
+        # ATR units give consistent meaning across different volatility regimes.
+        EMA_DISTANCE_ATR = 0.75  # within 0.75 ATR of EMA8 or EMA20
+        penetrates   = (ll <= l8 or ll <= l20)
+        atr_to_8     = abs(lc - l8)  / latr if latr > 0 else float("inf")
+        atr_to_20    = abs(lc - l20) / latr if latr > 0 else float("inf")
+        near_ema     = (atr_to_8 <= EMA_DISTANCE_ATR or atr_to_20 <= EMA_DISTANCE_ATR)
 
         if not (penetrates or near_ema):
             if debug:
                 print(
                     f"Engine 3 RLX Pullback: REJECTED - Not in value zone "
-                    f"(Close {lc:.2f}, Low {ll:.2f}, EMA8 {l8:.2f} [{dist_to_8*100:.1f}%], "
-                    f"EMA20 {l20:.2f} [{dist_to_20*100:.1f}%], required: penetration OR ≤4%)"
+                    f"(Close {lc:.2f}, Low {ll:.2f}, ATR {latr:.2f}, "
+                    f"EMA8 {l8:.2f} [{atr_to_8:.2f} ATR], "
+                    f"EMA20 {l20:.2f} [{atr_to_20:.2f} ATR], required: penetration OR ≤{EMA_DISTANCE_ATR} ATR)"
                 )
             return None
 
@@ -587,7 +591,7 @@ def scan_pullback_scored(
     +2  : 8 EMA > 20 EMA AND close > SMA50 (strong trend)
     +1  : 8 EMA > 20 EMA AND close > SMA50*0.97 (relaxed trend)
     +2  : low penetrates EMA8 or EMA20
-    +1  : close within params.ema_distance of EMA8 or EMA20
+    +1  : close within params.ema_distance ATR of EMA8 or EMA20 (tight zone test)
     +2  : CCI_prev < -100 (deep oversold, already turning — hard gate ensures turning)
     +1  : CCI_prev < params.cci_threshold (above -100, but still below floor)
     +2  : close >= EMA20 (full pin bar — closed back above value zone)
@@ -618,10 +622,17 @@ def scan_pullback_scored(
             return None, 0.0   # hard gate: no uptrend at all
 
         # ── Value zone (hard gate + score) ────────────────────────────────────
-        # Low must actually penetrate EMA8 or EMA20 — proximity alone is rejected
+        # Low must actually penetrate EMA8 or EMA20 — proximity alone is rejected.
+        # Bonus point if close recovered deep into the zone (within params.ema_distance ATR).
         if not (ll <= l8 or ll <= l20):
             return None, 0.0   # hard gate: price never entered the value zone
         score += 2.0
+        # Close proximity bonus: close within N ATR of EMA8 or EMA20 = tight zone test
+        if latr > 0:
+            atr_to_8  = abs(lc - l8)  / latr
+            atr_to_20 = abs(lc - l20) / latr
+            if atr_to_8 <= params.ema_distance or atr_to_20 <= params.ema_distance:
+                score += 1.0
 
         # ── CCI momentum (hard gate + score) ─────────────────────────────────
         # CCI must be turning up from below threshold — no directionless EMA touch.
