@@ -397,6 +397,16 @@ _scan_state: Dict = {
 _semaphore: Optional[asyncio.Semaphore] = None
 _ticker_cache: dict = {}  # ticker → (timestamp: float, df: Optional[pd.DataFrame])
 
+# ── JSON encoder for numpy types ─────────────────────────────────────────────
+class _NumpyEncoder(json.JSONEncoder):
+    """Serialize numpy scalars and arrays that leak into report dicts."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):  return int(obj)
+        if isinstance(obj, np.floating): return float(obj)
+        if isinstance(obj, np.bool_):    return bool(obj)
+        if isinstance(obj, np.ndarray):  return obj.tolist()
+        return super().default(obj)
+
 # ── Backtest diagnostics state ────────────────────────────────────────────────
 BACKTEST_DIAG_CACHE_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), BACKTEST_DIAG_CACHE_FILE))
 
@@ -3055,7 +3065,7 @@ async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
             tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(BACKTEST_DIAG_CACHE_PATH))
             try:
                 with os.fdopen(tmp_fd, "w") as f:
-                    json.dump(report, f)
+                    json.dump(report, f, cls=_NumpyEncoder)
                 os.replace(tmp_path, BACKTEST_DIAG_CACHE_PATH)
             except Exception:
                 try:
