@@ -329,7 +329,7 @@ export default function App() {
 
             {/* Middle: Chart + Intel Panel */}
             <div style={{
-              flex: chartFocus ? 1 : '0 0 420px',
+              flex: chartFocus ? 1 : '0 0 520px',
               display: 'flex', gap: 12,
               padding: '0 16px 12px',
               minHeight: 0,

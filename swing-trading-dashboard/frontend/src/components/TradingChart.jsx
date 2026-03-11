@@ -93,10 +93,9 @@ const SHARED_CHART_OPTS = {
 export default function TradingChart({ ticker, chartData, loading, setups = [] }) {
   const mainRef    = useRef(null)
   const cciRef     = useRef(null)
-  const rsRef      = useRef(null)
   const wrapRef    = useRef(null)
   const seriesRef  = useRef({})   // holds series + primitives for visibility toggles
-  const chartsRef  = useRef({})   // holds mainChart / cciChart / rsChart for AUTO button
+  const chartsRef  = useRef({})   // holds mainChart / cciChart for AUTO button
 
   // Legend state — updated on crosshair move
   const [legend, setLegend] = useState(null)
@@ -122,11 +121,10 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
   // runs it first (effects execute in definition order), ensuring seriesRef is
   // populated before visibility effects apply options.
   useEffect(() => {
-    if (!chartData || !mainRef.current || !cciRef.current || !rsRef.current) return
+    if (!chartData || !mainRef.current || !cciRef.current) return
 
     const mainEl = mainRef.current
     const cciEl  = cciRef.current
-    const rsEl   = rsRef.current
 
     // ── Create charts ──────────────────────────────────────────────────────
     const mainChart = createChart(mainEl, {
@@ -153,30 +151,11 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
       },
     })
 
-    const rsChart = createChart(rsEl, {
-      ...SHARED_CHART_OPTS,
-      height: rsEl.clientHeight || 100,
-      width:  rsEl.clientWidth  || 800,
-      rightPriceScale: {
-        ...SHARED_CHART_OPTS.rightPriceScale,
-        scaleMargins: { top: 0.15, bottom: 0.15 },
-      },
-      timeScale: {
-        ...SHARED_CHART_OPTS.timeScale,
-        visible: false,
-      },
-      layout: {
-        ...SHARED_CHART_OPTS.layout,
-        fontSize: 9,
-      },
-    })
-
     // ── Ctrl/Cmd+scroll = zoom, plain scroll = pan ─────────────────────────
     const applyScrollMode = (wantZoom) => {
       const zoomOpts = { handleScale: { mouseWheel: wantZoom }, handleScroll: { mouseWheel: !wantZoom } }
       mainChart.applyOptions(zoomOpts)
       cciChart.applyOptions(zoomOpts)
-      rsChart.applyOptions(zoomOpts)
     }
 
     const onKeyDown = (e) => { if ((e.ctrlKey || e.metaKey) && !e.repeat) applyScrollMode(true) }
@@ -455,41 +434,6 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
       }
     }
 
-    // ── RS Line series ─────────────────────────────────────────────────────
-    const rsSeries = rsChart.addLineSeries({
-      color:            COLORS.rs,
-      lineWidth:        1.5,
-      priceLineVisible: false,
-      lastValueVisible: true,
-      crosshairMarkerVisible: true,
-      crosshairMarkerRadius: 3,
-    })
-    if (chartData.rs_line?.length) rsSeries.setData(chartData.rs_line)
-
-    // 52-week RS high reference line
-    if (chartData.rs_52w_high != null) {
-      rsSeries.createPriceLine({
-        price:            chartData.rs_52w_high,
-        color:            COLORS.rsBlueDot,
-        lineWidth:        1,
-        lineStyle:        LineStyle.Dashed,
-        axisLabelVisible: true,
-        title:            '52W',
-      })
-    }
-
-    // Blue dot marker — last bar when RS is at 52-week high
-    if (chartData.rs_blue_dot && chartData.rs_line?.length) {
-      const lastPt = chartData.rs_line[chartData.rs_line.length - 1]
-      rsSeries.setMarkers([{
-        time:     lastPt.time,
-        position: 'aboveBar',
-        color:    COLORS.rsBlueDot,
-        shape:    'circle',
-        text:     '●',
-      }])
-    }
-
     // ── CCI line series ────────────────────────────────────────────────────
     const cciSeries = cciChart.addLineSeries({
       color:            COLORS.cci,
@@ -521,32 +465,21 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
     // ── Fit content ────────────────────────────────────────────────────────
     mainChart.timeScale().fitContent()
 
-    // ── Sync time ranges (main ↔ rs ↔ cci) ────────────────────────────────
+    // ── Sync time ranges (main ↔ cci) ─────────────────────────────────────
     let mainSyncing = false
-    let rsSyncing   = false
     let cciSyncing  = false
 
     mainChart.timeScale().subscribeVisibleTimeRangeChange((range) => {
-      if (rsSyncing || cciSyncing || !range) return
+      if (cciSyncing || !range) return
       mainSyncing = true
-      rsChart.timeScale().setVisibleRange(range)
       cciChart.timeScale().setVisibleRange(range)
       mainSyncing = false
     })
 
-    rsChart.timeScale().subscribeVisibleTimeRangeChange((range) => {
-      if (mainSyncing || cciSyncing || !range) return
-      rsSyncing = true
-      mainChart.timeScale().setVisibleRange(range)
-      cciChart.timeScale().setVisibleRange(range)
-      rsSyncing = false
-    })
-
     cciChart.timeScale().subscribeVisibleTimeRangeChange((range) => {
-      if (mainSyncing || rsSyncing || !range) return
+      if (mainSyncing || !range) return
       cciSyncing = true
       mainChart.timeScale().setVisibleRange(range)
-      rsChart.timeScale().setVisibleRange(range)
       cciSyncing = false
     })
 
@@ -588,15 +521,13 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
       descTL: descTrendlineSeries,
       ascTL:  ascTrendlineSeries,
       srPrimitives: srPrimitivesList,
-      rsSeries,
-      rsChart,
       mainChart,
       volSeries,
       volSmaSeries,
     }
 
     // ── Store chart instance refs for AUTO button ──────────────────────────
-    chartsRef.current = { mainChart, cciChart, rsChart }
+    chartsRef.current = { mainChart, cciChart }
 
     // ── Resize observer ────────────────────────────────────────────────────
     const wrap = wrapRef.current
@@ -604,7 +535,6 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
       if (!wrap) return
       const w = wrap.clientWidth
       mainChart.applyOptions({ width: w })
-      rsChart.applyOptions({ width: w })
       cciChart.applyOptions({ width: w })
     })
     if (wrap) observer.observe(wrap)
@@ -617,7 +547,6 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
       seriesRef.current = {}
       observer.disconnect()
       try { mainChart.remove() } catch (_) {}
-      try { rsChart.remove()   } catch (_) {}
       try { cciChart.remove()  } catch (_) {}
       setLegend(null)
     }
@@ -644,10 +573,6 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
     seriesRef.current.mainChart?.applyOptions({})
   }, [vis.sr, chartData])
 
-  useEffect(() => {
-    seriesRef.current.rsSeries?.applyOptions({ visible: vis.rs })
-    seriesRef.current.rsChart?.applyOptions({})
-  }, [vis.rs, chartData])
 
   useEffect(() => {
     seriesRef.current.volSeries?.applyOptions({ visible: vis.vol })
@@ -655,12 +580,11 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
   }, [vis.vol, chartData])
 
   const handleAutoReset = () => {
-    const { mainChart, cciChart, rsChart } = chartsRef.current
+    const { mainChart, cciChart } = chartsRef.current
     if (!mainChart) return
-    mainChart.timeScale().fitContent()  // propagates to cci/rs via sync subscription
+    mainChart.timeScale().fitContent()  // propagates to cci via sync subscription
     mainChart.priceScale('right').applyOptions({ autoScale: true })
     cciChart?.priceScale('right').applyOptions({ autoScale: true })
-    rsChart?.priceScale('right').applyOptions({ autoScale: true })
   }
 
   // ── Empty states ──────────────────────────────────────────────────────────
@@ -863,10 +787,7 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
             onClick={() => setVis(v => ({ ...v, tdl: !v.tdl }))} />
           <VisToggle label="S/R" active={vis.sr} activeColor="rgba(255,255,255,0.6)"
             onClick={() => setVis(v => ({ ...v, sr: !v.sr }))} />
-          {chartData.rs_line?.length > 0 && (
-            <VisToggle label="RS" active={vis.rs} activeColor={COLORS.rs}
-              onClick={() => setVis(v => ({ ...v, rs: !v.rs }))} />
-          )}
+
           <VisToggle label="VOL" active={vis.vol} activeColor="rgba(0,200,122,0.6)"
             onClick={() => setVis(v => ({ ...v, vol: !v.vol }))} />
         </div>
@@ -916,25 +837,6 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
           className="chart-container"
           style={{ width: '100%', height: '100%' }}
         />
-      </div>
-
-      {/* RS Line sub-chart */}
-      <div className="flex-shrink-0 border-t border-t-border" style={{ height: 100 }}>
-        <div className="section-label" style={{ padding: '4px 10px' }}>
-          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: COLORS.rs }} />
-          RS Line
-          {chartData.rs_blue_dot && (
-            <span style={{
-              marginLeft: 6, fontSize: 8, padding: '1px 5px', borderRadius: 3,
-              background: 'rgba(0,200,122,0.15)', color: COLORS.rsBlueDot,
-              border: '1px solid rgba(0,200,122,0.3)', fontWeight: 700,
-            }}>
-              ● BLUE DOT
-            </span>
-          )}
-          <span className="ml-auto text-[9px] text-t-muted">ticker / SPY</span>
-        </div>
-        <div ref={rsRef} style={{ height: 'calc(100% - 24px)' }} />
       </div>
 
       {/* CCI sub-chart */}

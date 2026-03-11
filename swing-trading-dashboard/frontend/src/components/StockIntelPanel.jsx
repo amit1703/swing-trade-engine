@@ -139,7 +139,7 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
   if (!setup) {
     return (
       <div style={{
-        width: 280, flexShrink: 0,
+        width: 320, flexShrink: 0,
         background: 'var(--card)',
         border: '1px solid var(--card-border)',
         borderRadius: 12,
@@ -170,7 +170,7 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
 
   return (
     <div style={{
-      width: 280, flexShrink: 0,
+      width: 320, flexShrink: 0,
       background: 'var(--card)',
       border: '1px solid var(--card-border)',
       borderRadius: 12,
