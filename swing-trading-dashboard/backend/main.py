@@ -3048,6 +3048,7 @@ async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
                 "setup_breakdown":     compute_setup_breakdown(adapted),
                 "ticker_distribution": compute_ticker_distribution(adapted),
                 "regime_performance":  compute_regime_performance(adapted),
+                "trades":              raw_trades,   # full TradeRecord dicts for deep analysis
             }
 
             os.makedirs(os.path.dirname(BACKTEST_DIAG_CACHE_PATH), exist_ok=True)

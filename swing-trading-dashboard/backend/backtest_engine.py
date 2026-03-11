@@ -144,6 +144,11 @@ class TradeRecord:
     final_score: Optional[float] = None
     regime: str = "UNKNOWN"
 
+    # Signal metadata — engine-specific fields for diagnostic analysis
+    # e.g. volume_ratio, breakout_pct, rs_score, support_source
+    rs_score:   float = 0.0
+    setup_meta: Dict  = field(default_factory=dict)
+
     def __post_init__(self):
         risk = self.entry_price - self.initial_stop
         if risk > 0:
@@ -183,6 +188,8 @@ class TradeRecord:
             "is_win":            self.is_win,
             "final_score":       self.final_score,
             "regime":            self.regime,
+            "rs_score":          self.rs_score,
+            "setup_meta":        self.setup_meta,
         }
 
 
@@ -744,6 +751,8 @@ class BacktestEngine:
                             holding_days=holding_days,
                             final_score=trade_state.get("_final_score"),
                             regime=trade_state.get("_regime", "UNKNOWN"),
+                            rs_score=trade_state.get("_rs_score", 0.0),
+                            setup_meta=trade_state.get("_setup_meta", {}),
                         ))
                         self._last_close_date = T_date.date()
                     else:
@@ -882,6 +891,12 @@ class BacktestEngine:
             if take_profit <= entry_price:
                 continue
 
+            # Capture engine-specific metadata for diagnostics
+            _meta_keys = ("volume_ratio", "breakout_pct", "resistance_level",
+                          "zone_upper", "support_source", "zone_source",
+                          "pullback_score", "days_since_breakout")
+            _setup_meta = {k: signal[k] for k in _meta_keys if k in signal}
+
             open_trades.append({
                 "setup_type":         signal.get("setup_type", self.setup_types[0]),
                 "signal_date":        T_date.strftime("%Y-%m-%d"),
@@ -893,6 +908,8 @@ class BacktestEngine:
                 "trail_mult_override": self.trail_mult_override,
                 "_final_score":       signal.get("_final_score"),
                 "_regime":            signal.get("_regime", "UNKNOWN"),
+                "_rs_score":          float(_rs_t.get("rs_score", 0.0)),
+                "_setup_meta":        _setup_meta,
             })
 
         # ── 5. Close any still-open trades at end of period ───────────────
@@ -917,6 +934,8 @@ class BacktestEngine:
                     holding_days=holding_days,
                     final_score=trade_state.get("_final_score"),
                     regime=trade_state.get("_regime", "UNKNOWN"),
+                    rs_score=trade_state.get("_rs_score", 0.0),
+                    setup_meta=trade_state.get("_setup_meta", {}),
                 ))
                 self._last_close_date = last_date.date()
 
