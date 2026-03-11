@@ -242,7 +242,10 @@ export default function DiagnosticsTab() {
         const url = source === 'live'
           ? '/api/diagnostics/report'
           : '/api/diagnostics/backtest'
-        const res = await fetch(url, { signal: controller.signal })
+        const res = await fetch(url, {
+          signal: controller.signal,
+          cache: source === 'backtest' ? 'no-store' : 'default',
+        })
         if (res.status === 404 && source === 'backtest') {
           setData(null)   // no cache yet — show "run backtest" prompt
           setLoading(false)
@@ -272,7 +275,7 @@ export default function DiagnosticsTab() {
           setBtRunning(false)
           clearInterval(pollRef.current)
           if (s.status === 'completed') {
-            const r = await fetch('/api/diagnostics/backtest')
+            const r = await fetch('/api/diagnostics/backtest', { cache: 'no-store' })
             if (r.ok) setData(await r.json())
           }
         }
@@ -406,7 +409,9 @@ export default function DiagnosticsTab() {
                       borderBottom: '1px solid var(--card-border)' }}>
           <span>
             V4 Baseline · {data.start_date} → {data.end_date} ·{' '}
-            {data.tickers_run} tickers · generated {data.generated_at ? new Date(data.generated_at).toLocaleDateString() : '—'}
+            {data.tickers_run} tickers · generated {data.generated_at
+            ? new Date(data.generated_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+            : '—'}
           </span>
           <button
             onClick={handleRunBacktest}
