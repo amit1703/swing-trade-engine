@@ -57,7 +57,7 @@ _TRAIL_ATR_BY_SETUP = {
     "BASE":         lambda: _constants.BASE_TRAIL_ATR_MULT,
 }
 
-from filters import compute_regime_series, passes_liquidity, in_earnings_blackout
+from filters import compute_regime_series, compute_regime_label_series, passes_liquidity, in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 from analytics import print_backtest_diagnostics as _print_backtest_diagnostics
 
@@ -698,10 +698,10 @@ class BacktestEngine:
         completed_trades: List[TradeRecord] = []
         open_trades: List[Dict]             = []   # up to MAX_OPEN_POSITIONS concurrent
 
-        # Pre-compute regime series from SPY data (empty Series if no spy_df)
-        _regime_series: pd.Series = pd.Series(dtype=bool)
+        # Pre-compute regime label series from SPY data (empty Series if no spy_df)
+        _regime_label_s: pd.Series = pd.Series(dtype=object)
         if self.spy_df is not None and len(self.spy_df) > 0:
-            _regime_series = compute_regime_series(self.spy_df)
+            _regime_label_s = compute_regime_label_series(self.spy_df)
 
         for T_date in replay_dates:
             full_idx = all_dates.get_loc(T_date)
@@ -739,6 +739,7 @@ class BacktestEngine:
                             exit_reason=exit_reason,
                             holding_days=holding_days,
                             final_score=trade_state.get("_final_score"),
+                            regime=trade_state.get("_regime", "UNKNOWN"),
                         ))
                     else:
                         still_open.append(trade_state)
@@ -748,15 +749,14 @@ class BacktestEngine:
             if len(open_trades) >= MAX_OPEN_POSITIONS:
                 continue
 
-            # Regime gate: skip new signals if SPY is in a defensive regime
-            if len(_regime_series) > 0:
-                spy_dates_before = _regime_series.index[_regime_series.index <= T_date]
+            # Regime gate: resolve current regime label, skip if DEFENSIVE
+            _current_regime = "UNKNOWN"
+            if len(_regime_label_s) > 0:
+                spy_dates_before = _regime_label_s.index[_regime_label_s.index <= T_date]
                 if len(spy_dates_before) > 0:
-                    is_bullish_bar = bool(_regime_series.loc[spy_dates_before[-1]])
-                else:
-                    is_bullish_bar = False
-                if not is_bullish_bar:
-                    continue
+                    _current_regime = str(_regime_label_s.loc[spy_dates_before[-1]])
+            if _current_regime == "DEFENSIVE":
+                continue
 
             df_slice  = ticker_df.iloc[:full_idx + 1]   # pre-computed cols included
 
@@ -819,6 +819,8 @@ class BacktestEngine:
                 )
             if signal is None:
                 continue
+            if signal is not None:
+                signal["_regime"] = signal.get("_regime", _current_regime)
 
             # ── Scored mode: apply signal-type weight and threshold gate ──────
             if self.params is not None:
@@ -836,6 +838,7 @@ class BacktestEngine:
                 if final_score < self.params.score_threshold:
                     continue
                 signal["_final_score"] = final_score
+                signal["_regime"] = _current_regime
 
             # ── 4c. Schedule entry on T+1 ─────────────────────────────────
             next_idx = full_idx + 1
@@ -864,6 +867,7 @@ class BacktestEngine:
                 "take_profit":        take_profit,
                 "trail_mult_override": self.trail_mult_override,
                 "_final_score":       signal.get("_final_score"),
+                "_regime":            signal.get("_regime", "UNKNOWN"),
             })
 
         # ── 5. Close any still-open trades at end of period ───────────────
@@ -887,6 +891,7 @@ class BacktestEngine:
                     exit_reason="EOD",
                     holding_days=holding_days,
                     final_score=trade_state.get("_final_score"),
+                    regime=trade_state.get("_regime", "UNKNOWN"),
                 ))
 
         # ── 6. Compute and return metrics ─────────────────────────────────
