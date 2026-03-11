@@ -910,6 +910,7 @@ async def run_backtest_universe(
     start_date: str,
     end_date: str,
     trail_mult_override: Optional[float] = None,
+    params: Optional[BacktestParams] = None,
     progress_cb=None,
 ) -> List[dict]:
     """
@@ -922,6 +923,7 @@ async def run_backtest_universe(
     end_date            : ISO date string "YYYY-MM-DD"
     trail_mult_override : when set, all engines use this single ATR trail mult
                           (bypasses V5 per-setup dict — use for V4 baseline audit)
+    params              : BacktestParams for scored mode; None → legacy mode
     progress_cb         : optional async callable(done: int, total: int)
                           called after each ticker completes
 
@@ -947,6 +949,7 @@ async def run_backtest_universe(
                     start_date=start_date,
                     end_date=end_date,
                     trail_mult_override=trail_mult_override,
+                    params=params,
                 )
                 summary = await engine.run()
                 return [t.to_dict() for t in summary.trades]

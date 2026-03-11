@@ -168,7 +168,7 @@ from analytics import (
 from email_digest import send_digest
 from services.macro_service import get_market_overview
 from services.narrative import generate_narrative
-from backtest_engine import BacktestEngine, run_backtest_universe
+from backtest_engine import BacktestEngine, BacktestParams, run_backtest_universe
 
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration (imported from constants.py for centralized management)
@@ -3032,6 +3032,7 @@ async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
                 BACKTEST_DIAG_START_DATE,
                 BACKTEST_DIAG_END_DATE,
                 trail_mult_override=BACKTEST_V4_TRAIL_MULT,
+                params=BacktestParams(),
                 progress_cb=_progress,
             )
             adapted = [_backtest_trade_to_analytics(t) for t in raw_trades]

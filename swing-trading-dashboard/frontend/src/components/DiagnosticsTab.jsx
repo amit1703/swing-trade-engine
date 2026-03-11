@@ -319,7 +319,7 @@ export default function DiagnosticsTab() {
       </div>
       <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 20 }}>
         {source === 'backtest'
-          ? 'V4 strategy baseline — historical simulation (2023–2024).'
+          ? 'V4 strategy — scored mode, default params (2023–2024).'
           : 'Live trading performance from closed portfolio trades.'}
         {source === 'live' && !hasData && ' Close trades in the Portfolio tab to populate this report.'}
       </div>
