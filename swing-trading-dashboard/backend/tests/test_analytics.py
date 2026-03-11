@@ -153,9 +153,9 @@ def test_ticker_distribution_fields():
 def test_regime_performance_buckets():
     from analytics import compute_regime_performance
     trades = [
-        _make_trade(regime_score=80, exit_price=120.0),  # AGGRESSIVE
-        _make_trade(regime_score=55, exit_price=90.0),   # SELECTIVE
-        _make_trade(regime_score=30, exit_price=110.0),  # DEFENSIVE
+        {**_make_trade(regime_score=80, exit_price=120.0), "regime": "AGGRESSIVE"},
+        {**_make_trade(regime_score=55, exit_price=90.0),  "regime": "SELECTIVE"},
+        {**_make_trade(regime_score=30, exit_price=110.0), "regime": "DEFENSIVE"},
     ]
     result = compute_regime_performance(trades)
     assert "AGGRESSIVE" in result
@@ -170,3 +170,35 @@ def test_regime_performance_missing_score_goes_to_unknown():
     t = {**_make_trade(), "regime_score": None}
     result = compute_regime_performance([t])
     assert "UNKNOWN" in result
+
+
+def test_regime_performance_buckets_by_label():
+    """compute_regime_performance buckets trades by 'regime' string field."""
+    from analytics import compute_regime_performance
+
+    def _make_regime_trade(regime, exit_price, entry_price=100.0):
+        stop = entry_price * 0.95
+        return {
+            "ticker": "TEST",
+            "setup_type": "PULLBACK",
+            "entry_price": entry_price,
+            "stop_loss": stop,
+            "close_price": exit_price,
+            "status": "closed",
+            "regime": regime,
+            "final_score": None,
+        }
+
+    trades = [
+        _make_regime_trade("AGGRESSIVE", 110.0),
+        _make_regime_trade("SELECTIVE",  105.0),
+        _make_regime_trade("DEFENSIVE",   95.0),
+        _make_regime_trade("UNKNOWN",     99.0),
+    ]
+    result = compute_regime_performance(trades)
+    assert result["AGGRESSIVE"] is not None
+    assert result["SELECTIVE"]  is not None
+    assert result["DEFENSIVE"]  is not None
+    assert result["UNKNOWN"]    is not None
+    assert result["AGGRESSIVE"]["trades"] == 1
+    assert result["SELECTIVE"]["trades"]  == 1

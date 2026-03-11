@@ -186,15 +186,10 @@ def compute_regime_performance(trades: list) -> dict:
     }
 
     for t in trades:
-        rs = t.get("regime_score")
-        if rs is None:
-            buckets["UNKNOWN"].append(t)
-        elif rs >= 70:
-            buckets["AGGRESSIVE"].append(t)
-        elif rs >= 40:
-            buckets["SELECTIVE"].append(t)
-        else:
-            buckets["DEFENSIVE"].append(t)
+        label = str(t.get("regime", "UNKNOWN")).upper()
+        if label not in buckets:
+            label = "UNKNOWN"
+        buckets[label].append(t)
 
     result = {}
     for label, group in buckets.items():
