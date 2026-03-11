@@ -578,6 +578,8 @@ def scan_pullback_scored(
     Hard gates (return (None, 0.0) immediately):
     - Insufficient bars / NaN indicators
     - Trend score == 0  (no uptrend whatsoever)
+    - Value zone not penetrated (low > EMA8 and low > EMA20)
+    - No CCI momentum reversal (cci_prev >= params.cci_threshold OR not turning up)
     - No structural support found
     - Risk math invalid (risk <= 0 or > 15% of entry)
 
@@ -586,8 +588,8 @@ def scan_pullback_scored(
     +1  : 8 EMA > 20 EMA AND close > SMA50*0.97 (relaxed trend)
     +2  : low penetrates EMA8 or EMA20
     +1  : close within params.ema_distance of EMA8 or EMA20
-    +2  : CCI_prev < -100 (deep oversold)
-    +1  : CCI_prev < params.cci_threshold AND CCI turning up
+    +2  : CCI_prev < -100 (deep oversold, already turning — hard gate ensures turning)
+    +1  : CCI_prev < params.cci_threshold (above -100, but still below floor)
     +2  : close >= EMA20 (full pin bar — closed back above value zone)
     +1  : close >= EMA20 × 0.98 (near miss)
     +2  : structural support found
@@ -621,10 +623,14 @@ def scan_pullback_scored(
             return None, 0.0   # hard gate: price never entered the value zone
         score += 2.0
 
-        # ── CCI momentum score ────────────────────────────────────────────────
-        if cci_prev < -100 and cci_today > cci_prev:
+        # ── CCI momentum (hard gate + score) ─────────────────────────────────
+        # CCI must be turning up from below threshold — no directionless EMA touch.
+        # Floor depth is scoring only: deeply oversold = higher conviction.
+        if not (cci_prev < params.cci_threshold and cci_today > cci_prev):
+            return None, 0.0   # hard gate: no momentum reversal at all
+        if cci_prev < -100:
             score += 2.0
-        elif cci_prev < params.cci_threshold and cci_today > cci_prev:
+        else:
             score += 1.0
 
         # ── Pin-bar score ──────────────────────────────────────────────────────
