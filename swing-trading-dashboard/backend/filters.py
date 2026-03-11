@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List
 
+import numpy as np
 import pandas as pd
 
 from constants import (
@@ -21,6 +22,42 @@ from constants import (
     REGIME_WEIGHT_MA_STACK,
     REGIME_WEIGHT_SLOPE,
 )
+
+
+def _compute_spy_regime_score(spy_df: pd.DataFrame) -> pd.Series:
+    """
+    Compute the integer regime score series for spy_df.
+
+    Uses SPY-only factors from engine0 (f1–f4):
+      f1: SPY Close > EMA20       → REGIME_WEIGHT_EMA20  pts
+      f2: SPY Close > SMA50       → REGIME_WEIGHT_SMA50  pts
+      f3: SMA50 > SMA200          → REGIME_WEIGHT_MA_STACK pts
+      f4: EMA20 slope (5-bar)     → 0..REGIME_WEIGHT_SLOPE pts
+
+    Bars where SMA200 is NaN (insufficient history) are zeroed out.
+    Caller is responsible for ensuring len(spy_df) >= 200.
+    """
+    close  = spy_df["Close"]
+    ema20  = close.ewm(span=20, adjust=False).mean()
+    sma50  = close.rolling(50).mean()
+    sma200 = close.rolling(200).mean()
+    slope5 = ema20 - ema20.shift(5)
+
+    # Vectorized scoring — all operations stay in NumPy speed
+    score = pd.Series(0, index=spy_df.index, dtype=int)
+    score += (close > ema20).astype(int) * REGIME_WEIGHT_EMA20
+    score += (close > sma50).astype(int) * REGIME_WEIGHT_SMA50
+    score += (sma50 > sma200).astype(int) * REGIME_WEIGHT_MA_STACK
+
+    # f4: EMA20 slope scaled to 0..REGIME_WEIGHT_SLOPE, then clipped
+    slope_norm = (slope5 / (sma50 * 0.01 + 1e-9)).fillna(0.0)
+    slope_pts  = (slope_norm * REGIME_WEIGHT_SLOPE).clip(0, REGIME_WEIGHT_SLOPE).astype(int)
+    score += slope_pts
+
+    # Zero out any bars where SMA200 is NaN (insufficient history)
+    score = score.where(sma200.notna(), other=0)
+
+    return score
 
 
 def compute_regime_series(spy_df: pd.DataFrame) -> pd.Series:
@@ -44,26 +81,7 @@ def compute_regime_series(spy_df: pd.DataFrame) -> pd.Series:
             return pd.Series(False, index=spy_df.index, dtype=bool)
         return pd.Series(dtype=bool)
 
-    close  = spy_df["Close"]
-    ema20  = close.ewm(span=20, adjust=False).mean()
-    sma50  = close.rolling(50).mean()
-    sma200 = close.rolling(200).mean()
-    slope5 = ema20 - ema20.shift(5)
-
-    # Vectorized scoring — all operations stay in NumPy speed
-    score = pd.Series(0, index=spy_df.index, dtype=int)
-    score += (close > ema20).astype(int) * REGIME_WEIGHT_EMA20
-    score += (close > sma50).astype(int) * REGIME_WEIGHT_SMA50
-    score += (sma50 > sma200).astype(int) * REGIME_WEIGHT_MA_STACK
-
-    # f4: EMA20 slope scaled to 0..REGIME_WEIGHT_SLOPE, then clipped
-    slope_norm = (slope5 / (sma50 * 0.01 + 1e-9)).fillna(0.0)
-    slope_pts  = (slope_norm * REGIME_WEIGHT_SLOPE).clip(0, REGIME_WEIGHT_SLOPE).astype(int)
-    score += slope_pts
-
-    # Zero out any bars where SMA200 is NaN (insufficient history)
-    score = score.where(sma200.notna(), other=0)
-
+    score = _compute_spy_regime_score(spy_df)
     return score >= REGIME_SELECTIVE_THRESHOLD
 
 
@@ -91,27 +109,17 @@ def compute_regime_label_series(spy_df: pd.DataFrame) -> pd.Series:
             return pd.Series("DEFENSIVE", index=spy_df.index, dtype=object)
         return pd.Series(dtype=object)
 
-    close  = spy_df["Close"]
-    ema20  = close.ewm(span=20, adjust=False).mean()
-    sma50  = close.rolling(50).mean()
-    sma200 = close.rolling(200).mean()
-    slope5 = ema20 - ema20.shift(5)
+    score = _compute_spy_regime_score(spy_df)
 
-    score = pd.Series(0, index=spy_df.index, dtype=int)
-    score += (close > ema20).astype(int) * REGIME_WEIGHT_EMA20
-    score += (close > sma50).astype(int) * REGIME_WEIGHT_SMA50
-    score += (sma50 > sma200).astype(int) * REGIME_WEIGHT_MA_STACK
-
-    slope_norm = (slope5 / (sma50 * 0.01 + 1e-9)).fillna(0.0)
-    slope_pts  = (slope_norm * REGIME_WEIGHT_SLOPE).clip(0, REGIME_WEIGHT_SLOPE).astype(int)
-    score += slope_pts
-
-    # Zero out bars where SMA200 is NaN (insufficient history)
-    score = score.where(sma200.notna(), other=0)
-
-    labels = pd.Series("DEFENSIVE", index=spy_df.index, dtype=object)
-    labels = labels.where(score < _BACKTEST_REGIME_SELECTIVE,  "SELECTIVE")
-    labels = labels.where(score < _BACKTEST_REGIME_AGGRESSIVE, "AGGRESSIVE")
+    labels = pd.Series(
+        np.select(
+            [score >= _BACKTEST_REGIME_AGGRESSIVE, score >= _BACKTEST_REGIME_SELECTIVE],
+            ["AGGRESSIVE", "SELECTIVE"],
+            default="DEFENSIVE",
+        ),
+        index=spy_df.index,
+        dtype=object,
+    )
     return labels
 
 
