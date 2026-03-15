@@ -614,3 +614,157 @@ def _print_report(results: List[WindowOptResult]) -> None:
 
     print(f"  Verdict: {verdict}")
     print(f"\n{'═' * W}\n")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Walk-Forward Optuna Validation")
+    parser.add_argument(
+        "--trials", type=int, default=100,
+        help="Optuna trials per IS window (default: 100)",
+    )
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="Resume existing Optuna studies instead of creating fresh",
+    )
+    parser.add_argument(
+        "--windows", type=str, default="1,2,3,4",
+        help="Comma-separated window numbers to run (default: 1,2,3,4)",
+    )
+    args = parser.parse_args()
+
+    selected = {int(w.strip()) for w in args.windows.split(",")}
+    windows_to_run = [w for w in WFO_WINDOWS if w[0] in selected]
+
+    if not windows_to_run:
+        print(f"ERROR: no valid windows in --windows={args.windows!r}  (valid: 1,2,3,4)")
+        sys.exit(1)
+
+    # ── 1. Load price data ────────────────────────────────────────────────────
+    cache_dir = _BACKEND_DIR / WFO_CACHE_DIR
+    ticker_cache, spy_df = _load_universe_cache(cache_dir)
+
+    if len(ticker_cache) < 10:
+        print("ERROR: fewer than 10 tickers in cache.")
+        print("  Download price data first (see wfo_cache.py).")
+        sys.exit(1)
+
+    print(f"\nWalk-Forward Optuna Validation")
+    print(f"  Windows  : {[w[0] for w in windows_to_run]}")
+    print(f"  IS trials: {args.trials} per window")
+    print(f"  Universe : {len(ticker_cache)} tickers")
+    print(f"  Resume   : {args.resume}")
+    print()
+
+    all_results: List[WindowOptResult] = []
+
+    # ── 2. Per-window loop ────────────────────────────────────────────────────
+    for window_num, is_start, is_end, oos_start, oos_end in windows_to_run:
+        storage = f"sqlite:///{_DATA_DIR}/wfo_w{window_num}.db"
+
+        print(f"\n{'═' * 70}")
+        print(f"  Window {window_num}: IS {is_start}→{is_end}  |  OOS {oos_start}→{oos_end}")
+        print(f"{'═' * 70}")
+
+        # ── 2a. IS Optuna optimization ────────────────────────────────────────
+        print(f"\n[IS] Running {args.trials} Optuna trials…", flush=True)
+        t0_is = datetime.now()
+        best_params, is_metrics, best_trial_n, best_score = _optimize_window(
+            window_num, is_start, is_end,
+            ticker_cache, spy_df, args.trials, storage, args.resume,
+        )
+        elapsed_is = (datetime.now() - t0_is).total_seconds() / 60
+        print(
+            f"\n[IS] Done in {elapsed_is:.1f}min  "
+            f"best trial #{best_trial_n}  score={best_score:.4f}  "
+            f"E={is_metrics['expectancy']:+.4f}  PF={is_metrics['profit_factor']:.3f}  "
+            f"N={is_metrics['total_trades']}",
+            flush=True,
+        )
+
+        # ── 2b. OOS with optimized params ─────────────────────────────────────
+        print(f"\n[OOS-opt] Evaluating OOS with optimized params…", flush=True)
+        oos_trades  = asyncio.run(
+            _run_trial(ticker_cache, spy_df, oos_start, oos_end, best_params)
+        )
+        oos_metrics = _compute_metrics(oos_trades)
+        print(
+            f"[OOS-opt] E={oos_metrics['expectancy']:+.4f}  "
+            f"PF={oos_metrics['profit_factor']:.3f}  "
+            f"N={oos_metrics['total_trades']}  "
+            f"port={oos_metrics['portfolio_return_pct']:+.1f}%",
+            flush=True,
+        )
+
+        # ── 2c. OOS with frozen #433 params ───────────────────────────────────
+        print(f"\n[OOS-frz] Evaluating OOS with frozen #433 params…", flush=True)
+        frozen        = _frozen_params()
+        frozen_trades = asyncio.run(
+            _run_trial(ticker_cache, spy_df, oos_start, oos_end, frozen)
+        )
+        frozen_metrics = _compute_metrics(frozen_trades)
+        print(
+            f"[OOS-frz] E={frozen_metrics['expectancy']:+.4f}  "
+            f"PF={frozen_metrics['profit_factor']:.3f}  "
+            f"N={frozen_metrics['total_trades']}  "
+            f"port={frozen_metrics['portfolio_return_pct']:+.1f}%",
+            flush=True,
+        )
+
+        spy_pct = _spy_return(spy_df, oos_start, oos_end)
+        if spy_pct is not None:
+            print(f"[SPY]     OOS period return: {spy_pct*100:+.1f}%", flush=True)
+
+        # ── 2d. Collect best_params as plain dict ─────────────────────────────
+        best_params_dict = {p: getattr(best_params, p) for p in TUNABLE_PARAMS}
+
+        all_results.append(WindowOptResult(
+            window_num=window_num,
+            is_start=is_start,
+            is_end=is_end,
+            oos_start=oos_start,
+            oos_end=oos_end,
+            best_trial=best_trial_n,
+            best_score=best_score,
+            best_params=best_params_dict,
+            is_metrics=is_metrics,
+            oos_metrics=oos_metrics,
+            frozen_metrics=frozen_metrics,
+            spy_pct=spy_pct,
+        ))
+
+    # ── 3. Final report ───────────────────────────────────────────────────────
+    _print_report(all_results)
+
+    # ── 4. Save JSON ──────────────────────────────────────────────────────────
+    output = {
+        "generated_at": datetime.now().isoformat(),
+        "n_trials":     args.trials,
+        "windows": [
+            {
+                "window_num":     r.window_num,
+                "is_start":       r.is_start,
+                "is_end":         r.is_end,
+                "oos_start":      r.oos_start,
+                "oos_end":        r.oos_end,
+                "best_trial":     r.best_trial,
+                "best_score":     r.best_score,
+                "best_params":    r.best_params,
+                "is_metrics":     r.is_metrics,
+                "oos_metrics":    r.oos_metrics,
+                "frozen_metrics": r.frozen_metrics,
+                "spy_pct":        r.spy_pct,
+            }
+            for r in all_results
+        ],
+    }
+    with open(_OUTPUT_PATH, "w") as f:
+        json.dump(output, f, indent=2)
+    print(f"Results saved to {_OUTPUT_PATH}")
+
+
+if __name__ == "__main__":
+    main()
