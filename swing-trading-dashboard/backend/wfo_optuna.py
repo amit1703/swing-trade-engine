@@ -303,3 +303,63 @@ async def _run_trial(
     for batch in results:
         all_trades.extend(batch)
     return all_trades
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Param builders
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_params(trial) -> BacktestParams:
+    """Sample BacktestParams from Optuna trial. Search space identical to optimize_v5.py."""
+    return BacktestParams(
+        # ── Frozen at trial #433 ─────────────────────────────────────────────
+        rs_threshold    = 0.066,
+        cci_threshold   = -54.5,
+        ema_distance    = 1.651,
+        score_threshold = 2.50,
+        breakout_weight = 1.724,
+        pullback_weight = 1.842,
+        tdl_bonus       = 1.016,
+        vcp_bonus       = 1.370,
+        cooldown_days   = 4,
+        # ── Tunable ──────────────────────────────────────────────────────────
+        tp_multiple     = trial.suggest_float("tp_multiple",     1.5,  6.0),
+        brk_vol_mult    = trial.suggest_float("brk_vol_mult",    1.5,  3.5),
+        brk_stop_atr    = trial.suggest_float("brk_stop_atr",    0.3,  2.0),
+        brk_min_pct     = trial.suggest_float("brk_min_pct",     0.01, 0.05),
+        brk_gap_pct     = trial.suggest_float("brk_gap_pct",     0.01, 0.08),
+        brk_trail_mult  = trial.suggest_float("brk_trail_mult",  1.5,  8.0),
+    )
+
+
+def _build_params_from_values(values: dict) -> BacktestParams:
+    """Reconstruct BacktestParams from Optuna best_trial.params dict.
+
+    Frozen params fall back to trial #433 hardcoded values.
+    Tunable params use .get(key, trial_433_default) so this works
+    when called with a partial dict (e.g. from --resume with missing keys).
+    """
+    return BacktestParams(
+        # ── Frozen ───────────────────────────────────────────────────────────
+        rs_threshold    = 0.066,
+        cci_threshold   = -54.5,
+        ema_distance    = 1.651,
+        score_threshold = 2.50,
+        breakout_weight = 1.724,
+        pullback_weight = 1.842,
+        tdl_bonus       = 1.016,
+        vcp_bonus       = 1.370,
+        cooldown_days   = 4,
+        # ── Tunable (fall back to trial #433 defaults) ────────────────────
+        tp_multiple     = values.get("tp_multiple",    4.3458),
+        brk_vol_mult    = values.get("brk_vol_mult",   3.0161),
+        brk_stop_atr    = values.get("brk_stop_atr",   1.6675),
+        brk_min_pct     = values.get("brk_min_pct",    0.04333),
+        brk_gap_pct     = values.get("brk_gap_pct",    0.01021),
+        brk_trail_mult  = values.get("brk_trail_mult", 6.906),
+    )
+
+
+def _frozen_params() -> BacktestParams:
+    """Return trial #433 params — current BacktestParams() defaults."""
+    return BacktestParams()
