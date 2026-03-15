@@ -1,0 +1,45 @@
+{
+  "trial_number": 279,
+  "score": 7.91383136692886,
+  "metrics": {
+    "total_trades": 702,
+    "brk_trades": 702,
+    "win_rate": 52.0,
+    "expectancy": 0.4227,
+    "profit_factor": 2.856,
+    "brk_expectancy": 0.4227,
+    "brk_profit_factor": 2.856,
+    "brk_win_rate": 52.0,
+    "max_drawdown_r": -14.43,
+    "by_setup": {
+      "RES_BREAKOUT": 702
+    }
+  },
+  "params": {
+    "breakout_weight": 2.550473700944496,
+    "brk_vol_mult": 1.8625665406865513,
+    "brk_stop_atr": 2.264300576237455,
+    "brk_donchian_n": 87,
+    "brk_atr_expansion": 1.4744439557458766
+  },
+  "generated_at": "2026-03-12T20:06:25.551687",
+  "frozen": {
+    "rs_threshold": 0.066,
+    "cci_threshold": -54.5,
+    "ema_distance": 1.651,
+    "pullback_weight": 1.842,
+    "tdl_bonus": 1.016,
+    "vcp_bonus": 1.37,
+    "cooldown_days": 4,
+    "tp_multiple": 4.562
+  },
+  "frozen_brk_converged": {
+    "brk_gap_pct": 0.042,
+    "brk_min_consolidation": 10,
+    "brk_pivot_strength": 2,
+    "brk_regime_factor": 0.861,
+    "brk_trail_mult": 5.928,
+    "score_threshold": 5.791,
+    "brk_min_pct": 0.0
+  }
+}

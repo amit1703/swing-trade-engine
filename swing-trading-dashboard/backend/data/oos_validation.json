@@ -1,0 +1,112 @@
+{
+  "generated_at": "2026-03-12T20:46:53.227186",
+  "params": {
+    "tp_multiple": 5.160751990358413,
+    "score_threshold": 1.1440914600706171,
+    "pullback_weight": 2.5362351516564994,
+    "breakout_weight": 2.550473700944496,
+    "base_weight": 3.89468448256698,
+    "cci_threshold": -107.6442352347089,
+    "ema_distance": 2.093764129282863,
+    "brk_trail_mult": 5.928,
+    "base_trail_mult": 6.99465584480253
+  },
+  "windows": [
+    {
+      "label": "In-sample",
+      "start": "2023-01-01",
+      "end": "2024-12-31",
+      "metrics": {
+        "total_trades": 703,
+        "win_rate": 51.6,
+        "expectancy": 0.4305,
+        "profit_factor": 2.957,
+        "max_drawdown_r": -11.21,
+        "by_setup": {
+          "PULLBACK": 98,
+          "RES_BREAKOUT": 571,
+          "BASE": 34
+        },
+        "expectancy_by_setup": {
+          "PULLBACK": 0.2517,
+          "RES_BREAKOUT": 0.4586,
+          "BASE": 0.4754
+        },
+        "win_rate_by_setup": {
+          "PULLBACK": 61.2,
+          "RES_BREAKOUT": 51.1,
+          "BASE": 32.4
+        },
+        "pf_by_setup": {
+          "PULLBACK": 2.54,
+          "RES_BREAKOUT": 2.994,
+          "BASE": 3.209
+        }
+      }
+    },
+    {
+      "label": "OOS-1",
+      "start": "2020-01-01",
+      "end": "2021-12-31",
+      "metrics": {
+        "total_trades": 445,
+        "win_rate": 41.3,
+        "expectancy": 0.0502,
+        "profit_factor": 1.169,
+        "max_drawdown_r": -20.95,
+        "by_setup": {
+          "PULLBACK": 96,
+          "RES_BREAKOUT": 324,
+          "BASE": 25
+        },
+        "expectancy_by_setup": {
+          "PULLBACK": 0.1576,
+          "RES_BREAKOUT": -0.0098,
+          "BASE": 0.415
+        },
+        "win_rate_by_setup": {
+          "PULLBACK": 61.5,
+          "RES_BREAKOUT": 34.6,
+          "BASE": 52.0
+        },
+        "pf_by_setup": {
+          "PULLBACK": 2.195,
+          "RES_BREAKOUT": 0.972,
+          "BASE": 3.243
+        }
+      }
+    },
+    {
+      "label": "OOS-2",
+      "start": "2017-01-01",
+      "end": "2019-12-31",
+      "metrics": {
+        "total_trades": 629,
+        "win_rate": 47.7,
+        "expectancy": 0.1636,
+        "profit_factor": 1.617,
+        "max_drawdown_r": -29.17,
+        "by_setup": {
+          "RES_BREAKOUT": 448,
+          "PULLBACK": 84,
+          "BASE": 97
+        },
+        "expectancy_by_setup": {
+          "RES_BREAKOUT": 0.1183,
+          "PULLBACK": 0.2493,
+          "BASE": 0.2986
+        },
+        "win_rate_by_setup": {
+          "RES_BREAKOUT": 42.9,
+          "PULLBACK": 64.3,
+          "BASE": 55.7
+        },
+        "pf_by_setup": {
+          "RES_BREAKOUT": 1.388,
+          "PULLBACK": 3.17,
+          "BASE": 2.4
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "trial_number": 6,
+  "score": 1.111060087597348,
+  "metrics": {
+    "total_trades": 335,
+    "win_rate": 49.9,
+    "expectancy": 0.1222,
+    "profit_factor": 1.563,
+    "max_drawdown_r": -7.46,
+    "by_setup": {
+      "PULLBACK": 307,
+      "BASE": 28
+    }
+  },
+  "params": {
+    "rs_threshold": -0.032060863109254746,
+    "cci_threshold": -50.1457297887807,
+    "ema_distance": 1.5813738350795705,
+    "score_threshold": 5.9289403829864735,
+    "breakout_weight": 2.4274179498864026,
+    "pullback_weight": 1.7344889909109769,
+    "tdl_bonus": 1.0454656587639881,
+    "vcp_bonus": 1.282623055075649,
+    "cooldown_days": 1,
+    "brk_vol_mult": 1.9078914269933045,
+    "brk_stop_atr": 0.4345721042554077,
+    "brk_min_pct": 0.02909231233791341,
+    "brk_gap_pct": 0.03257423924305307,
+    "brk_trail_mult": 4.034282764658811,
+    "tp_multiple": 3.7689161848152324
+  },
+  "generated_at": "2026-03-11T16:13:16.182810"
+}

@@ -40,7 +40,7 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
 
     if (filters.setupType !== 'ALL') {
       data = data.filter(s => {
-        const t = (s.setup_type ?? '').toUpperCase()
+        const t = (s.setup_type ?? '').toUpperCase().replace(/_/g, '-')
         const f = filters.setupType
         if (f === 'VCP')      return t === 'VCP'
         if (f === 'PULLBACK') return t.startsWith('PULLBACK')
@@ -48,7 +48,7 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
         if (f === 'RES-BRK')  return t === 'RES-BREAKOUT'
         if (f === 'HTF')      return t === 'HTF'
         if (f === 'LCE')      return t === 'LCE'
-return true
+        return true
       })
     }
     if (filters.minScore > 0) data = data.filter(s => (s.setup_score ?? 0) >= filters.minScore)
@@ -119,7 +119,10 @@ return true
             const isVolSurge  = s.is_vol_surge
             const score       = typeof s.setup_score === 'number' ? Math.round(s.setup_score) : null
             const scoreColor  = score === null ? 'var(--muted)' : score >= 80 ? 'var(--go)' : score >= 60 ? 'var(--accent)' : 'var(--muted)'
-            const typeKey     = (s.setup_type ?? '').toUpperCase()
+            // Normalize type key: backend uses RES_BREAKOUT (underscore), maps use RES-BREAKOUT (hyphen)
+            // Relaxed pullbacks have setup_type=PULLBACK + is_relaxed=true
+            const _rawType    = (s.setup_type ?? '').toUpperCase().replace(/_/g, '-')
+            const typeKey     = (s.is_relaxed && _rawType === 'PULLBACK') ? 'PULLBACK-RLX' : _rawType
             const typeLabel   = SETUP_TYPE_LABEL[typeKey] ?? typeKey
             const typeColor   = TYPE_COLOR[typeKey] ?? 'var(--muted)'
             const rsInt       = s.rs_score != null ? Math.round(s.rs_score * 100) : null

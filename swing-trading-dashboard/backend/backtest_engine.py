@@ -45,6 +45,8 @@ from constants import (
     MAX_POSITION_SIZE_PCT,
     MAX_OPEN_POSITIONS,
     BACKTEST_RS_THRESHOLD_DEFAULT,
+    RES_MAX_GAP_PCT,
+    RES_SELECTIVE_REGIME_FACTOR,
 )
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
 
@@ -83,24 +85,47 @@ class BacktestParams:
     All parameters that Optuna tunes in a single trial.
 
     Passed to BacktestEngine(params=...). When params=None the engine runs
-    in legacy mode — identical behaviour to pre-V5 backtest. All defaults
-    match the V4 Optuna best so that a plain BacktestParams() is a sensible
-    starting point.
+    in legacy mode — identical behaviour to pre-V5 backtest. Defaults are
+    the final frozen values from the per-engine Optuna runs (PB, BRK, BASE)
+    validated via 3-window OOS backtest (2023-24 in-sample, 2020-21, 2017-19).
     """
-    # ── RS filter ────────────────────────────────────────────────────────────
-    rs_threshold:    float = BACKTEST_RS_THRESHOLD_DEFAULT  # O'Neil RS floor  (Optuna: -0.05 → +0.10)
+    # ── RS filter ─────────────────────────────────────────────── pb #183 ────
+    rs_threshold:    float = 0.088
 
-    # ── Pullback scoring thresholds ──────────────────────────────────────────
-    cci_threshold:   float = -20.0     # relaxed CCI floor (Optuna: -150 → -10)
-    ema_distance:    float = 0.75      # value-zone proximity in ATR units (Optuna: 0.25 → 2.0)
-    score_threshold: float = 5.0       # min score to open any trade (Optuna: 2 → 9)
+    # ── Pullback scoring thresholds ───────────────────────────── pb #183 ────
+    cci_threshold:   float = -107.6
+    ema_distance:    float = 2.094
+    score_threshold: float = 1.144    # base_optimizer #2 (overrides pb value)
 
-    # ── Signal-type weights ──────────────────────────────────────────────────
-    breakout_weight: float = 1.0       # VCP / RES_BREAKOUT / HTF / LCE (Optuna: 0.5 → 3.0)
-    pullback_weight: float = 1.0       # PULLBACK  (Optuna: 0.5 → 3.0)
-    tdl_bonus:       float = 1.0       # ascending TDL support (Optuna: 0.0 → 2.0)
-    vcp_bonus:       float = 1.0   # added to pb_score when VCP co-fires (Optuna: 0.0 → 3.0)
-    cooldown_days:   int   = 3     # days blocked after a trade closes (Optuna: 1 → 15)
+    # ── Signal-type weights ───────────────────────────────────── pb #183 ────
+    breakout_weight: float = 2.550    # brk_optimizer #279
+    pullback_weight: float = 2.536
+    tdl_bonus:       float = 0.573
+    vcp_bonus:       float = 0.738
+    cooldown_days:   int   = 5
+
+    # ── RES_BREAKOUT engine parameters ──────────────────────── brk #279 ────
+    brk_vol_mult:        float = 1.863  # volume floor (×50d avg)
+    brk_stop_atr:        float = 2.264  # stop = resistance − stop_atr×ATR
+    brk_min_pct:         float = 0.0    # min close above resistance
+    brk_gap_pct:         float = 0.042  # skip T+1 if open > res×(1+gap_pct)
+    brk_trail_mult:      float = 5.928  # ATR trail multiplier
+    brk_regime_factor:   float = 0.861  # score penalty in SELECTIVE (unused when aggressive_only=True)
+    brk_aggressive_only: bool  = True   # skip BRK in SELECTIVE regime (OOS finding)
+    # ── Multi-source resistance detection (converged in brk run 1) ───────────
+    brk_donchian_n:        int   = 87   # rolling-high lookback bars
+    brk_pivot_strength:    int   = 2    # bars each side for pivot detection
+    brk_atr_expansion:     float = 1.474  # min bar expansion (×ATR)
+    brk_min_consolidation: int   = 10   # min bars near resistance before brk
+
+    # ── BASE engine parameters ─────────────────────────────── base #2 ─────
+    base_weight:       float = 3.895  # scoring weight for BASE signals
+    base_trail_mult:   float = 6.995  # ATR trail multiplier
+    base_vol_ratio:    float = 1.425  # min volume ratio for base breakout
+    base_quality_min:  int   = 19     # min quality score gate in engine5
+
+    # ── Take-profit multiplier ─────────────────────────────── pb #183 ─────
+    tp_multiple:   float = 5.161
 
 
 # Base scores for non-pullback signals (used in scored mode post-signal gate)
@@ -415,6 +440,7 @@ def _detect_signals(
     setup_types: List[str],
     sr_zones: Optional[List] = None,
     precomputed_rs: Optional[Dict] = None,
+    params=None,
 ) -> Optional[Dict]:
     """
     Run the appropriate signal engine(s) on a lookahead-safe slice.
@@ -506,11 +532,12 @@ def _detect_signals(
                     rs_blue_dot=rs_blue_dot,
                     rs_score=rs_score,
                     sr_zones=sr_zones,
+                    params=params,
                 )
 
             elif stype == "RES_BREAKOUT":
                 from engines.engine6 import scan_resistance_breakout
-                setup = scan_resistance_breakout(ticker, df_slice, sr_zones)
+                setup = scan_resistance_breakout(ticker, df_slice, sr_zones, params=params)
 
             elif stype == "HTF":
                 from engines.engine8_htf import scan_htf
@@ -841,6 +868,7 @@ class BacktestEngine:
                             self.ticker, df_slice, spy_slice, non_pb_types,
                             sr_zones=_sr_zones_cache,
                             precomputed_rs=_rs_t,
+                            params=self.params,
                         )
                         if non_pb_types else None
                     )
@@ -850,6 +878,7 @@ class BacktestEngine:
                     self.ticker, df_slice, spy_slice, self.setup_types,
                     sr_zones=_sr_zones_cache,
                     precomputed_rs=_rs_t,
+                    params=self.params,
                 )
             if signal is None:
                 continue
@@ -864,11 +893,28 @@ class BacktestEngine:
                     _SIGNAL_BASE_SCORES.get(setup_type_sig, _SIGNAL_BASE_SCORE_DEFAULT),
                 )
                 is_breakout = setup_type_sig in ("VCP", "RES_BREAKOUT", "HTF", "LCE")
+                is_base     = setup_type_sig == "BASE"
                 weight = (
                     self.params.breakout_weight if is_breakout
+                    else self.params.base_weight if is_base
                     else self.params.pullback_weight
                 )
                 final_score = raw_score * weight
+
+                # RES_BREAKOUT regime gate: breakouts underperform in SELECTIVE regime (OOS finding).
+                # brk_aggressive_only=True (default): skip BRK entirely in SELECTIVE.
+                # brk_aggressive_only=False: apply brk_regime_factor discount instead.
+                if setup_type_sig == "RES_BREAKOUT" and _current_regime == "SELECTIVE":
+                    if self.params is not None and self.params.brk_aggressive_only:
+                        continue  # skip BRK in SELECTIVE regime
+                    else:
+                        _regime_factor = (
+                            self.params.brk_regime_factor
+                            if self.params is not None
+                            else RES_SELECTIVE_REGIME_FACTOR
+                        )
+                        final_score *= _regime_factor
+
                 if final_score < self.params.score_threshold:
                     continue
                 signal["_final_score"] = final_score
@@ -882,8 +928,23 @@ class BacktestEngine:
             next_date   = all_dates[next_idx]
             entry_price = float(ticker_df["Open"].iloc[next_idx])  # T+1 open
 
-            stop_loss   = signal.get("stop_loss", 0.0)
-            take_profit = signal.get("take_profit", 0.0)
+            # Gap-chase gate for RES_BREAKOUT: skip if T+1 open already > brk_gap_pct above zone.
+            # Extended gaps degrade R:R and indicate chasing rather than entering cleanly.
+            if signal.get("setup_type") == "RES_BREAKOUT":
+                _zone_upper = signal.get("zone_upper", 0.0)
+                _gap_pct = self.params.brk_gap_pct if self.params is not None else RES_MAX_GAP_PCT
+                if _zone_upper > 0 and entry_price > _zone_upper * (1 + _gap_pct):
+                    continue
+
+            stop_loss = signal.get("stop_loss", 0.0)
+
+            # In scored mode, override take_profit with Optuna-tuned tp_multiple so
+            # the target is always (entry − stop) × tp_multiple above entry.
+            if self.params is not None:
+                _risk = entry_price - stop_loss
+                take_profit = round(entry_price + self.params.tp_multiple * _risk, 2) if _risk > 0 else 0.0
+            else:
+                take_profit = signal.get("take_profit", 0.0)
 
             # Guard: entry must be above stop, and target must be above entry
             if stop_loss <= 0 or stop_loss >= entry_price:
@@ -897,15 +958,26 @@ class BacktestEngine:
                           "pullback_score", "days_since_breakout")
             _setup_meta = {k: signal[k] for k in _meta_keys if k in signal}
 
+            # For RES_BREAKOUT in V5 scored mode, use params.brk_trail_mult as the per-trade
+            # trail override. This lets Optuna tune trail independently from other setups.
+            # In V4 baseline mode (trail_mult_override set globally) the global value wins.
+            _sig_type = signal.get("setup_type", self.setup_types[0])
+            _trade_trail = self.trail_mult_override
+            if _trade_trail is None and self.params is not None:
+                if _sig_type == "RES_BREAKOUT":
+                    _trade_trail = self.params.brk_trail_mult
+                elif _sig_type == "BASE":
+                    _trade_trail = self.params.base_trail_mult
+
             open_trades.append({
-                "setup_type":         signal.get("setup_type", self.setup_types[0]),
+                "setup_type":         _sig_type,
                 "signal_date":        T_date.strftime("%Y-%m-%d"),
                 "entry_date":         next_date.strftime("%Y-%m-%d"),
                 "entry_price":        entry_price,
                 "initial_stop":       stop_loss,
                 "trailing_stop":      stop_loss,
                 "take_profit":        take_profit,
-                "trail_mult_override": self.trail_mult_override,
+                "trail_mult_override": _trade_trail,
                 "_final_score":       signal.get("_final_score"),
                 "_regime":            signal.get("_regime", "UNKNOWN"),
                 "_rs_score":          float(_rs_t.get("rs_score", 0.0)),

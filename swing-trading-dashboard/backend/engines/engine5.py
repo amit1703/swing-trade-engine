@@ -54,11 +54,14 @@ def scan_base_pattern(
     rs_blue_dot: bool = False,
     rs_score: float = 0.0,
     sr_zones: list = None,
+    params=None,
 ) -> Optional[Dict]:
     """Return the highest-quality base setup found, or None."""
-    ch = scan_cup_handle(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, sr_zones)
-    fb = scan_flat_base(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, sr_zones)
-    candidates = [s for s in [ch, fb] if s is not None and s.get("quality_score", 0) >= 25]
+    _vol_ratio   = getattr(params, "base_vol_ratio",   BASE_BRK_MIN_VOL_RATIO)
+    _quality_min = getattr(params, "base_quality_min", 25)
+    ch = scan_cup_handle(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, sr_zones, min_vol_ratio=_vol_ratio)
+    fb = scan_flat_base(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, sr_zones, min_vol_ratio=_vol_ratio)
+    candidates = [s for s in [ch, fb] if s is not None and s.get("quality_score", 0) >= _quality_min]
     if not candidates:
         return None
     return max(candidates, key=lambda s: s.get("quality_score", 0))
@@ -73,6 +76,7 @@ def scan_flat_base(
     rs_blue_dot: bool = False,
     rs_score: float = 0.0,
     sr_zones: list = None,
+    min_vol_ratio: float = BASE_BRK_MIN_VOL_RATIO,
 ) -> Optional[Dict]:
     """ATR-Adjusted Darvas Box detector. Returns setup dict or None."""
     try:
@@ -182,7 +186,7 @@ def scan_flat_base(
         prior_ranges  = (high_arr[-25:-5] - low_arr[-25:-5]).mean() if len(high_arr) >= 25 else recent_ranges
         base_range_contraction = prior_ranges > 0 and recent_ranges < prior_ranges
 
-        if lc > ceiling and vol_ratio >= BASE_BRK_MIN_VOL_RATIO and base_range_contraction:
+        if lc > ceiling and vol_ratio >= min_vol_ratio and base_range_contraction:
             signal = "BRK"
         elif dist_to_pivot <= 0.010:
             signal = "DRY"
@@ -248,6 +252,7 @@ def scan_cup_handle(
     rs_blue_dot: bool = False,
     rs_score: float = 0.0,
     sr_zones: list = None,
+    min_vol_ratio: float = BASE_BRK_MIN_VOL_RATIO,
 ) -> Optional[Dict]:
     """Proportional Cup & Handle with ATR-gated depth. Returns setup dict or None."""
     try:
@@ -381,7 +386,7 @@ def scan_cup_handle(
         else:
             base_range_contraction = True  # not enough history → don't block
 
-        if lc > handle_high_price and vol_ratio >= BASE_BRK_MIN_VOL_RATIO and base_range_contraction:
+        if lc > handle_high_price and vol_ratio >= min_vol_ratio and base_range_contraction:
             signal = "BRK"
         elif dist_to_pivot <= 0.010:
             signal = "DRY"

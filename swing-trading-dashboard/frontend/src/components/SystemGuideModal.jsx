@@ -79,13 +79,118 @@ export default function SystemGuideModal({ isOpen, onClose }) {
         {/* Scrollable body */}
         <div style={{ overflowY: 'auto', paddingBottom: 16 }}>
           <MetricsSection />
+          <ScannerColumnsSection />
           <IndicatorsSection />
           <SetupTypesSection />
+          <MarketRegimeSection />
+          <SignalGatesSection />
           <ChartLegendSection />
           <ChartControlsSection />
           <PortfolioHealthSection />
           <KeyboardSection />
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Section 0: Scanner Table Columns ────────────────────────────────────── */
+
+function ScannerColumnsSection() {
+  const cols = [
+    {
+      label: 'SCR',
+      color: 'var(--accent)',
+      desc: 'Unified quality score 0–100. Color: ≥80 green (high conviction), 60–79 amber (borderline), <60 grey (shown in dev mode only). Each setup type has its own scoring formula combining trend, momentum, volume, and RS factors.',
+    },
+    {
+      label: 'TICKER',
+      color: 'var(--text)',
+      desc: 'Symbol. Amber = currently selected. 🔥 = hot sector. Blue dot = RS Line at 52-week high. Age badge shows days since detection; red at ≥5 days.',
+    },
+    {
+      label: 'TYPE',
+      color: '#F5A623',
+      desc: 'Setup classification: VCP, PB (Pullback), PB-RLX (Relaxed Pullback), BASE, BRK (Resistance Breakout), HTF (High Tight Flag), LCE (Low Cheat Entry).',
+    },
+    {
+      label: 'PRICE',
+      color: 'var(--text)',
+      desc: 'Live price (streamed). Color: green = above entry, amber = within 3% below entry (near trigger), grey = further below. Sub-label shows % distance from entry.',
+    },
+    {
+      label: 'VOL ×',
+      color: 'var(--go)',
+      desc: 'Volume today vs 20-day average. ×1.5+ shown in green — a volume surge confirms institutional participation. Grey = normal volume.',
+    },
+    {
+      label: 'RS',
+      color: 'var(--go)',
+      desc: "O'Neil composite RS score (weighted 3–12 month return vs SPY, scaled to ±100). Green = ≥+5 (outperforming). Stocks below 0 are underperforming the market.",
+    },
+    {
+      label: 'DIST',
+      color: 'var(--muted)',
+      desc: 'Distance from live price to entry trigger. Negative = price is below entry (not yet triggered). Amber and ↓ when within −3% (approaching). Positive = already above entry.',
+    },
+    {
+      label: 'ENTRY',
+      color: 'var(--text)',
+      desc: 'The exact price level that triggers the trade. For breakouts this is the pivot high; for pullbacks it is the moving average or trendline touch point.',
+    },
+    {
+      label: 'STOP',
+      color: 'var(--halt)',
+      desc: 'Hard stop-loss in dollars. Based on the swing low or KDE support zone minus an ATR buffer. Exit immediately if price closes below this level.',
+    },
+    {
+      label: 'R:R',
+      color: 'var(--go)',
+      desc: 'Risk-to-reward ratio. Green = ≥2.0 (target is at least twice the risk). Calculated as (target − entry) ÷ (entry − stop).',
+    },
+    {
+      label: 'SECTOR',
+      color: 'var(--muted)',
+      desc: 'Industry sector (truncated to 12 chars). Use the 🔥 hot sector filter to isolate setups where ≥3 stocks from the same sector fired in one scan.',
+    },
+  ]
+
+  return (
+    <div>
+      <SectionLabel color="var(--accent)">Scanner Table Columns</SectionLabel>
+      <div style={{ padding: '4px 12px 4px' }}>
+        {cols.map((c, i) => (
+          <div
+            key={c.label}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '148px 1fr',
+              alignItems: 'center',
+              gap: 12,
+              padding: '7px 8px',
+              borderBottom: i < cols.length - 1 ? '1px solid rgba(26,37,53,0.6)' : 'none',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                fontFamily: 'IBM Plex Mono, monospace',
+                fontSize: 9, fontWeight: 700,
+                color: c.color,
+                minWidth: 40,
+              }}>
+                {c.label}
+              </span>
+              <span style={{
+                fontFamily: 'Barlow Condensed, sans-serif',
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', color: 'var(--text)',
+                whiteSpace: 'nowrap',
+              }}>
+              </span>
+            </div>
+            <span style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.55 }}>{c.desc}</span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -361,6 +466,235 @@ function SetupTypesSection() {
             </span>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── Section 3b: Market Regime ────────────────────────────────────────────── */
+
+function MarketRegimeSection() {
+  const regimes = [
+    {
+      label: 'AGGRESSIVE',
+      score: '70 – 100',
+      color: 'var(--go)',
+      bg: 'rgba(0,200,122,0.07)',
+      border: 'rgba(0,200,122,0.35)',
+      desc: 'Full offense. All setup types active. Highest signal frequency — BRK dominates (702 backtest trades).',
+      active: ['VCP', 'PB', 'BASE', 'BRK', 'HTF', 'LCE'],
+    },
+    {
+      label: 'SELECTIVE',
+      score: '40 – 69',
+      color: 'var(--accent)',
+      bg: 'rgba(245,166,35,0.07)',
+      border: 'rgba(245,166,35,0.35)',
+      desc: 'Defensive offense. BRK disabled — breakouts fail more in mixed markets. Pullbacks and bases dominate.',
+      active: ['VCP', 'PB', 'BASE', 'HTF', 'LCE'],
+    },
+    {
+      label: 'DEFENSIVE',
+      score: '0 – 39',
+      color: 'var(--halt)',
+      bg: 'rgba(255,45,85,0.07)',
+      border: 'rgba(255,45,85,0.3)',
+      desc: 'Capital preservation. Only structural setups (base building, HTF, LCE) run. VCP and Pullback signals suppressed.',
+      active: ['BASE', 'HTF', 'LCE'],
+    },
+  ]
+
+  const ALL_SETUPS = ['VCP', 'PB', 'BASE', 'BRK', 'HTF', 'LCE']
+
+  const factors = [
+    'SPY above 20 EMA',
+    'SPY above 50 SMA',
+    'EMA20 > SMA50 > SMA200 stack',
+    'SPY short-term slope (5-day momentum)',
+    'Market breadth — % of stocks above 200-day',
+    'New highs vs new lows ratio',
+    'VIX fear index level',
+  ]
+
+  return (
+    <div>
+      <SectionLabel color="var(--halt)">Market Regime</SectionLabel>
+
+      {/* Regime cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '12px 12px 4px' }}>
+        {regimes.map((r) => (
+          <div
+            key={r.label}
+            style={{
+              background: r.bg,
+              border: `1px solid ${r.border}`,
+              borderTop: `3px solid ${r.color}`,
+              padding: '10px 12px',
+              display: 'flex', flexDirection: 'column', gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{
+                fontFamily: 'Barlow Condensed, sans-serif',
+                fontSize: 12, fontWeight: 700, letterSpacing: '0.14em',
+                textTransform: 'uppercase', color: r.color,
+              }}>
+                {r.label}
+              </span>
+              <span style={{
+                fontFamily: 'IBM Plex Mono, monospace',
+                fontSize: 9, color: 'var(--muted)',
+              }}>
+                {r.score}
+              </span>
+            </div>
+            <span style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5 }}>{r.desc}</span>
+            {/* Active setups */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {ALL_SETUPS.map((s) => {
+                const on = r.active.includes(s)
+                return (
+                  <span
+                    key={s}
+                    style={{
+                      fontFamily: 'IBM Plex Mono, monospace',
+                      fontSize: 8, fontWeight: 700,
+                      padding: '1px 5px',
+                      background: on ? `${r.color}18` : 'rgba(0,0,0,0)',
+                      color: on ? r.color : 'rgba(255,255,255,0.15)',
+                      border: `1px solid ${on ? r.color + '40' : 'rgba(255,255,255,0.08)'}`,
+                      textDecoration: on ? 'none' : 'line-through',
+                    }}
+                  >
+                    {s}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Scoring factors */}
+      <div style={{ padding: '8px 20px 12px' }}>
+        <span style={{
+          fontFamily: 'Barlow Condensed, sans-serif',
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.16em',
+          textTransform: 'uppercase', color: 'var(--muted)',
+          display: 'block', marginBottom: 6,
+        }}>
+          Score Components (7 factors, equal weight)
+        </span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px' }}>
+          {factors.map((f, i) => (
+            <span key={i} style={{ fontSize: 10, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--muted)', flexShrink: 0, display: 'inline-block' }} />
+              {f}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Section 3c: Signal Gates & Dev Mode ─────────────────────────────────── */
+
+function SignalGatesSection() {
+  const gates = [
+    {
+      num: '1',
+      label: 'RS Rank',
+      color: '#00C8FF',
+      desc: 'Stock must be in the top 30% of the scanned universe by relative strength score. Weak stocks — even with valid chart patterns — are filtered out.',
+    },
+    {
+      num: '2',
+      label: 'RS Score',
+      color: '#00C8FF',
+      desc: "O'Neil composite RS score must be ≥0.088 (positive outperformance vs SPY). Ensures you're only trading stocks actually leading the market.",
+    },
+    {
+      num: '3',
+      label: 'Unified Score',
+      color: 'var(--accent)',
+      desc: 'Setup quality score must be ≥70 to appear. Scores are setup-specific — a Pullback score of 70 means something different from a BRK score of 70. All passed this bar.',
+    },
+  ]
+
+  return (
+    <div>
+      <SectionLabel color="#00C8FF">Signal Gates &amp; Dev Mode</SectionLabel>
+
+      {/* Gates */}
+      <div style={{ padding: '8px 12px 4px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{
+          fontFamily: 'Barlow Condensed, sans-serif',
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.16em',
+          textTransform: 'uppercase', color: 'var(--muted)',
+          padding: '0 8px',
+        }}>
+          3-Layer Quality Filter — all must pass to appear in scanner
+        </span>
+        {gates.map((g) => (
+          <div
+            key={g.num}
+            style={{
+              display: 'grid', gridTemplateColumns: '148px 1fr',
+              alignItems: 'center', gap: 12, padding: '6px 8px',
+              background: 'var(--panel)', border: '1px solid var(--border)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                fontFamily: 'IBM Plex Mono, monospace',
+                fontSize: 9, fontWeight: 700,
+                color: 'var(--muted)',
+                background: 'rgba(0,0,0,0.4)',
+                border: '1px solid var(--border)',
+                padding: '1px 6px',
+                minWidth: 16, textAlign: 'center',
+              }}>
+                {g.num}
+              </span>
+              <span style={{
+                fontFamily: 'Barlow Condensed, sans-serif',
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', color: g.color,
+                whiteSpace: 'nowrap',
+              }}>
+                {g.label}
+              </span>
+            </div>
+            <span style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.55 }}>{g.desc}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Dev Mode */}
+      <div style={{ margin: '8px 12px 8px', padding: '10px 14px', background: 'rgba(245,166,35,0.06)', border: '1px solid rgba(245,166,35,0.25)', borderLeft: '3px solid var(--accent)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <span style={{
+            fontFamily: 'IBM Plex Mono, monospace',
+            fontSize: 9, fontWeight: 700,
+            background: 'rgba(245,166,35,0.15)',
+            color: 'var(--accent)',
+            border: '1px solid rgba(245,166,35,0.4)',
+            padding: '2px 8px',
+          }}>
+            DEV
+          </span>
+          <span style={{
+            fontFamily: 'Barlow Condensed, sans-serif',
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+            textTransform: 'uppercase', color: 'var(--text)',
+          }}>
+            Dev Mode
+          </span>
+        </div>
+        <span style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.6 }}>
+          Bypasses all quality gates for research and exploration. RS rank gate is skipped. RS score gate is skipped. Score threshold drops from 70 → 50. Regime restriction on VCP and Pullback (normally blocked in DEFENSIVE) is lifted. Produces more signals — not all are tradeable, but useful for monitoring setups before they hit full score.
+        </span>
       </div>
     </div>
   )

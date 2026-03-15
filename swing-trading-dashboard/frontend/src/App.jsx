@@ -329,7 +329,7 @@ export default function App() {
 
             {/* Middle: Chart + Intel Panel */}
             <div style={{
-              flex: chartFocus ? 1 : '0 0 520px',
+              flex: chartFocus ? 1 : 1,
               display: 'flex', gap: 12,
               padding: '0 16px 12px',
               minHeight: 0,
@@ -374,7 +374,7 @@ export default function App() {
             {/* Bottom: Filter bar + Scanner table */}
             {!chartFocus && (
               <div style={{
-                flex: 1, display: 'flex', flexDirection: 'column',
+                flex: '0 0 200px', display: 'flex', flexDirection: 'column',
                 margin: '0 16px 16px',
                 background: 'var(--card)',
                 border: '1px solid var(--card-border)',

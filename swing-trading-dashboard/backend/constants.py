@@ -130,10 +130,10 @@ SCORE_SELECTIVE_REGIME_FACTOR = 0.53   # SELECTIVE regime earns 53% of AGGRESSIV
 # ──────────────────────────────────────────────────────────────────────────
 
 DATA_FETCH_PERIOD = "1y"  # Historical data lookback for each ticker (1y = 252 bars, covers all engines)
-CONCURRENCY_LIMIT = 15  # Max concurrent yfinance API requests (lowered for stability)
+CONCURRENCY_LIMIT = 8   # Max concurrent yfinance API requests (lowered to avoid rate limits)
 BATCH_SAVE_SIZE = 100  # Batch size for database operations (if needed)
-FETCH_MAX_RETRIES = 3  # Maximum retry attempts for data fetches
-FETCH_BACKOFF_BASE = 1.0  # Base delay for exponential backoff (seconds)
+FETCH_MAX_RETRIES = 4  # Maximum retry attempts for data fetches
+FETCH_BACKOFF_BASE = 5.0  # Base delay for exponential backoff (seconds) — longer for rate limits
 CACHE_TTL_SUCCESS = 14400  # Seconds to cache a successful fetch (4 hours)
 CACHE_TTL_FAILURE = 900    # Seconds to cache a failed fetch — retry sooner (15 min)
 PIVOT_LOOKBACK_DAYS       = 252    # 1 full trading year — captures macro bases
@@ -242,8 +242,12 @@ BASE_BRK_MIN_VOL_RATIO = 1.5       # BASE BRK signal: raised from 1.2x to 1.5x
 
 # RES_BREAKOUT tighter filters
 RES_LAUNCHPAD_BARS         = 5     # Pre-breakout consolidation bars (was 3)
-RES_DECISIVE_MIN_PCT       = 0.007 # Decisive close minimum = 0.7% above zone
+RES_DECISIVE_MIN_PCT       = 0.02  # Decisive close minimum = 2% above zone (diagnostic: <2% → neg expectancy)
 RES_DECISIVE_ATR_FACTOR    = 0.5400  # Optuna v4 best (trial #951); was 0.4725 (v3)
+RES_STOP_ATR_FACTOR        = 0.8   # Stop = zone_lower − 0.8×ATR (was 0.2; allows normal retests)
+RES_BREAKOUT_VOL_MULT      = 2.0   # Minimum breakout volume (×50d avg); diagnostic: <2x → neg expectancy
+RES_MAX_GAP_PCT            = 0.03  # Skip T+1 entry if open > zone_upper × (1 + 3%); prevents gap-chasing
+RES_SELECTIVE_REGIME_FACTOR = 0.80 # Score multiplier for RES_BREAKOUT in non-AGGRESSIVE regimes
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Universe & Pre-Scan Filtering (2026-03-07)

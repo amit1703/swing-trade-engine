@@ -1,11 +1,11 @@
 """Tests for Engine 6: Resistance Breakout Scanner (Minervini/O'Neil overhaul).
 
 Three mandatory rules for a valid breakout:
-  1. LAUNCHPAD   — 3 trading days before breakout: highs within 3% of resistance
+  1. LAUNCHPAD   — 5 trading days before breakout: highs within 3% of resistance
                    AND daily range < 1.5 × ATR14.
-  2. DECISIVE CLOSE — breakout day close > zone_upper × 1.005 (0.5% above zone)
+  2. DECISIVE CLOSE — breakout day close ≥ zone_upper × 1.02 (≥ 2% above zone)
                       AND close in top 30% of daily range.
-  3. INSTITUTIONAL VOLUME — breakout day volume ≥ 150% of 50-day average.
+  3. INSTITUTIONAL VOLUME — breakout day volume ≥ 200% of 50-day average.
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -43,14 +43,15 @@ def make_resistance_zone(level: float, atr: float = 1.0):
     }
 
 
-def setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6):
+def setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=2.5):
     """
     Configure a valid Minervini-style breakout in-place.
 
     Applies:
       • Launchpad: bars -5 through -1 before breakout are tight under resistance.
-      • Breakout bar: close 1.2% above zone, top 30% of range, institutional volume.
+      • Breakout bar: close 2.5% above zone, top 30% of range, institutional volume.
 
+    Default vol_mult=2.5 satisfies the ≥2.0× threshold with margin.
     Returns the breakout bar's high (for risk-math assertions).
     """
     n       = len(df)
@@ -69,10 +70,10 @@ def setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6):
             df.iloc[idx, df.columns.get_loc("Close")] = pre_high - pre_range * 0.5
 
     # ── Breakout bar ──────────────────────────────────────────────────────
-    brk_high  = zone_upper * 1.015
+    brk_high  = zone_upper * 1.028   # narrow upper wick — keeps close in top 30% of range
     brk_low   = zone_upper * 0.998   # small lower wick
-    brk_close = zone_upper * 1.012   # 1.2% above zone — clears max(0.7%, 0.25×ATR≈0.5) decisive threshold ✓
-    # Verify top-30%: (close-low)/(high-low) = (1.012-0.998)/(1.015-0.998) = 0.014/0.017 ≈ 0.82 > 0.70 ✓
+    brk_close = zone_upper * 1.025   # 2.5% above zone — clears the ≥2% decisive threshold ✓
+    # Verify top-30%: (close-low)/(high-low) = (1.025-0.998)/(1.028-0.998) = 0.027/0.030 = 0.90 > 0.70 ✓
 
     df.iloc[brk_idx, df.columns.get_loc("Close")]  = brk_close
     df.iloc[brk_idx, df.columns.get_loc("High")]   = brk_high
@@ -132,24 +133,24 @@ def test_ignores_overextended_price():
 
 
 # =============================================================================
-# Rule 3: Institutional Volume (≥ 150 % of 50-day average)
+# Rule 3: Institutional Volume (≥ 200 % of 50-day average)
 # =============================================================================
 
-def test_institutional_volume_threshold_is_150_pct():
-    """Breakout day volume must be ≥ 150% of 50-day average."""
+def test_institutional_volume_threshold_is_200_pct():
+    """Breakout day volume must be ≥ 200% of 50-day average."""
     n  = 300
     df = make_uptrend_df(n=n, base_price=105.0)
     zone       = make_resistance_zone(102.0, atr=1.0)
     zone_upper = zone["upper"]
 
-    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6)   # 160 % → should pass
+    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=2.2)   # 220 % → should pass
     result_pass = scan_resistance_breakout("TEST", df, [zone])
 
-    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.4)   # 140 % → should fail
+    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.8)   # 180 % → should fail
     result_fail = scan_resistance_breakout("TEST", df, [zone])
 
-    assert result_pass is not None, "160% volume should qualify (≥150%)"
-    assert result_fail is None,     "140% volume must not qualify (<150%)"
+    assert result_pass is not None, "220% volume should qualify (≥200%)"
+    assert result_fail is None,     "180% volume must not qualify (<200%)"
 
 
 def test_ignores_low_volume_breakout():
@@ -169,25 +170,25 @@ def test_ignores_low_volume_breakout():
 # Rule 2: Decisive Close
 # =============================================================================
 
-def test_ignores_breakout_close_below_half_pct_threshold():
-    """Close only 0.3 % above zone_upper (< 0.5 % minimum) must be rejected."""
+def test_ignores_breakout_close_below_2pct_threshold():
+    """Close only 1.2% above zone_upper (< 2% minimum) must be rejected."""
     n  = 300
     df = make_uptrend_df(n=n, base_price=105.0)
     zone       = make_resistance_zone(102.0, atr=1.0)
     zone_upper = zone["upper"]
 
-    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6)
+    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=2.5)
 
-    # Override breakout bar: close only 0.3% above zone
-    brk_close = zone_upper * 1.003   # < 1.005 threshold
-    brk_high  = zone_upper * 1.010
+    # Override breakout bar: close only 1.2% above zone (below 2% threshold)
+    brk_close = zone_upper * 1.012   # < 1.02 threshold
+    brk_high  = zone_upper * 1.040
     brk_low   = zone_upper * 0.998
     df.iloc[-1, df.columns.get_loc("Close")] = brk_close
     df.iloc[-1, df.columns.get_loc("High")]  = brk_high
     df.iloc[-1, df.columns.get_loc("Low")]   = brk_low
 
     result = scan_resistance_breakout("TEST", df, [zone])
-    assert result is None, "Close < 0.5% above zone must be rejected"
+    assert result is None, "Close < 2% above zone must be rejected"
 
 
 def test_ignores_breakout_with_weak_close_position():
@@ -197,16 +198,18 @@ def test_ignores_breakout_with_weak_close_position():
     zone       = make_resistance_zone(102.0, atr=1.0)
     zone_upper = zone["upper"]
 
-    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6)
+    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=2.5)
 
-    # Override: very wide upper wick (6%), low just above zone → close at 15% of range
-    # brk_low must be above zone so that close at 15% of range still clears 0.5% threshold
-    brk_high  = zone_upper * 1.060   # wide upper wick
-    brk_low   = zone_upper * 1.002   # wick starts just above zone
-    # Close at bottom 15% of range → weak rejection candle
+    # Override: very wide upper wick (8%), low starts at 1.5% above zone.
+    # Close at 15% of range lands at ~2.5% above zone — passes the 2% decisive threshold
+    # but fails the top-30% close-position rule.
+    brk_high  = zone_upper * 1.080   # wide upper wick
+    brk_low   = zone_upper * 1.015   # wick starts 1.5% above zone
     daily_range = brk_high - brk_low
-    brk_close   = brk_low + 0.15 * daily_range      # 15 % = NOT in top 30 %
-    assert brk_close > zone_upper * 1.005, "Precondition: close still above 0.5% threshold"
+    brk_close   = brk_low + 0.15 * daily_range   # 15% of range = bottom 15% = NOT in top 30%
+    # brk_close ≈ zone_upper * 1.015 + 0.15*0.065*zone_upper ≈ zone_upper * 1.025 ≥ 1.02 ✓
+    assert brk_close >= zone_upper * 1.02, "Precondition: close must clear 2% threshold"
+    assert (brk_close - brk_low) / daily_range < 0.30, "Precondition: close in bottom 30% of range"
 
     df.iloc[-1, df.columns.get_loc("Close")] = brk_close
     df.iloc[-1, df.columns.get_loc("High")]  = brk_high
@@ -227,7 +230,7 @@ def test_ignores_breakout_when_pre_bars_above_resistance():
     zone       = make_resistance_zone(102.0, atr=1.0)
     zone_upper = zone["upper"]
 
-    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6)
+    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=2.5)
 
     # Override launchpad: bar -2 has high 5% above resistance (too extended)
     brk_idx = n - 1
@@ -244,7 +247,7 @@ def test_ignores_breakout_when_pre_bars_have_wide_range():
     zone       = make_resistance_zone(102.0, atr=1.0)
     zone_upper = zone["upper"]
 
-    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6)
+    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=2.5)
 
     # Override launchpad bar -2: give it a very wide range (ATR ≈ 2, 1.5×ATR ≈ 3; use 10)
     brk_idx  = n - 1
@@ -267,14 +270,14 @@ def test_detects_fresh_breakout_today():
     zone       = make_resistance_zone(102.0, atr=1.0)
     zone_upper = zone["upper"]
 
-    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6)
+    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=2.5)
 
     result = scan_resistance_breakout("TEST", df, [zone])
     assert result is not None,          "Should detect today's valid breakout"
     assert result["setup_type"] == "RES_BREAKOUT"
     assert result["signal"]     == "BRK"
     assert result["days_since_breakout"] == 0
-    assert result["volume_ratio"] >= 1.5
+    assert result["volume_ratio"] >= 2.0
 
 
 def test_detects_breakout_3_days_ago():
@@ -284,7 +287,7 @@ def test_detects_breakout_3_days_ago():
     zone       = make_resistance_zone(107.0, atr=1.0)
     zone_upper = zone["upper"]
 
-    setup_full_breakout(df, zone_upper, days_ago=3, vol_mult=1.6)
+    setup_full_breakout(df, zone_upper, days_ago=3, vol_mult=2.5)
 
     result = scan_resistance_breakout("TEST", df, [zone])
     assert result is not None,                  "3-day-old breakout should be detected"
@@ -298,7 +301,7 @@ def test_risk_math():
     zone       = make_resistance_zone(102.0, atr=1.0)
     zone_upper = zone["upper"]
 
-    brk_high = setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6)
+    brk_high = setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=2.5)
 
     result = scan_resistance_breakout("TEST", df, [zone])
     assert result is not None
@@ -308,12 +311,18 @@ def test_risk_math():
     assert result["stop_loss"]   <  result["entry"]
     assert result["take_profit"] >  result["entry"]
 
+    # Stop = zone_lower − 0.8×ATR14 (wider than old 0.2×ATR to allow retests)
+    assert result["stop_loss"] < zone["lower"], "Stop must be below zone lower"
+
+    # Take profit is set by nearest_resistance_target (uses TARGET_RR ≈ 2.785)
+    # Verify R:R > 1 at minimum
     risk = result["entry"] - result["stop_loss"]
-    assert result["take_profit"] == pytest.approx(result["entry"] + 2 * risk, rel=1e-3)
+    assert risk > 0, "Risk must be positive"
+    assert result["take_profit"] >= result["entry"] + risk, "R:R must be ≥ 1:1"
 
 
-def test_decisive_close_below_atr_threshold_rejected():
-    """Breakout close clearing old 0.5% threshold but not new max(0.7%,0.25xATR) is rejected."""
+def test_decisive_close_below_2pct_atr_threshold_rejected():
+    """Breakout close only 1.5% above zone (< 2% minimum) is rejected."""
     df = make_uptrend_df(n=300, base_price=100.0)
     zone = make_resistance_zone(100.0, atr=2.0)
     zone_upper = float(zone["upper"])  # 100.0 + 0.2*2.0 = 100.4
@@ -329,26 +338,25 @@ def test_decisive_close_below_atr_threshold_rejected():
         df.iloc[lp, df.columns.get_loc("Close")]  = zone_upper * 0.993
         df.iloc[lp, df.columns.get_loc("Volume")] = 1_000_000.0
 
-    # Breakout close: 0.6% above zone_upper (above old 0.5% but below new ~0.7%)
-    # decisive_min = max(0.007 * zone_upper, 0.25 * ATR)
-    # ATR for this df ≈ 2.0, so decisive_min = max(0.007*100.4, 0.25*2.0) = max(0.703, 0.5) = 0.703
-    # brk_close = zone_upper * 1.006 → zone_upper + 0.6% ≈ zone_upper + 0.60 < 0.703 → REJECTED
-    brk_close = zone_upper * 1.006
+    # Breakout close: 1.5% above zone_upper (below the 2% decisive threshold)
+    # decisive_min = max(0.02 * zone_upper, 0.54 * ATR)
+    # ATR for this df ≈ 2.0, so decisive_min = max(0.02*100.4, 0.54*2.0) = max(2.008, 1.08) = 2.008
+    # brk_close = zone_upper * 1.015 → zone_upper + 1.5% ≈ zone_upper + 1.51 < 2.008 → REJECTED
+    brk_close = zone_upper * 1.015
     brk_high  = brk_close * 1.005
     brk_low   = zone_upper * 0.990
-    brk_range = brk_high - brk_low
 
     df.iloc[brk_idx, df.columns.get_loc("Close")]  = brk_close
     df.iloc[brk_idx, df.columns.get_loc("High")]   = brk_high
     df.iloc[brk_idx, df.columns.get_loc("Low")]    = brk_low
-    df.iloc[brk_idx, df.columns.get_loc("Volume")] = 2_000_000.0  # institutional vol surge
+    df.iloc[brk_idx, df.columns.get_loc("Volume")] = 2_000_000.0  # 2.0× — passes volume gate
 
-    # Also set previous bar's close <= zone_upper for zone-cross detection
+    # Previous bar's close ≤ zone_upper for zone-cross detection
     df.iloc[brk_idx - 1, df.columns.get_loc("Close")] = zone_upper * 0.993
 
     result = scan_resistance_breakout("TEST", df, zones=[zone])
     assert result is None, (
-        f"Expected rejection: close 0.6% above zone does not clear max(0.7%, 0.25xATR) threshold; got {result}"
+        f"Expected rejection: close 1.5% above zone does not clear max(2%, 0.54xATR) threshold; got {result}"
     )
 
 
@@ -369,7 +377,7 @@ def test_detects_breakout_below_200sma():
     zone       = make_resistance_zone(90.0, atr=1.0)
     zone_upper = zone["upper"]
 
-    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=1.6)
+    setup_full_breakout(df, zone_upper, days_ago=0, vol_mult=2.5)
 
     sma200 = pd.Series(close).rolling(200).mean().iloc[-1]
     assert close[-1] < sma200, "Precondition: close must be below 200 SMA"

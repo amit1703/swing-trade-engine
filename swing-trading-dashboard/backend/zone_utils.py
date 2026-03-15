@@ -13,6 +13,7 @@ def nearest_resistance_target(
     entry: float,
     zones: List[Dict],
     risk: float,
+    tp_multiple: float = None,
 ) -> Tuple[float, float]:
     """
     Return (take_profit, rr) using the nearest KDE RESISTANCE zone above entry.
@@ -20,17 +21,18 @@ def nearest_resistance_target(
     Logic:
       - Collect all zones with type=="RESISTANCE" and zone["lower"] > entry
       - Use the lowest of those (nearest supply above entry) as take_profit
-      - If computed R:R < 1.0, fall back to the fixed TARGET_RR multiplier
+      - If computed R:R < 1.0, fall back to tp_multiple (or TARGET_RR if not given)
 
-    Falls back to (entry + TARGET_RR * risk, TARGET_RR) when:
+    Falls back to (entry + fallback_rr * risk, fallback_rr) when:
       - zones is empty or None
       - No resistance zone is above entry
       - The nearest zone yields R:R < 1.0 (too close to entry to be useful)
     """
-    fallback_tp = round(entry + TARGET_RR * risk, 2)
+    fallback_rr = tp_multiple if tp_multiple is not None else TARGET_RR
+    fallback_tp = round(entry + fallback_rr * risk, 2)
 
     if not zones or risk <= 0:
-        return fallback_tp, TARGET_RR
+        return fallback_tp, fallback_rr
 
     candidates = [
         float(z["lower"])
@@ -39,12 +41,12 @@ def nearest_resistance_target(
     ]
 
     if not candidates:
-        return fallback_tp, TARGET_RR
+        return fallback_tp, fallback_rr
 
     target = round(min(candidates), 2)
     rr = (target - entry) / risk
 
     if rr < 1.0:
-        return fallback_tp, TARGET_RR
+        return fallback_tp, fallback_rr
 
     return target, round(rr, 2)

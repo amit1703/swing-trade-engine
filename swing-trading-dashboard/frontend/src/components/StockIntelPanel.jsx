@@ -175,7 +175,8 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
       border: '1px solid var(--card-border)',
       borderRadius: 12,
       display: 'flex', flexDirection: 'column',
-      overflow: 'hidden',
+      overflowY: 'auto',
+      overflowX: 'hidden',
     }}>
       {/* Header */}
       <div style={{
@@ -245,7 +246,7 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
       </div>
 
       {/* Trade Plan */}
-      <div style={{ padding: '10px 16px', flex: 1, overflow: 'auto' }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--card-border)' }}>
         <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 6 }}>TRADE PLAN</div>
         {[
           { label: 'Entry',  value: setup.entry       ? `$${setup.entry.toFixed(2)}`       : '—', color: 'var(--text)'   },

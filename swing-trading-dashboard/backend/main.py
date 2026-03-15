@@ -148,7 +148,7 @@ from wfo_engine import run_wfo
 from engines.engine0 import check_market_regime
 from engines.engine1 import calculate_sr_zones
 from engines.engine2 import scan_vcp, detect_trendline, scan_near_breakout
-from engines.engine3 import scan_pullback, scan_relaxed_pullback
+from engines.engine3 import scan_pullback, scan_relaxed_pullback, scan_pullback_scored
 from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats, calculate_rs_score, get_rs_signals
 from engines.engine5 import scan_base_pattern
 from engines.engine6 import scan_resistance_breakout
@@ -169,6 +169,9 @@ from email_digest import send_digest
 from services.macro_service import get_market_overview
 from services.narrative import generate_narrative
 from backtest_engine import BacktestEngine, BacktestParams, run_backtest_universe
+
+# Shared optimized params instance used by live scanner engines (engine6, etc.)
+_LIVE_PARAMS = BacktestParams()
 
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration (imported from constants.py for centralized management)
@@ -827,10 +830,12 @@ async def _fetch(
                     return df
 
             except Exception as exc:
+                is_rate_limit = "RateLimit" in type(exc).__name__ or "Too Many" in str(exc)
                 if attempt < FETCH_MAX_RETRIES:
-                    backoff_delay = FETCH_BACKOFF_BASE * (2 ** attempt)
+                    # Rate limit errors need a much longer pause than generic errors
+                    backoff_delay = (30.0 * (2 ** attempt)) if is_rate_limit else (FETCH_BACKOFF_BASE * (2 ** attempt))
                     log.warning(
-                        "Fetch %s: failed with %s (attempt %d/%d), retrying in %.1fs...",
+                        "Fetch %s: %s (attempt %d/%d), retrying in %.0fs...",
                         ticker,
                         type(exc).__name__,
                         attempt + 1,
@@ -1217,6 +1222,17 @@ async def _run_scan(
                 rs_blue_dot = ind.rs_blue_dot
                 rs_score    = ind.rs_score
 
+                # ── RS Score gate (mirrors backtest_engine.py line 837) ───────────
+                # Backtest only backtests bars where rs_score >= rs_threshold (0.088).
+                # Live scanner must apply the same gate to stay consistent.
+                # Bypassed in force/dev mode so everything is visible for debugging.
+                if not force and rs_score < _LIVE_PARAMS.rs_threshold:
+                    log.debug(
+                        "Skipped %s: rs_score=%.4f < rs_threshold=%.4f",
+                        ticker, rs_score, _LIVE_PARAMS.rs_threshold,
+                    )
+                    return
+
                 # ── S/R Zone calculation (uses full weekly resample, stays separate) ──
                 zones: List[Dict] = []
                 try:
@@ -1286,8 +1302,11 @@ async def _run_scan(
 
                 # ── Engine 3: Pullback (SELECTIVE/AGGRESSIVE only) ────────────────────
                 if regime["is_bullish"] or force:
-                    pb = await loop.run_in_executor(None, scan_pullback, ticker, df, zones, tl, rs_score)
-                    if pb:
+                    pb, pb_score = await loop.run_in_executor(
+                        None, scan_pullback_scored, ticker, df, zones, _LIVE_PARAMS, tl, rs_score
+                    )
+                    _pb_final = pb_score * _LIVE_PARAMS.pullback_weight
+                    if pb and _pb_final >= _LIVE_PARAMS.score_threshold:
                         # Sanitize pullback output
                         try:
                             pb["entry"] = float(pb.get("entry", 0.0))
@@ -1298,11 +1317,13 @@ async def _run_scan(
                             log.warning("Pullback conversion failed for %s: %s", ticker, conv_err)
                             return
 
-                        pb["sector"] = SECTORS.get(ticker, "Unknown")
+                        pb["sector"]   = SECTORS.get(ticker, "Unknown")
+                        pb["rs_score"] = rs_score
+                        pb["vol_ratio"] = pb.get("volume_ratio", pb.get("vol_ratio", 0.0))
                         collected_setups.append(pb)
                         pb_count += 1
                         _scan_state["engine_stats"]["e3"]["pullback"] += 1
-                        log.info("  PULLBACK %-6s  entry=%.2f", ticker, pb["entry"])
+                        log.info("  PULLBACK %-6s  entry=%.2f  score=%.2f", ticker, pb["entry"], pb_score)
                     else:
                         # Only check relaxed if no strict pullback found
                         try:
@@ -1332,7 +1353,7 @@ async def _run_scan(
                 try:
                     base = await loop.run_in_executor(
                         None, scan_base_pattern, ticker, df,
-                        spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, zones
+                        spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, zones, _LIVE_PARAMS
                     )
                     if base:
                         try:
@@ -1343,7 +1364,13 @@ async def _run_scan(
                         except (ValueError, TypeError) as conv_err:
                             log.warning("Base pattern conversion failed for %s: %s", ticker, conv_err)
                         else:
-                            base["sector"] = SECTORS.get(ticker, "Unknown")
+                            base["sector"]       = SECTORS.get(ticker, "Unknown")
+                            base["rs_score"]     = rs_score
+                            base["rs_blue_dot"]  = rs_blue_dot
+                            base["rs_ratio"]     = rs_ratio
+                            _vr_base = base.get("volume_ratio", base.get("vol_ratio", 0.0))
+                            base["vol_ratio"]    = _vr_base
+                            base["is_vol_surge"] = _vr_base >= 1.5
                             collected_setups.append(base)
                             base_count += 1
                             if base.get("base_type") == "CUP_HANDLE":
@@ -1356,10 +1383,16 @@ async def _run_scan(
                     log.warning("Base pattern check failed for %s: %s", ticker, base_exc)
 
                 # Engine 6: Resistance breakout
-                if zones:
+                # brk_aggressive_only: skip BRK in any non-AGGRESSIVE regime.
+                # SELECTIVE underperforms per OOS; DEFENSIVE is worse than SELECTIVE.
+                _brk_regime_ok = (
+                    regime["regime"] == "AGGRESSIVE"
+                    or not getattr(_LIVE_PARAMS, "brk_aggressive_only", True)
+                )
+                if zones and _brk_regime_ok:
                     try:
                         res_brk = await loop.run_in_executor(
-                            None, scan_resistance_breakout, ticker, df, zones
+                            None, scan_resistance_breakout, ticker, df, zones, False, _LIVE_PARAMS
                         )
                         if res_brk:
                             try:
@@ -1370,13 +1403,21 @@ async def _run_scan(
                             except (ValueError, TypeError) as conv_err:
                                 log.warning("ResBreakout conversion failed for %s: %s", ticker, conv_err)
                             else:
-                                res_brk["sector"] = SECTORS.get(ticker, "Unknown")
+                                res_brk["sector"]       = SECTORS.get(ticker, "Unknown")
+                                # Inject RS + volume fields not computed by engine6
+                                res_brk["rs_score"]     = rs_score
+                                res_brk["rs_blue_dot"]  = rs_blue_dot
+                                res_brk["rs_ratio"]     = rs_ratio
+                                # vol_ratio alias: engine6 uses "volume_ratio", frontend reads "vol_ratio"
+                                _vr = res_brk.get("volume_ratio", 0.0)
+                                res_brk["vol_ratio"]    = _vr
+                                res_brk["is_vol_surge"] = _vr >= 1.5
                                 collected_setups.append(res_brk)
                                 res_count += 1
                                 _scan_state["engine_stats"]["e6"]["res_breakout"] += 1
-                                log.info("  RES_BRK  %-6s  level=%.2f  vol=×%.1f",
+                                log.info("  RES_BRK  %-6s  level=%.2f  vol=×%.1f  rs=%.3f",
                                          ticker, res_brk.get("resistance_level", 0),
-                                         res_brk.get("volume_ratio", 0))
+                                         _vr, rs_score)
                     except Exception as res_exc:
                         log.warning("ResBreakout check failed for %s: %s", ticker, res_exc)
 
@@ -1395,7 +1436,13 @@ async def _run_scan(
                             except (ValueError, TypeError) as conv_err:
                                 log.warning("HTF conversion failed for %s: %s", ticker, conv_err)
                             else:
-                                htf["sector"] = SECTORS.get(ticker, "Unknown")
+                                htf["sector"]       = SECTORS.get(ticker, "Unknown")
+                                htf["rs_score"]     = rs_score
+                                htf["rs_blue_dot"]  = rs_blue_dot
+                                htf["rs_ratio"]     = rs_ratio
+                                _vr_htf = htf.get("volume_ratio", htf.get("vol_ratio", 0.0))
+                                htf["vol_ratio"]    = _vr_htf
+                                htf["is_vol_surge"] = _vr_htf >= 1.5
                                 collected_setups.append(htf)
                                 htf_count += 1
                                 _scan_state["engine_stats"]["e8"]["htf"] += 1
@@ -1420,7 +1467,13 @@ async def _run_scan(
                             except (ValueError, TypeError) as conv_err:
                                 log.warning("LCE conversion failed for %s: %s", ticker, conv_err)
                             else:
-                                lce["sector"] = SECTORS.get(ticker, "Unknown")
+                                lce["sector"]       = SECTORS.get(ticker, "Unknown")
+                                lce["rs_score"]     = rs_score
+                                lce["rs_blue_dot"]  = rs_blue_dot
+                                lce["rs_ratio"]     = rs_ratio
+                                _vr_lce = lce.get("volume_ratio", lce.get("vol_ratio", 0.0))
+                                lce["vol_ratio"]    = _vr_lce
+                                lce["is_vol_surge"] = _vr_lce >= 1.5
                                 collected_setups.append(lce)
                                 lce_count += 1
                                 _scan_state["engine_stats"]["e9"]["lce"] += 1
@@ -2260,16 +2313,33 @@ async def get_prices(tickers: str):
                 continue
         uncached.append(t)
 
-    # Fetch uncached tickers in one batch
-    if uncached:
+    # Serve uncached prices from the main ticker cache first (avoids extra yfinance calls)
+    still_missing: list = []
+    for t in uncached:
+        cached_entry = _ticker_cache.get(t)
+        if cached_entry is not None:
+            _, df_cached = cached_entry
+            if df_cached is not None and not df_cached.empty:
+                try:
+                    adj = "Adj Close" if "Adj Close" in df_cached.columns else "Close"
+                    price = float(df_cached[adj].dropna().iloc[-1])
+                    _price_cache[t] = (now, price)
+                    result[t] = price
+                    continue
+                except Exception:
+                    pass
+        still_missing.append(t)
+
+    # Fetch any tickers not in the main cache via yfinance
+    if still_missing:
         try:
             loop = asyncio.get_event_loop()
 
-            def _batch_download(tks=uncached):
+            def _batch_download(tks=still_missing):
                 return yf.download(
                     tks,
-                    period="1d",
-                    interval="1m",
+                    period="5d",
+                    interval="1d",
                     progress=False,
                     group_by="ticker" if len(tks) > 1 else None,
                 )
@@ -2278,20 +2348,20 @@ async def get_prices(tickers: str):
 
             if df is not None and not df.empty:
                 fetch_ts = time.time()
-                if len(uncached) == 1:
-                    # Single ticker: df has simple column index
-                    t = uncached[0]
+                if len(still_missing) == 1:
+                    t = still_missing[0]
                     try:
-                        price = float(df["Close"].dropna().iloc[-1])
+                        adj = "Adj Close" if "Adj Close" in df.columns else "Close"
+                        price = float(df[adj].dropna().iloc[-1])
                         _price_cache[t] = (fetch_ts, price)
                         result[t] = price
                     except Exception:
                         pass
                 else:
-                    # Multiple tickers: df is MultiIndex (ticker, field)
-                    for t in uncached:
+                    for t in still_missing:
                         try:
-                            price = float(df["Close"][t].dropna().iloc[-1])
+                            adj = "Adj Close" if "Adj Close" in df.columns else "Close"
+                            price = float(df[adj][t].dropna().iloc[-1])
                             _price_cache[t] = (fetch_ts, price)
                             result[t] = price
                         except Exception:
@@ -2385,38 +2455,55 @@ async def debug_ticker(ticker: str):
         except Exception:
             return None
 
+    # ── Gate checks (mirrors _process_ticker logic) ───────────────────────
+    regime_label   = regime_row.get("regime", "UNKNOWN")
+    is_bullish     = bool(regime_row.get("is_bullish", False))
+
+    rs_threshold_gate = rs_score >= _LIVE_PARAMS.rs_threshold  # mirrors backtest line 837
+    brk_regime_ok     = (
+        regime_label == "AGGRESSIVE"
+        or not getattr(_LIVE_PARAMS, "brk_aggressive_only", True)
+    )
+
     # Engine 2 — VCP
     e2 = await loop.run_in_executor(
         None, _run_engine, scan_vcp,
         sym, df, zones, 0.0, rs_ratio, rs_52w_high, rs_blue_dot, rs_score,
         rs_signals["rs_improving"], rs_signals["rs_near_high"], rs_signals["rs_acceleration"]
-    )
-    # Engine 3 — Pullback (strict then relaxed then pure EMA path)
-    e3 = await loop.run_in_executor(None, _run_engine, scan_pullback, sym, df, zones, tl, rs_score)
-    e3_relaxed = False
-    if e3 is None:
+    ) if is_bullish else None
+
+    # Engine 3 — Pullback (scored mode with _LIVE_PARAMS, then relaxed fallback)
+    e3_scored_result = None
+    e3_score         = 0.0
+    e3_final_score   = 0.0
+    e3_passes_gate   = False
+    e3_relaxed       = False
+
+    if is_bullish and rs_threshold_gate:
+        e3_scored_result, e3_score = await loop.run_in_executor(
+            None, scan_pullback_scored, sym, df, zones, _LIVE_PARAMS, tl, rs_score
+        )
+        e3_final_score = e3_score * _LIVE_PARAMS.pullback_weight
+        e3_passes_gate = e3_final_score >= _LIVE_PARAMS.score_threshold
+
+    e3 = e3_scored_result if e3_passes_gate else None
+    if e3 is None and is_bullish:
         e3 = await loop.run_in_executor(None, _run_engine, scan_relaxed_pullback, sym, df, zones, tl, rs_score)
         if e3 is not None:
             e3_relaxed = True
-    # Engine 5 — Base pattern
+
+    # Engine 5 — Base pattern (always runs; passes _LIVE_PARAMS)
     e5 = await loop.run_in_executor(
         None, _run_engine, scan_base_pattern,
-        sym, df, 0.0, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, zones
+        sym, df, 0.0, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, zones, _LIVE_PARAMS
     )
-    # Engine 6 — Resistance breakout
+
+    # Engine 6 — Resistance breakout (gated by regime + zones; passes _LIVE_PARAMS)
     e6 = await loop.run_in_executor(
-        None, _run_engine, scan_resistance_breakout, sym, df, zones
-    ) if zones else None
+        None, _run_engine, scan_resistance_breakout, sym, df, zones, False, _LIVE_PARAMS
+    ) if (zones and brk_regime_ok) else None
 
     def _eng(result, extra_keys=()):
-        """Build a per-engine debug block.
-
-        Keys:
-          triggered  – bool: whether the engine fired
-          result     – string setup_type/base_type or None when skipped
-          rejection  – always None (engines don't surface rejection strings)
-          + any extra_keys extracted from the result dict
-        """
         if result is None:
             return {"triggered": False, "result": None, "rejection": None}
         out = {
@@ -2429,37 +2516,67 @@ async def debug_ticker(ticker: str):
                 out[k] = result[k]
         return out
 
-    # Engine 2 block: derive path (A=DRY, B=BRK) from is_breakout; normalise vol_surge
+    # Engine 2 block
     e2_out = _eng(e2, ("is_breakout", "is_vol_surge", "is_rs_lead"))
     if e2 is not None:
         e2_out["path"]      = "B" if e2.get("is_breakout") else "A"
         e2_out["vol_surge"] = e2.get("is_vol_surge", False)
-        e2_out.pop("is_vol_surge", None)  # remove raw key; exposed as vol_surge
+        e2_out.pop("is_vol_surge", None)
 
-    # Engine 3 block: flag relaxed variant
+    # Engine 3 block — include scoring breakdown
     e3_out = _eng(e3, ())
+    e3_out["raw_score"]    = round(e3_score, 3)
+    e3_out["final_score"]  = round(e3_final_score, 3)
+    e3_out["passes_gate"]  = e3_passes_gate
+    e3_out["gate_formula"] = f"{e3_score:.3f} × {_LIVE_PARAMS.pullback_weight:.3f} = {e3_final_score:.3f} (need ≥ {_LIVE_PARAMS.score_threshold:.3f})"
     if e3 is not None and e3_relaxed:
         e3_out["is_relaxed"] = True
 
-    # Engine 5 block: use base_type as the result value (more specific than "BASE")
+    # Engine 5 block
     e5_out = _eng(e5, ("base_type", "quality_score"))
     if e5 is not None and e5.get("base_type"):
         e5_out["result"] = e5["base_type"]
 
     # Engine 6 block
     e6_out = _eng(e6, ("days_since_breakout", "volume_ratio"))
+    e6_out["regime_gate_ok"] = brk_regime_ok
+    if not brk_regime_ok:
+        e6_out["skipped_reason"] = f"brk_aggressive_only=True blocks BRK in {regime_label} regime"
 
     return {
         "ticker": sym,
+        "live_params": {
+            "rs_threshold":      _LIVE_PARAMS.rs_threshold,
+            "cci_threshold":     _LIVE_PARAMS.cci_threshold,
+            "ema_distance":      _LIVE_PARAMS.ema_distance,
+            "score_threshold":   _LIVE_PARAMS.score_threshold,
+            "pullback_weight":   _LIVE_PARAMS.pullback_weight,
+            "breakout_weight":   _LIVE_PARAMS.breakout_weight,
+            "base_weight":       _LIVE_PARAMS.base_weight,
+            "brk_aggressive_only": _LIVE_PARAMS.brk_aggressive_only,
+            "brk_vol_mult":      _LIVE_PARAMS.brk_vol_mult,
+            "brk_donchian_n":    _LIVE_PARAMS.brk_donchian_n,
+            "base_vol_ratio":    _LIVE_PARAMS.base_vol_ratio,
+            "base_quality_min":  _LIVE_PARAMS.base_quality_min,
+        },
+        "gates": {
+            "rs_threshold_pass":  rs_threshold_gate,
+            "rs_score":           round(float(rs_score), 4),
+            "rs_threshold":       _LIVE_PARAMS.rs_threshold,
+            "regime":             regime_label,
+            "is_bullish":         is_bullish,
+            "brk_regime_ok":      brk_regime_ok,
+        },
         "regime": {
-            "is_bullish": regime_row.get("is_bullish"),
+            "is_bullish": is_bullish,
             "spy_close":  regime_row.get("spy_close"),
             "spy_20ema":  regime_row.get("spy_20ema"),
+            "label":      regime_label,
         },
         "rs": {
             "ratio":    rs_ratio,
             "blue_dot": rs_blue_dot,
-            "rs_score": rs_score,
+            "rs_score": round(float(rs_score), 4),
         },
         "indicators": {
             "close":       round(lc, 2),
