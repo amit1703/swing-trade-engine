@@ -184,3 +184,34 @@ def test_compute_metrics_basic():
     assert abs(m["profit_factor"] - 4.0) < 0.01   # gross_win=4.0, gross_loss=1.0
     assert abs(m["expectancy"] - 1.0) < 0.01       # (2+2-1)/3 = 1.0
     assert abs(m["max_drawdown_r"] - (-1.0)) < 0.01  # runs to -1 after 2+2 then hit -1
+
+
+# ── New tests ─────────────────────────────────────────────────────────────────
+
+def test_wfo_windows_is_24_months():
+    """IS windows must be exactly 24 months."""
+    from wfo_optuna import WFO_WINDOWS
+    for win_num, is_start, is_end, oos_start, oos_end in WFO_WINDOWS:
+        s = pd.Timestamp(is_start)
+        e = pd.Timestamp(is_end)
+        months = (e.year - s.year) * 12 + (e.month - s.month)
+        assert months == 24, f"IS window {win_num} should be 24 months, got {months}"
+
+
+def test_build_params_from_values_partial_dict_uses_defaults():
+    """Partial dict (only some tunable keys) falls back to trial #433 defaults for missing keys."""
+    from wfo_optuna import _build_params_from_values
+    # Only provide tp_multiple — rest should fall back to trial #433 values
+    values = {"tp_multiple": 3.5}
+    p = _build_params_from_values(values)
+    assert abs(p.tp_multiple - 3.5) < 1e-9           # provided value
+    assert abs(p.brk_vol_mult - 3.0161) < 1e-4       # #433 default
+    assert abs(p.brk_stop_atr - 1.6675) < 1e-4       # #433 default
+    assert abs(p.brk_trail_mult - 6.906) < 1e-3      # #433 default
+
+
+def test_sparkline_single_value():
+    """Single-value list returns exactly one character without error."""
+    from wfo_optuna import _sparkline
+    result = _sparkline([42.0])
+    assert len(result) == 1

@@ -55,7 +55,6 @@ logger = logging.getLogger("wfo_optuna")
 
 _BACKEND_DIR = Path(__file__).parent
 _DATA_DIR    = _BACKEND_DIR / "data"
-_DATA_DIR.mkdir(exist_ok=True)
 _OUTPUT_PATH = _DATA_DIR / "wfo_optuna_results.json"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -339,6 +338,12 @@ def _build_params_from_values(values: dict) -> BacktestParams:
     Tunable params use .get(key, trial_433_default) so this works
     when called with a partial dict (e.g. from --resume with missing keys).
     """
+    missing = [k for k in TUNABLE_PARAMS if k not in values]
+    if missing:
+        logger.warning(
+            "_build_params_from_values: missing keys %s — falling back to trial #433 defaults",
+            missing,
+        )
     return BacktestParams(
         # ── Frozen ───────────────────────────────────────────────────────────
         rs_threshold    = 0.066,
@@ -434,7 +439,7 @@ def _optimize_window(
             elapsed = time.perf_counter() - t0
             trial_times.append(elapsed)
             avg = sum(trial_times) / len(trial_times)
-            done_so_far = len([t for t in study.trials if t.state.name == "COMPLETE"])
+            done_so_far = trial.number + 1
             eta_min = max(0, (n_trials - done_so_far) * avg / 60)
             print(
                 f"  W{window_num} trial {trial.number:>4}  "
@@ -644,6 +649,7 @@ def main() -> None:
         sys.exit(1)
 
     # ── 1. Load price data ────────────────────────────────────────────────────
+    _DATA_DIR.mkdir(exist_ok=True)
     cache_dir = _BACKEND_DIR / WFO_CACHE_DIR
     ticker_cache, spy_df = _load_universe_cache(cache_dir)
 
