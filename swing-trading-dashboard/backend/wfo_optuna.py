@@ -122,3 +122,184 @@ def _sparkline(values: List[float]) -> str:
         chars[min(7, int((v - mn) / (mx - mn) * 8))]
         for v in values
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Data loading (identical to optimize_v5.py)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_universe_cache(
+    cache_dir: Path,
+) -> Tuple[Dict[str, pd.DataFrame], Optional[pd.DataFrame]]:
+    """Load all parquet files from the WFO cache directory."""
+    if not cache_dir.exists():
+        logger.error("Cache dir does not exist: %s", cache_dir)
+        return {}, None
+
+    parquet_files = list(cache_dir.glob("*.parquet"))
+    if not parquet_files:
+        logger.error("No parquet files in %s. Run wfo_cache download first.", cache_dir)
+        return {}, None
+
+    ticker_cache: Dict[str, pd.DataFrame] = {}
+    spy_df: Optional[pd.DataFrame] = None
+
+    print(f"Loading {len(parquet_files)} parquet files from cache…", flush=True)
+    for path in parquet_files:
+        ticker = path.stem.upper()
+        try:
+            df = pd.read_parquet(path)
+            if df is None or df.empty:
+                continue
+            ticker_cache[ticker] = df
+            if ticker == "SPY":
+                spy_df = df
+        except Exception as exc:
+            logger.debug("Failed to load %s: %s", path, exc)
+
+    non_spy = len(ticker_cache) - (1 if spy_df is not None else 0)
+    print(f"  Loaded {len(ticker_cache)} tickers ({non_spy} non-SPY).", flush=True)
+    if spy_df is None:
+        print("  WARNING: SPY not found — benchmark unavailable.", flush=True)
+    return ticker_cache, spy_df
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SPY benchmark (identical to optimize_v5.py)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _spy_return(
+    spy_df: Optional[pd.DataFrame],
+    start_date: str,
+    end_date: str,
+) -> Optional[float]:
+    """Return SPY's total % return over [start_date, end_date]. None if unavailable."""
+    if spy_df is None or spy_df.empty:
+        return None
+    try:
+        adj_col = "Adj Close" if "Adj Close" in spy_df.columns else "Close"
+        sliced  = spy_df.loc[start_date:end_date, adj_col].dropna()
+        if len(sliced) < 2:
+            return None
+        return float(sliced.iloc[-1] / sliced.iloc[0] - 1)
+    except Exception:
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Metrics (identical to optimize_v5.py _compute_metrics)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _compute_metrics(trades: List[dict]) -> dict:
+    """Compute expectancy, PF, win rate, max drawdown, portfolio return."""
+    if not trades:
+        return {
+            "total_trades": 0, "win_rate": 0.0,
+            "expectancy": 0.0, "profit_factor": 0.0,
+            "max_drawdown_r": 0.0, "portfolio_return_pct": 0.0, "by_setup": {},
+        }
+
+    rr_vals = [t["rr_achieved"] for t in trades if "rr_achieved" in t]
+    wins    = [r for r in rr_vals if r > 0]
+    losses  = [r for r in rr_vals if r <= 0]
+
+    total      = len(rr_vals)
+    win_rate   = len(wins) / total if total else 0.0
+    expectancy = sum(rr_vals) / total if total else 0.0
+
+    gross_win  = sum(wins)
+    gross_loss = abs(sum(losses))
+    profit_factor = (gross_win / gross_loss) if gross_loss > 0 else float("inf")
+
+    # Max drawdown in R (peak-to-trough of cumulative R curve)
+    peak, max_dd, running = 0.0, 0.0, 0.0
+    for r in rr_vals:
+        running += r
+        if running > peak:
+            peak = running
+        dd = running - peak
+        if dd < max_dd:
+            max_dd = dd
+
+    # Compounded portfolio return (1% risk/trade, sorted by exit_date)
+    sorted_trades = sorted(
+        [t for t in trades if "portfolio_pnl_pct" in t and "exit_date" in t],
+        key=lambda t: t["exit_date"],
+    )
+    equity = 1.0
+    for t in sorted_trades:
+        equity *= (1.0 + t["portfolio_pnl_pct"] / 100.0)
+    portfolio_return_pct = round((equity - 1.0) * 100.0, 2)
+
+    by_setup: Dict[str, int] = defaultdict(int)
+    for t in trades:
+        by_setup[t.get("setup_type", "UNKNOWN")] += 1
+
+    return {
+        "total_trades":         total,
+        "win_rate":             round(win_rate * 100, 1),
+        "expectancy":           round(expectancy, 4),
+        "profit_factor":        round(min(profit_factor, 99.0), 3),
+        "max_drawdown_r":       round(max_dd, 2),
+        "portfolio_return_pct": portfolio_return_pct,
+        "by_setup":             dict(by_setup),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Objective score (identical to optimize_v5.py)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _objective_score(metrics: dict) -> float:
+    """Compute Optuna objective: expectancy × PF × log(trades+1)."""
+    n  = metrics["total_trades"]
+    ex = metrics["expectancy"]
+    pf = min(metrics["profit_factor"], 10.0)
+
+    if n < MIN_TRADES:
+        return PENALTY_SCORE
+    if ex <= 0 or pf <= 0:
+        return ex
+    return ex * pf * math.log(n + 1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Backtest runner (identical to optimize_v5.py _run_trial)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _run_trial(
+    ticker_cache: Dict[str, pd.DataFrame],
+    spy_df: Optional[pd.DataFrame],
+    start_date: str,
+    end_date: str,
+    params: BacktestParams,
+) -> List[dict]:
+    """Run full universe backtest with given params. Returns list of trade dicts."""
+    tickers = [t for t in ticker_cache if t != "SPY"]
+    if not tickers:
+        return []
+
+    sem = asyncio.Semaphore(CONCURRENCY_LIMIT)
+
+    async def _run_one(ticker: str) -> List[dict]:
+        async with sem:
+            try:
+                engine = BacktestEngine(
+                    ticker=ticker,
+                    start_date=start_date,
+                    end_date=end_date,
+                    ticker_df=ticker_cache[ticker],
+                    spy_df=spy_df,
+                    params=params,
+                )
+                summary = await engine.run()
+                return [t.to_dict() for t in summary.trades]
+            except Exception as exc:
+                logger.debug("Trial ticker %s failed: %s", ticker, exc)
+                return []
+
+    results = await asyncio.gather(*[_run_one(t) for t in tickers])
+    all_trades: List[dict] = []
+    for batch in results:
+        all_trades.extend(batch)
+    return all_trades
