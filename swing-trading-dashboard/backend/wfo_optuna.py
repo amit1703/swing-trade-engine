@@ -30,14 +30,14 @@ import math
 import os
 import sys
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, str(Path(__file__).parent))
 
 from backtest_engine import BacktestEngine, BacktestParams
 from constants import CONCURRENCY_LIMIT, WFO_CACHE_DIR
