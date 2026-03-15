@@ -32,7 +32,8 @@ def test_wfo_windows_oos_non_overlapping():
     for i in range(len(WFO_WINDOWS) - 1):
         _, _, _, _, oos_end_i = WFO_WINDOWS[i]
         _, _, _, oos_start_next, _ = WFO_WINDOWS[i + 1]
-        assert pd.Timestamp(oos_end_i) <= pd.Timestamp(oos_start_next)
+        assert pd.Timestamp(oos_end_i) == pd.Timestamp(oos_start_next), \
+            f"Gap between OOS windows {i} and {i+1}"
 
 
 def test_wfo_windows_starts_2019():
@@ -154,7 +155,7 @@ def test_spy_return_computes_correctly():
     df = pd.DataFrame({"Close": close, "Adj Close": close})
     result = _spy_return(df, "2023-01-01", "2023-12-31")
     assert result is not None
-    assert abs(result - 0.10) < 0.01
+    assert abs(result - 0.10) < 1e-6
 
 
 # ── Compute metrics ───────────────────────────────────────────────────────────
@@ -180,3 +181,6 @@ def test_compute_metrics_basic():
     assert m["profit_factor"] > 1.0
     assert m["expectancy"] > 0
     assert m["max_drawdown_r"] <= 0
+    assert abs(m["profit_factor"] - 4.0) < 0.01   # gross_win=4.0, gross_loss=1.0
+    assert abs(m["expectancy"] - 1.0) < 0.01       # (2+2-1)/3 = 1.0
+    assert abs(m["max_drawdown_r"] - (-1.0)) < 0.01  # runs to -1 after 2+2 then hit -1
