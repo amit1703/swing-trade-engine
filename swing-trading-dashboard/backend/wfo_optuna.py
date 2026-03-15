@@ -363,3 +363,97 @@ def _build_params_from_values(values: dict) -> BacktestParams:
 def _frozen_params() -> BacktestParams:
     """Return trial #433 params — current BacktestParams() defaults."""
     return BacktestParams()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-window IS optimization
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _optimize_window(
+    window_num:   int,
+    is_start:     str,
+    is_end:       str,
+    ticker_cache: Dict[str, pd.DataFrame],
+    spy_df:       Optional[pd.DataFrame],
+    n_trials:     int,
+    storage:      str,
+    resume:       bool,
+) -> Tuple[BacktestParams, dict, int, float]:
+    """
+    Run Optuna TPE on the IS period for one window.
+
+    Returns
+    -------
+    best_params  : BacktestParams built from best trial values
+    is_metrics   : metrics dict for IS period with best params
+    best_trial_n : Optuna trial number of best trial
+    best_score   : objective score of best trial
+    """
+    try:
+        import optuna
+    except ImportError:
+        print("ERROR: optuna not installed. Run: pip install optuna")
+        sys.exit(1)
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    study_name = f"wfo_v{window_num}"
+    study = optuna.create_study(
+        study_name=study_name,
+        direction="maximize",
+        storage=storage,
+        load_if_exists=True,
+        sampler=optuna.samplers.TPESampler(seed=42),
+    )
+
+    completed = [t for t in study.trials if t.state.name == "COMPLETE"]
+    remaining = n_trials - len(completed)
+
+    if resume and len(completed) > 0:
+        print(
+            f"  W{window_num}: Resuming — {len(completed)} completed, "
+            f"{remaining} remaining.",
+            flush=True,
+        )
+
+    if remaining <= 0:
+        print(
+            f"  W{window_num}: Already has {len(completed)} trials — skipping optimization.",
+            flush=True,
+        )
+    else:
+        import time
+        trial_times: List[float] = []
+
+        def objective(trial) -> float:
+            t0 = time.perf_counter()
+            params  = _build_params(trial)
+            trades  = asyncio.run(_run_trial(ticker_cache, spy_df, is_start, is_end, params))
+            metrics = _compute_metrics(trades)
+            score   = _objective_score(metrics)
+            elapsed = time.perf_counter() - t0
+            trial_times.append(elapsed)
+            avg = sum(trial_times) / len(trial_times)
+            done_so_far = len([t for t in study.trials if t.state.name == "COMPLETE"])
+            eta_min = max(0, (n_trials - done_so_far) * avg / 60)
+            print(
+                f"  W{window_num} trial {trial.number:>4}  "
+                f"score={score:>8.4f}  E={metrics['expectancy']:>+.4f}  "
+                f"PF={metrics['profit_factor']:.3f}  N={metrics['total_trades']}  "
+                f"port={metrics['portfolio_return_pct']:>+.1f}%  "
+                f"{elapsed/60:.1f}min  ETA≈{eta_min:.0f}min",
+                flush=True,
+            )
+            return score
+
+        study.optimize(objective, n_trials=remaining, n_jobs=1, show_progress_bar=False)
+
+    best        = study.best_trial
+    best_params = _build_params_from_values(best.params)
+
+    # Re-evaluate IS period with best params to get full metrics
+    print(f"  W{window_num}: Re-evaluating IS with best params (trial #{best.number})…", flush=True)
+    is_trades  = asyncio.run(_run_trial(ticker_cache, spy_df, is_start, is_end, best_params))
+    is_metrics = _compute_metrics(is_trades)
+
+    return best_params, is_metrics, best.number, best.value
