@@ -457,3 +457,160 @@ def _optimize_window(
     is_metrics = _compute_metrics(is_trades)
 
     return best_params, is_metrics, best.number, best.value
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Report printer
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _print_report(results: List[WindowOptResult]) -> None:
+    import statistics
+    W = 90
+    print(f"\n{'═' * W}")
+    print(
+        f"  WALK-FORWARD OPTUNA VALIDATION REPORT  "
+        f"({len(results)} windows, {datetime.now().strftime('%Y-%m-%d %H:%M')})"
+    )
+    print(f"{'═' * W}")
+
+    # ── Section A: OOS performance table ─────────────────────────────────────
+    print(f"\n  {'─' * (W - 2)}")
+    print(f"  SECTION A — OOS PERFORMANCE  (optimized IS params vs frozen #433)")
+    print(f"  {'─' * (W - 2)}")
+    print(
+        f"  {'Win':<4} {'OOS Period':<25} {'Params':<10} "
+        f"{'N':>5} {'WR%':>6} {'E(R)':>8} {'PF':>6} "
+        f"{'MaxDD':>7} {'Port%':>7} {'SPY%':>7} {'Alpha':>7}"
+    )
+    print(
+        f"  {'─'*4} {'─'*25} {'─'*10} "
+        f"{'─'*5} {'─'*6} {'─'*8} {'─'*6} "
+        f"{'─'*7} {'─'*7} {'─'*7} {'─'*7}"
+    )
+
+    def _row(win_num: int, oos_start: str, oos_end: str,
+             label: str, m: dict, spy_pct: Optional[float]) -> None:
+        period = f"{oos_start} → {oos_end}"
+        n   = m["total_trades"]
+        wr  = m["win_rate"]
+        ex  = m["expectancy"]
+        pf  = m["profit_factor"]
+        dd  = m["max_drawdown_r"]
+        pr  = m["portfolio_return_pct"]
+        spy_str   = f"{spy_pct*100:>+.1f}" if spy_pct is not None else "  N/A"
+        alpha_str = f"{pr - spy_pct*100:>+.1f}" if spy_pct is not None else "  N/A"
+        print(
+            f"  {win_num:<4} {period:<25} {label:<10} {n:>5} {wr:>6.1f} "
+            f"{ex:>+8.4f} {pf:>6.3f} {dd:>7.2f} {pr:>+7.1f} "
+            f"{spy_str:>7} {alpha_str:>7}"
+        )
+
+    for r in results:
+        _row(r.window_num, r.oos_start, r.oos_end, "optimized", r.oos_metrics, r.spy_pct)
+        _row(r.window_num, r.oos_start, r.oos_end, "frozen#433", r.frozen_metrics, r.spy_pct)
+        print()
+
+    # ── Section B: Combined OOS equity sparklines ─────────────────────────────
+    print(f"  {'─' * (W - 2)}")
+    print(f"  SECTION B — COMBINED OOS EQUITY CURVE  (portfolio return % per window)")
+    print(f"  {'─' * (W - 2)}")
+
+    opt_returns    = [r.oos_metrics["portfolio_return_pct"] for r in results]
+    frozen_returns = [r.frozen_metrics["portfolio_return_pct"] for r in results]
+    labels         = [f"W{r.window_num}({r.oos_start[:4]})" for r in results]
+
+    print(f"\n  Optimized : {_sparkline(opt_returns)}  {opt_returns}")
+    print(f"  Frozen#433: {_sparkline(frozen_returns)}  {frozen_returns}")
+    print(f"  Windows   : {labels}")
+
+    # Cumulative compounded return across all OOS windows
+    opt_cum    = 1.0
+    frozen_cum = 1.0
+    for r in results:
+        opt_cum    *= (1.0 + r.oos_metrics["portfolio_return_pct"] / 100.0)
+        frozen_cum *= (1.0 + r.frozen_metrics["portfolio_return_pct"] / 100.0)
+
+    print(f"\n  Cumulative OOS return (optimized) : {(opt_cum - 1)*100:>+.1f}%")
+    print(f"  Cumulative OOS return (frozen#433): {(frozen_cum - 1)*100:>+.1f}%")
+
+    spy_vals = [r.spy_pct for r in results if r.spy_pct is not None]
+    if spy_vals:
+        spy_cum = 1.0
+        for s in spy_vals:
+            spy_cum *= (1.0 + s)
+        print(f"  SPY cumulative (OOS windows only) : {(spy_cum - 1)*100:>+.1f}%")
+
+    # ── Section C: Parameter stability table ─────────────────────────────────
+    print(f"\n  {'─' * (W - 2)}")
+    print(f"  SECTION C — PARAMETER STABILITY  (tuned values across IS windows)")
+    print(f"  {'─' * (W - 2)}")
+
+    hdr2 = f"\n  {'Param':<20}" + "".join(
+        f"{'W'+str(r.window_num)+'-best':>12}" for r in results
+    )
+    hdr2 += f"{'mean':>10} {'std':>8} {'CV':>6}  {'stable?':>10}"
+    print(hdr2)
+    print(f"  {'─'*20}" + "─" * (12 * len(results) + 36))
+
+    for param in TUNABLE_PARAMS:
+        vals = [r.best_params.get(param, float("nan")) for r in results]
+        valid = [v for v in vals if not math.isnan(v)]
+        if not valid:
+            continue
+        mean = statistics.mean(valid)
+        std  = statistics.stdev(valid) if len(valid) > 1 else 0.0
+        cv   = abs(std / mean) if mean != 0 else 0.0
+        if cv < 0.15:
+            stable = "✓ stable"
+        elif cv < 0.30:
+            stable = "⚠ moderate"
+        else:
+            stable = "✗ SENSITIVE"
+        row  = f"  {param:<20}" + "".join(f"{v:>12.4f}" for v in vals)
+        row += f"{mean:>10.4f} {std:>8.4f} {cv:>6.3f}  {stable:>10}"
+        print(row)
+
+    print(f"\n  CV < 0.15 = stable   CV 0.15–0.30 = moderate   CV > 0.30 = regime-sensitive")
+
+    # ── Section D: Robustness verdict ─────────────────────────────────────────
+    print(f"\n  {'─' * (W - 2)}")
+    print(f"  SECTION D — ROBUSTNESS VERDICT")
+    print(f"  {'─' * (W - 2)}\n")
+
+    oos_exps = [r.oos_metrics["expectancy"]   for r in results]
+    is_exps  = [r.is_metrics["expectancy"]    for r in results]
+    oos_pfs  = [r.oos_metrics["profit_factor"] for r in results]
+
+    avg_is_exp  = sum(is_exps)  / len(is_exps)  if is_exps  else 0.0
+    avg_oos_exp = sum(oos_exps) / len(oos_exps) if oos_exps else 0.0
+    avg_oos_pf  = sum(oos_pfs)  / len(oos_pfs)  if oos_pfs  else 0.0
+    degradation = (
+        (avg_is_exp - avg_oos_exp) / abs(avg_is_exp) * 100
+        if avg_is_exp != 0 else 0.0
+    )
+
+    all_positive = all(e > 0 for e in oos_exps)
+    all_pf_gt1   = all(p > 1.0 for p in oos_pfs)
+    worst_dd     = min(r.oos_metrics["max_drawdown_r"] for r in results)
+
+    print(f"  Avg IS expectancy           : {avg_is_exp:>+.4f} R")
+    print(f"  Avg OOS expectancy          : {avg_oos_exp:>+.4f} R")
+    print(f"  Avg OOS profit factor       : {avg_oos_pf:>6.3f}")
+    print(f"  OOS degradation vs IS       : {degradation:>+.1f}%")
+    print(f"  Worst OOS drawdown          : {worst_dd:>.2f} R")
+    print(f"  All OOS windows profitable? : {'YES' if all_positive else 'NO'}")
+    print(f"  All OOS windows PF > 1.0?   : {'YES' if all_pf_gt1 else 'NO'}")
+    print()
+
+    if all_positive and all_pf_gt1:
+        if degradation < 30:
+            verdict = "ROBUST — strategy generalises well across regimes"
+        elif degradation < 60:
+            verdict = "MODERATE — some regime sensitivity; monitor live performance"
+        else:
+            verdict = "OVERFIT — large OOS degradation; re-examine search space"
+    else:
+        verdict = "FRAGILE — OOS expectancy negative in ≥1 window; do not trade live"
+
+    print(f"  Verdict: {verdict}")
+    print(f"\n{'═' * W}\n")
