@@ -322,7 +322,7 @@ def _build_params(trial) -> BacktestParams:
         vcp_bonus       = 1.370,
         cooldown_days   = 4,
         # ── Tunable ──────────────────────────────────────────────────────────
-        tp_multiple     = trial.suggest_float("tp_multiple",     1.5,  6.0),
+        tp_multiple     = trial.suggest_float("tp_multiple",     1.5,  9.0),
         brk_vol_mult    = trial.suggest_float("brk_vol_mult",    1.5,  3.5),
         brk_stop_atr    = trial.suggest_float("brk_stop_atr",    0.3,  2.0),
         brk_min_pct     = trial.suggest_float("brk_min_pct",     0.01, 0.05),

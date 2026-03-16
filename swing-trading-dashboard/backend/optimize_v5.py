@@ -163,16 +163,38 @@ async def _run_trial(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SPY benchmark
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _spy_return(spy_df: Optional[pd.DataFrame], start_date: str, end_date: str) -> Optional[float]:
+    """
+    Return SPY's total % return over [start_date, end_date] using the cached parquet.
+    Returns None if SPY data is unavailable or the window cannot be sliced.
+    """
+    if spy_df is None or spy_df.empty:
+        return None
+    try:
+        adj_col = "Adj Close" if "Adj Close" in spy_df.columns else "Close"
+        sliced  = spy_df.loc[start_date:end_date, adj_col].dropna()
+        if len(sliced) < 2:
+            return None
+        return float(sliced.iloc[-1] / sliced.iloc[0] - 1)
+    except Exception:
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Metrics computation
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _compute_metrics(trades: List[dict]) -> dict:
-    """Compute expectancy, profit factor, win rate, max drawdown, trade counts."""
+    """Compute expectancy, profit factor, win rate, max drawdown, trade counts,
+    and compounded portfolio return (1% risk model, sorted by exit date)."""
     if not trades:
         return {
             "total_trades": 0, "win_rate": 0.0,
             "expectancy": 0.0, "profit_factor": 0.0,
-            "max_drawdown_r": 0.0, "by_setup": {},
+            "max_drawdown_r": 0.0, "portfolio_return_pct": 0.0, "by_setup": {},
         }
 
     rr_vals    = [t["rr_achieved"] for t in trades if "rr_achieved" in t]
@@ -203,18 +225,31 @@ def _compute_metrics(trades: List[dict]) -> dict:
         if dd < max_dd:
             max_dd = dd
 
+    # Compounded portfolio return — sort trades by exit_date, compound portfolio_pnl_pct.
+    # portfolio_pnl_pct is pre-computed in TradeRecord using RISK_PER_TRADE_PCT=1% model.
+    # Sorting by exit date gives a realistic chronological equity curve across all tickers.
+    sorted_trades = sorted(
+        [t for t in trades if "portfolio_pnl_pct" in t and "exit_date" in t],
+        key=lambda t: t["exit_date"],
+    )
+    equity = 1.0
+    for t in sorted_trades:
+        equity *= (1.0 + t["portfolio_pnl_pct"] / 100.0)
+    portfolio_return_pct = round((equity - 1.0) * 100.0, 2)
+
     # Trade distribution by setup type
     by_setup: Dict[str, int] = defaultdict(int)
     for t in trades:
         by_setup[t.get("setup_type", "UNKNOWN")] += 1
 
     return {
-        "total_trades":  total,
-        "win_rate":      round(win_rate * 100, 1),
-        "expectancy":    round(expectancy, 4),
-        "profit_factor": round(min(profit_factor, 99.0), 3),
-        "max_drawdown_r": round(max_dd, 2),
-        "by_setup":      dict(by_setup),
+        "total_trades":        total,
+        "win_rate":            round(win_rate * 100, 1),
+        "expectancy":          round(expectancy, 4),
+        "profit_factor":       round(min(profit_factor, 99.0), 3),
+        "max_drawdown_r":      round(max_dd, 2),
+        "portfolio_return_pct": portfolio_return_pct,
+        "by_setup":            dict(by_setup),
     }
 
 
@@ -253,21 +288,32 @@ def _objective_score(metrics: dict) -> float:
 def _build_params(trial) -> BacktestParams:
     """Sample BacktestParams from the Optuna trial's search space.
 
-    Pullback params are FROZEN at V5 best (trial #286, score=1.7948).
-    Only brk_* params are tuned here — use this for breakout-only Optuna phase.
+    Pullback params are FROZEN at V5 best (trial #286, score=1.7948),
+    EXCEPT tp_multiple and score_threshold which are tuned together here.
+    These two interact: a higher tp_multiple shifts which setups reach minimum
+    R:R threshold, which changes the effective score_threshold. They must
+    converge together before either is frozen.
+
+    Gate: do NOT update TARGET_RR in constants.py until CV < 0.10 on tp_multiple.
     """
     return BacktestParams(
         # ── FROZEN: pullback params (V5 Optuna best #286) ───────────────────
         rs_threshold    = 0.066,
         cci_threshold   = -54.5,
         ema_distance    = 1.651,
-        score_threshold = 2.50,
         breakout_weight = 1.724,
         pullback_weight = 1.842,
         tdl_bonus       = 1.016,
         vcp_bonus       = 1.370,
         cooldown_days   = 4,
-        tp_multiple     = 4.562,
+
+        # ── FROZEN: score_threshold (ineffective in [0.5, 5.0] — fixed signal
+        #    scores for non-PB setups sit above this range; re-tune separately
+        #    once tp_multiple has converged) ──────────────────────────────────
+        score_threshold = 2.50,
+
+        # ── TUNABLE: tp_multiple only (single new free variable this phase) ─
+        tp_multiple     = trial.suggest_float("tp_multiple",     1.5,  9.0),
 
         # ── TUNABLE: RES_BREAKOUT engine parameters ──────────────────────────
         brk_vol_mult    = trial.suggest_float("brk_vol_mult",    1.5,   3.5),
@@ -282,7 +328,8 @@ def _build_params(trial) -> BacktestParams:
 # Report printer
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _print_report(best_params: BacktestParams, metrics: dict, trial_number: int) -> None:
+def _print_report(best_params: BacktestParams, metrics: dict, trial_number: int,
+                  spy_pct: Optional[float] = None) -> None:
     line = "─" * 62
     print(f"\n{'═' * 62}")
     print(f"  V5 OPTUNA BEST RESULT  (trial #{trial_number})")
@@ -294,6 +341,11 @@ def _print_report(best_params: BacktestParams, metrics: dict, trial_number: int)
     print(f"  Expectancy     : {metrics['expectancy']:+.4f} R")
     print(f"  Profit Factor  : {metrics['profit_factor']:.3f}")
     print(f"  Max Drawdown   : {metrics['max_drawdown_r']:.2f} R")
+    print(f"\n  Portfolio Return: {metrics['portfolio_return_pct']:>+.1f}%  (1% risk/trade, compounded)")
+    if spy_pct is not None:
+        print(f"  SPY (same window): {spy_pct*100:+.1f}%")
+        diff = metrics['portfolio_return_pct'] - spy_pct * 100
+        print(f"  Alpha vs SPY   : {diff:>+.1f}%")
 
     print(f"\n  By Setup:")
     for setup, count in sorted(metrics["by_setup"].items(), key=lambda x: -x[1]):
@@ -382,6 +434,13 @@ def main():
             sampler=optuna.samplers.TPESampler(seed=42),
         )
 
+    # ── 2b. Compute SPY benchmark once (same window, never changes) ──────────
+    spy_pct = _spy_return(spy_df, start_date, end_date)
+    if spy_pct is not None:
+        print(f"SPY benchmark: {spy_pct*100:+.1f}%  ({start_date} → {end_date})\n")
+    else:
+        print("SPY benchmark: unavailable\n")
+
     trial_times: List[float] = []
 
     # ── 3. Objective closure ──────────────────────────────────────────────────
@@ -407,6 +466,7 @@ def main():
             f"trades={metrics['total_trades']:>5}  "
             f"E={metrics['expectancy']:>+.4f}  PF={metrics['profit_factor']:.3f}  "
             f"WR={metrics['win_rate']:.1f}%  "
+            f"port={metrics['portfolio_return_pct']:>+.1f}%  "
             f"elapsed={elapsed/60:.1f}min  ETA≈{eta_min:.0f}min",
             flush=True,
         )
@@ -438,21 +498,28 @@ def main():
     print(f"Best params saved to {_OUTPUT_PATH}")
 
     # ── 7. Print report ───────────────────────────────────────────────────────
-    _print_report(best_params, best_metrics, best_trial.number)
+    _print_report(best_params, best_metrics, best_trial.number, spy_pct=spy_pct)
 
 
 def _build_params_from_values(values: dict) -> BacktestParams:
-    """Reconstruct BacktestParams from a dict of Optuna best trial values."""
+    """Reconstruct BacktestParams from a dict of Optuna best trial values.
+
+    Frozen params (not in Optuna search space DB) fall back to their hardcoded
+    defaults so this function works correctly when called with study.best_trial.params,
+    which only contains the tuned parameters.
+    """
     return BacktestParams(
-        rs_threshold    = values["rs_threshold"],
-        cci_threshold   = values["cci_threshold"],
-        ema_distance    = values["ema_distance"],
-        score_threshold = values["score_threshold"],
-        breakout_weight = values["breakout_weight"],
-        pullback_weight = values["pullback_weight"],
-        tdl_bonus       = values["tdl_bonus"],
-        vcp_bonus       = values["vcp_bonus"],
-        cooldown_days   = int(values["cooldown_days"]),
+        # ── Frozen (not in search space DB — use hardcoded V5 #433 values) ──
+        rs_threshold    = values.get("rs_threshold",    0.066),
+        cci_threshold   = values.get("cci_threshold",   -54.5),
+        ema_distance    = values.get("ema_distance",    1.651),
+        score_threshold = values.get("score_threshold", 2.50),
+        breakout_weight = values.get("breakout_weight", 1.724),
+        pullback_weight = values.get("pullback_weight", 1.842),
+        tdl_bonus       = values.get("tdl_bonus",       1.016),
+        vcp_bonus       = values.get("vcp_bonus",       1.370),
+        cooldown_days   = int(values.get("cooldown_days", 4)),
+        # ── Tuned (present in search space DB) ──────────────────────────────
         brk_vol_mult    = values["brk_vol_mult"],
         brk_stop_atr    = values["brk_stop_atr"],
         brk_min_pct     = values["brk_min_pct"],

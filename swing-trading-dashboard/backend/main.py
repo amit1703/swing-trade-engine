@@ -1340,6 +1340,7 @@ async def _run_scan(
                         pb["sector"]   = SECTORS.get(ticker, "Unknown")
                         pb["rs_score"] = rs_score
                         pb["vol_ratio"] = pb.get("volume_ratio", pb.get("vol_ratio", 0.0))
+                        pb["recommended_execution"] = "Enter at next market open (T+1)"
                         collected_setups.append(pb)
                         pb_count += 1
                         _scan_state["engine_stats"]["e3"]["pullback"] += 1
@@ -1363,6 +1364,7 @@ async def _run_scan(
 
                                 _apply_tp_multiple(pb_relaxed, _LIVE_PARAMS)
                                 pb_relaxed["sector"] = SECTORS.get(ticker, "Unknown")
+                                pb_relaxed["recommended_execution"] = "Enter at next market open (T+1)"
                                 collected_setups.append(pb_relaxed)
                                 pb_count += 1
                                 _scan_state["engine_stats"]["e3"]["relaxed"] += 1
@@ -1393,6 +1395,7 @@ async def _run_scan(
                             _vr_base = base.get("volume_ratio", base.get("vol_ratio", 0.0))
                             base["vol_ratio"]    = _vr_base
                             base["is_vol_surge"] = _vr_base >= 1.5
+                            base["recommended_execution"] = "Enter at next market open (T+1)"
                             collected_setups.append(base)
                             base_count += 1
                             if base.get("base_type") == "CUP_HANDLE":
@@ -1435,6 +1438,19 @@ async def _run_scan(
                                 _vr = res_brk.get("volume_ratio", 0.0)
                                 res_brk["vol_ratio"]    = _vr
                                 res_brk["is_vol_surge"] = _vr >= 1.5
+                                # Gap-chase protection (mirrors backtest_engine.py brk_gap_pct filter).
+                                # Flag if current close is already beyond the gap threshold so the
+                                # trader knows not to chase an extended entry.
+                                _zone_upper  = float(res_brk.get("zone_upper", res_brk.get("resistance_level", 0.0)))
+                                _last_close  = float(df["Close"].iloc[-1]) if len(df) > 0 else 0.0
+                                _gap_thresh  = _zone_upper * (1.0 + getattr(_LIVE_PARAMS, "brk_gap_pct", 0.01021))
+                                if _zone_upper > 0 and _last_close > _gap_thresh:
+                                    res_brk["gap_risk"]      = True
+                                    res_brk["signal_status"] = "EXTENDED — do not chase"
+                                else:
+                                    res_brk["gap_risk"]      = False
+                                    res_brk["signal_status"] = "valid"
+                                res_brk["recommended_execution"] = "Enter at next market open (T+1)"
                                 collected_setups.append(res_brk)
                                 res_count += 1
                                 _scan_state["engine_stats"]["e6"]["res_breakout"] += 1
@@ -1467,6 +1483,7 @@ async def _run_scan(
                                 _vr_htf = htf.get("volume_ratio", htf.get("vol_ratio", 0.0))
                                 htf["vol_ratio"]    = _vr_htf
                                 htf["is_vol_surge"] = _vr_htf >= 1.5
+                                htf["recommended_execution"] = "Enter at next market open (T+1)"
                                 collected_setups.append(htf)
                                 htf_count += 1
                                 _scan_state["engine_stats"]["e8"]["htf"] += 1
@@ -1499,6 +1516,7 @@ async def _run_scan(
                                 _vr_lce = lce.get("volume_ratio", lce.get("vol_ratio", 0.0))
                                 lce["vol_ratio"]    = _vr_lce
                                 lce["is_vol_surge"] = _vr_lce >= 1.5
+                                lce["recommended_execution"] = "Enter at next market open (T+1)"
                                 collected_setups.append(lce)
                                 lce_count += 1
                                 _scan_state["engine_stats"]["e9"]["lce"] += 1
