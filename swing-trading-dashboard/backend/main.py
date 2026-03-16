@@ -173,6 +173,25 @@ from backtest_engine import BacktestEngine, BacktestParams, run_backtest_univers
 # Shared optimized params instance used by live scanner engines (engine6, etc.)
 _LIVE_PARAMS = BacktestParams()
 
+
+def _apply_tp_multiple(signal: dict, params) -> dict:
+    """Override take_profit and rr using params.tp_multiple × risk.
+
+    Mirrors backtest_engine.py scored-mode override:
+        take_profit = entry + tp_multiple × (entry - stop_loss)
+
+    Modifies signal in place and returns it. No-ops if entry/stop are invalid.
+    """
+    entry     = signal.get("entry", 0.0)
+    stop_loss = signal.get("stop_loss", 0.0)
+    if entry > 0 and stop_loss > 0 and entry > stop_loss:
+        risk              = entry - stop_loss
+        tp_mult           = getattr(params, "tp_multiple", 2.0)
+        signal["take_profit"] = round(entry + tp_mult * risk, 2)
+        signal["rr"]          = round(tp_mult, 3)
+    return signal
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration (imported from constants.py for centralized management)
 # ────────────────────────────────────────────────────────────────────────────
@@ -1328,7 +1347,7 @@ async def _run_scan(
                         # Only check relaxed if no strict pullback found
                         try:
                             pb_relaxed = await loop.run_in_executor(
-                                None, scan_relaxed_pullback, ticker, df, zones, tl, rs_score
+                                None, lambda: scan_relaxed_pullback(ticker, df, zones, tl, rs_score, params=_LIVE_PARAMS)
                             )
                             if pb_relaxed:
                                 # Sanitize relaxed pullback output
@@ -2488,7 +2507,7 @@ async def debug_ticker(ticker: str):
 
     e3 = e3_scored_result if e3_passes_gate else None
     if e3 is None and is_bullish:
-        e3 = await loop.run_in_executor(None, _run_engine, scan_relaxed_pullback, sym, df, zones, tl, rs_score)
+        e3 = await loop.run_in_executor(None, lambda: scan_relaxed_pullback(sym, df, zones, tl, rs_score, params=_LIVE_PARAMS))
         if e3 is not None:
             e3_relaxed = True
 
