@@ -89,30 +89,30 @@ class BacktestParams:
     the final frozen values from the per-engine Optuna runs (PB, BRK, BASE)
     validated via 3-window OOS backtest (2023-24 in-sample, 2020-21, 2017-19).
     """
-    # ── RS filter ─────────────────────────────────────────────── pb #183 ────
-    rs_threshold:    float = 0.088
+    # ── RS filter ──────────────────────────────────── v5 Optuna #433 (frozen) ─
+    rs_threshold:    float = 0.066
 
-    # ── Pullback scoring thresholds ───────────────────────────── pb #183 ────
-    cci_threshold:   float = -107.6
-    ema_distance:    float = 2.094
-    score_threshold: float = 1.144    # base_optimizer #2 (overrides pb value)
+    # ── Pullback scoring thresholds ──────────────── v5 Optuna #433 (frozen) ─
+    cci_threshold:   float = -54.5
+    ema_distance:    float = 1.651
+    score_threshold: float = 2.50     # frozen at 2.50 (not in v5 search space)
 
-    # ── Signal-type weights ───────────────────────────────────── pb #183 ────
-    breakout_weight: float = 2.550    # brk_optimizer #279
-    pullback_weight: float = 2.536
-    tdl_bonus:       float = 0.573
-    vcp_bonus:       float = 0.738
-    cooldown_days:   int   = 5
+    # ── Signal-type weights ──────────────────────── v5 Optuna #433 (frozen) ─
+    breakout_weight: float = 1.724
+    pullback_weight: float = 1.842
+    tdl_bonus:       float = 1.016
+    vcp_bonus:       float = 1.370
+    cooldown_days:   int   = 4
 
-    # ── RES_BREAKOUT engine parameters ──────────────────────── brk #279 ────
-    brk_vol_mult:        float = 1.863  # volume floor (×50d avg)
-    brk_stop_atr:        float = 2.264  # stop = resistance − stop_atr×ATR
-    brk_min_pct:         float = 0.0    # min close above resistance
-    brk_gap_pct:         float = 0.042  # skip T+1 if open > res×(1+gap_pct)
-    brk_trail_mult:      float = 5.928  # ATR trail multiplier
+    # ── RES_BREAKOUT engine parameters ──────────── v5 Optuna #433 (tuned) ──
+    brk_vol_mult:        float = 3.0161  # volume floor (×50d avg)
+    brk_stop_atr:        float = 1.6675  # stop = resistance − stop_atr×ATR
+    brk_min_pct:         float = 0.04333 # min close above resistance
+    brk_gap_pct:         float = 0.01021 # skip T+1 if open > res×(1+gap_pct)
+    brk_trail_mult:      float = 6.9060  # ATR trail multiplier
     brk_regime_factor:   float = 0.861  # score penalty in SELECTIVE (unused when aggressive_only=True)
     brk_aggressive_only: bool  = True   # skip BRK in SELECTIVE regime (OOS finding)
-    # ── Multi-source resistance detection (converged in brk run 1) ───────────
+    # ── Multi-source resistance detection (converged in brk run 1, deferred) ─
     brk_donchian_n:        int   = 87   # rolling-high lookback bars
     brk_pivot_strength:    int   = 2    # bars each side for pivot detection
     brk_atr_expansion:     float = 1.474  # min bar expansion (×ATR)
@@ -123,9 +123,10 @@ class BacktestParams:
     base_trail_mult:   float = 6.995  # ATR trail multiplier
     base_vol_ratio:    float = 1.425  # min volume ratio for base breakout
     base_quality_min:  int   = 19     # min quality score gate in engine5
+    base_stop_atr:     float = 0.2    # stop = floor − stop_atr×ATR (Optuna-tunable)
 
-    # ── Take-profit multiplier ─────────────────────────────── pb #183 ─────
-    tp_multiple:   float = 5.161
+    # ── Take-profit multiplier ───────────── WFO mean across 4 windows (5.80) ─
+    tp_multiple:   float = 5.80
 
 
 # Base scores for non-pullback signals (used in scored mode post-signal gate)
@@ -520,7 +521,7 @@ def _detect_signals(
                 # trendline not computed during replay — ascending-TDL pullbacks will not fire
                 setup = scan_pullback(ticker, df_slice, sr_zones, rs_score=rs_score)
                 if setup is None:
-                    setup = scan_relaxed_pullback(ticker, df_slice, sr_zones, rs_score=rs_score)
+                    setup = scan_relaxed_pullback(ticker, df_slice, sr_zones, rs_score=rs_score, params=params)
 
             elif stype == "BASE":
                 from engines.engine5 import scan_base_pattern
