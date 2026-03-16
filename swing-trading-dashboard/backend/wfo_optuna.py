@@ -1,9 +1,20 @@
 """
-wfo_optuna.py — Walk-Forward Optuna Validation
-════════════════════════════════════════════════
+wfo_optuna.py — Walk-Forward Optuna Validation  (Final V1 run)
+═══════════════════════════════════════════════════════════════
 Runs per-window Optuna IS optimization across 4 rolling windows (2019–2024),
 applies best IS params to each OOS window, then reruns all OOS windows with
-frozen trial #433 params for comparison. Prints a full WFO report.
+frozen #433 params for comparison. Prints a full WFO report.
+
+Objective (v2, Calmar-adjusted):
+    calmar = expectancy / max(0.1, |max_drawdown_r|)
+    score  = calmar × PF × log(N+1) × min(1, sqrt(N/200))
+
+vs previous objective (E × PF × log(N+1)):
+    + Penalises high-drawdown solutions
+    + Smooth trade-count scaling (no hard -99 cliff at 200 trades)
+
+Tunable params (7): score_threshold [1.0,4.0], tp_multiple [1.5,9.0],
+    brk_vol_mult, brk_stop_atr, brk_min_pct, brk_gap_pct, brk_trail_mult
 
 Windows (IS=24 months, OOS=12 months, step=12 months, start=2019-01-01):
   W1: IS 2019-01-01→2020-12-31  OOS 2021-01-01→2021-12-31
@@ -13,11 +24,11 @@ Windows (IS=24 months, OOS=12 months, step=12 months, start=2019-01-01):
 
 Usage:
     cd backend
-    python3 wfo_optuna.py [--trials 100] [--resume] [--windows 1,2,3,4]
+    python3 wfo_optuna.py [--trials 1000] [--resume] [--windows 1,2,3,4]
 
 Output:
-    data/wfo_w1.db … data/wfo_w4.db   (Optuna SQLite per window, resumable)
-    data/wfo_optuna_results.json       (full results)
+    data/wfo_final_w1.db … wfo_final_w4.db   (Optuna SQLite per window)
+    data/wfo_final_results.json               (full results)
 """
 
 from __future__ import annotations
@@ -55,14 +66,13 @@ logger = logging.getLogger("wfo_optuna")
 
 _BACKEND_DIR = Path(__file__).parent
 _DATA_DIR    = _BACKEND_DIR / "data"
-_OUTPUT_PATH = _DATA_DIR / "wfo_optuna_results.json"
+_OUTPUT_PATH = _DATA_DIR / "wfo_final_results.json"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────────────────────
 
 MIN_TRADES    = 200
-PENALTY_SCORE = -99.0
 
 # 4 rolling windows: (window_num, IS_start, IS_end, OOS_start, OOS_end)
 # IS=24 months, OOS=12 months, step=12 months, starting 2019-01-01
@@ -73,8 +83,9 @@ WFO_WINDOWS: List[Tuple[int, str, str, str, str]] = [
     (4, "2022-01-01", "2024-01-01", "2024-01-01", "2025-01-01"),
 ]
 
-# The 6 tunable parameter names (used for stability table)
+# Tunable parameter names (used for stability table and best_params dict)
 TUNABLE_PARAMS = [
+    "score_threshold",
     "tp_multiple",
     "brk_vol_mult",
     "brk_stop_atr",
@@ -250,16 +261,29 @@ def _compute_metrics(trades: List[dict]) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _objective_score(metrics: dict) -> float:
-    """Compute Optuna objective: expectancy × PF × log(trades+1)."""
-    n  = metrics["total_trades"]
-    ex = metrics["expectancy"]
-    pf = min(metrics["profit_factor"], 10.0)
+    """Calmar-adjusted objective with smooth trade-count scaling.
 
-    if n < MIN_TRADES:
-        return PENALTY_SCORE
+    score = calmar × PF × log(N+1) × min(1.0, sqrt(N / MIN_TRADES))
+
+    calmar = expectancy / max(0.1, |max_drawdown_r|)
+
+    vs old objective (E × PF × log(N+1)):
+    - Penalises high-drawdown solutions — prefers smoother equity curves.
+    - Smooth MIN_TRADES scaling removes the hard -99 cliff at exactly 200 trades.
+      Trials below MIN_TRADES are penalised proportionally, not zeroed out.
+    """
+    n   = metrics["total_trades"]
+    ex  = metrics["expectancy"]
+    pf  = min(metrics["profit_factor"], 10.0)
+    mdd = abs(metrics.get("max_drawdown_r", 0.0))
+
     if ex <= 0 or pf <= 0:
-        return ex
-    return ex * pf * math.log(n + 1)
+        return float(ex)  # negative — Optuna will route away from these
+
+    calmar      = ex / max(0.1, mdd)
+    raw         = calmar * pf * math.log(n + 1)
+    trade_scale = min(1.0, math.sqrt(n / MIN_TRADES))
+    return raw * trade_scale
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -309,19 +333,26 @@ async def _run_trial(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _build_params(trial) -> BacktestParams:
-    """Sample BacktestParams from Optuna trial. Search space identical to optimize_v5.py."""
+    """Sample BacktestParams from Optuna trial.
+
+    Tunable (7): score_threshold, tp_multiple, brk_vol_mult, brk_stop_atr,
+                 brk_min_pct, brk_gap_pct, brk_trail_mult
+    Frozen (5):  rs_threshold, cci_threshold, ema_distance,
+                 breakout_weight, pullback_weight
+    """
     return BacktestParams(
         # ── Frozen at trial #433 ─────────────────────────────────────────────
         rs_threshold    = 0.066,
         cci_threshold   = -54.5,
         ema_distance    = 1.651,
-        score_threshold = 2.50,
         breakout_weight = 1.724,
         pullback_weight = 1.842,
         tdl_bonus       = 1.016,
         vcp_bonus       = 1.370,
         cooldown_days   = 4,
         # ── Tunable ──────────────────────────────────────────────────────────
+        # score_threshold gates ALL pullback signals — never been optimized before
+        score_threshold = trial.suggest_float("score_threshold", 1.0,  4.0),
         tp_multiple     = trial.suggest_float("tp_multiple",     1.5,  9.0),
         brk_vol_mult    = trial.suggest_float("brk_vol_mult",    1.5,  3.5),
         brk_stop_atr    = trial.suggest_float("brk_stop_atr",    0.3,  2.0),
@@ -335,7 +366,7 @@ def _build_params_from_values(values: dict) -> BacktestParams:
     """Reconstruct BacktestParams from Optuna best_trial.params dict.
 
     Frozen params fall back to trial #433 hardcoded values.
-    Tunable params use .get(key, trial_433_default) so this works
+    Tunable params use .get(key, fallback) so this works
     when called with a partial dict (e.g. from --resume with missing keys).
     """
     missing = [k for k in TUNABLE_PARAMS if k not in values]
@@ -349,19 +380,19 @@ def _build_params_from_values(values: dict) -> BacktestParams:
         rs_threshold    = 0.066,
         cci_threshold   = -54.5,
         ema_distance    = 1.651,
-        score_threshold = 2.50,
         breakout_weight = 1.724,
         pullback_weight = 1.842,
         tdl_bonus       = 1.016,
         vcp_bonus       = 1.370,
         cooldown_days   = 4,
-        # ── Tunable (fall back to trial #433 defaults) ────────────────────
-        tp_multiple     = values.get("tp_multiple",    4.3458),
-        brk_vol_mult    = values.get("brk_vol_mult",   3.0161),
-        brk_stop_atr    = values.get("brk_stop_atr",   1.6675),
-        brk_min_pct     = values.get("brk_min_pct",    0.04333),
-        brk_gap_pct     = values.get("brk_gap_pct",    0.01021),
-        brk_trail_mult  = values.get("brk_trail_mult", 6.906),
+        # ── Tunable (fall back to trial #433 / current defaults) ─────────
+        score_threshold = values.get("score_threshold", 2.50),
+        tp_multiple     = values.get("tp_multiple",     5.80),
+        brk_vol_mult    = values.get("brk_vol_mult",    3.0161),
+        brk_stop_atr    = values.get("brk_stop_atr",    1.6675),
+        brk_min_pct     = values.get("brk_min_pct",     0.04333),
+        brk_gap_pct     = values.get("brk_gap_pct",     0.01021),
+        brk_trail_mult  = values.get("brk_trail_mult",  6.906),
     )
 
 
@@ -422,13 +453,16 @@ def _optimize_window(
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    study_name = f"wfo_v{window_num}"
+    # Per-window seed: gives structurally independent Latin hypercube starts
+    # across all four windows instead of correlated exploration from seed=42.
+    window_seed = window_num * 100 + 1  # W1→101  W2→201  W3→301  W4→401
+    study_name  = f"wfo_final_w{window_num}"
     study = optuna.create_study(
         study_name=study_name,
         direction="maximize",
         storage=storage,
         load_if_exists=True,
-        sampler=optuna.samplers.TPESampler(seed=42),
+        sampler=optuna.samplers.TPESampler(seed=window_seed),
     )
 
     completed = [t for t in study.trials if t.state.name == "COMPLETE"]
@@ -493,9 +527,10 @@ def _print_report(results: List[WindowOptResult]) -> None:
     W = 90
     print(f"\n{'═' * W}")
     print(
-        f"  WALK-FORWARD OPTUNA VALIDATION REPORT  "
+        f"  WALK-FORWARD OPTUNA VALIDATION REPORT — FINAL V1  "
         f"({len(results)} windows, {datetime.now().strftime('%Y-%m-%d %H:%M')})"
     )
+    print(f"  Objective: Calmar×PF×log(N+1)×scale  |  7 tunable params  |  per-window seeds")
     print(f"{'═' * W}")
 
     # ── Section A: OOS performance table ─────────────────────────────────────
@@ -648,8 +683,8 @@ def _print_report(results: List[WindowOptResult]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Walk-Forward Optuna Validation")
     parser.add_argument(
-        "--trials", type=int, default=100,
-        help="Optuna trials per IS window (default: 100)",
+        "--trials", type=int, default=1000,
+        help="Optuna trials per IS window (default: 1000)",
     )
     parser.add_argument(
         "--resume", action="store_true",
@@ -689,7 +724,7 @@ def main() -> None:
 
     # ── 2. Per-window loop ────────────────────────────────────────────────────
     for window_num, is_start, is_end, oos_start, oos_end in windows_to_run:
-        storage = f"sqlite:///{_DATA_DIR}/wfo_w{window_num}.db"
+        storage = f"sqlite:///{_DATA_DIR}/wfo_final_w{window_num}.db"
 
         print(f"\n{'═' * 70}")
         print(f"  Window {window_num}: IS {is_start}→{is_end}  |  OOS {oos_start}→{oos_end}")
