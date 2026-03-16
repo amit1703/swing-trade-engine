@@ -357,6 +357,8 @@ export default function App() {
                   chartData={chartData}
                   loading={loadingChart}
                   setups={selectedTicker ? allSetups.filter(s => s.ticker === selectedTicker) : []}
+                  chartFocus={chartFocus}
+                  onToggleFocus={() => setChartFocus(v => !v)}
                 />
               </div>
 

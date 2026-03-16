@@ -90,7 +90,7 @@ const SHARED_CHART_OPTS = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function TradingChart({ ticker, chartData, loading, setups = [] }) {
+export default function TradingChart({ ticker, chartData, loading, setups = [], chartFocus = false, onToggleFocus }) {
   const mainRef    = useRef(null)
   const cciRef     = useRef(null)
   const wrapRef    = useRef(null)
@@ -793,6 +793,29 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
 
           <VisToggle label="VOL" active={vis.vol} activeColor="rgba(0,200,122,0.6)"
             onClick={() => setVis(v => ({ ...v, vol: !v.vol }))} />
+
+          {/* Fullscreen toggle — tappable on mobile, works alongside F key on desktop */}
+          {onToggleFocus && (
+            <button
+              onClick={onToggleFocus}
+              title={chartFocus ? 'Exit focus (F)' : 'Full screen (F)'}
+              style={{
+                fontFamily: '"IBM Plex Mono", monospace',
+                fontSize: 13,
+                lineHeight: 1,
+                padding: '2px 7px',
+                background: 'rgba(0,0,0,0.75)',
+                border: '1px solid rgba(245,166,35,0.4)',
+                color: 'rgba(245,166,35,0.85)',
+                cursor: 'pointer',
+                backdropFilter: 'blur(4px)',
+                userSelect: 'none',
+                borderRadius: 2,
+              }}
+            >
+              {chartFocus ? '⊠' : '⛶'}
+            </button>
+          )}
         </div>
 
         {/* Trade setup bubbles — bottom-left of main chart */}
