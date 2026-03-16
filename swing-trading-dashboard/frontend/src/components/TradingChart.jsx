@@ -100,8 +100,8 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
   // Legend state — updated on crosshair move
   const [legend, setLegend] = useState(null)
 
-  // Visibility toggles: ema / sma / tdl / sr / rs / vol
-  const [vis, setVis] = useState({ ema: true, sma: true, tdl: true, sr: true, rs: true, vol: true })
+  // Visibility toggles: ema / sma / tdl / sr / vol
+  const [vis, setVis] = useState({ ema: true, sma: true, tdl: true, sr: true, vol: true })
 
   // Active trade bubble (index into setups array, or null)
   const [activeBubble, setActiveBubble] = useState(null)
@@ -534,8 +534,11 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
     const observer = new ResizeObserver(() => {
       if (!wrap) return
       const w = wrap.clientWidth
-      mainChart.applyOptions({ width: w })
-      cciChart.applyOptions({ width: w })
+      const h = wrap.clientHeight
+      const mainH = Math.round(h * 0.80)
+      const cciH  = Math.max(1, Math.round(h * 0.20) - 24) // subtract label row
+      mainChart.applyOptions({ width: w, height: mainH })
+      cciChart.applyOptions({ width: w, height: cciH })
     })
     if (wrap) observer.observe(wrap)
 
@@ -649,8 +652,8 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
   return (
     <div ref={wrapRef} className="flex flex-col h-full overflow-hidden">
 
-      {/* Main price chart with floating overlay */}
-      <div className="flex-1 min-h-0 relative">
+      {/* Main price chart with floating overlay — 80% of container */}
+      <div style={{ height: '80%', position: 'relative', minHeight: 0 }}>
 
         {/* Floating TradingView-style legend overlay */}
         <div style={{
@@ -839,8 +842,8 @@ export default function TradingChart({ ticker, chartData, loading, setups = [] }
         />
       </div>
 
-      {/* CCI sub-chart */}
-      <div className="flex-shrink-0 border-t border-t-border" style={{ height: 160 }}>
+      {/* CCI sub-chart — 20% of container */}
+      <div style={{ height: '20%', borderTop: '1px solid var(--border)' }}>
         <div className="section-label" style={{ padding: '4px 10px' }}>
           <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: COLORS.cci }} />
           CCI (20)
