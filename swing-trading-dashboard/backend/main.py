@@ -184,7 +184,7 @@ def _apply_tp_multiple(signal: dict, params) -> dict:
     """
     entry     = signal.get("entry", 0.0)
     stop_loss = signal.get("stop_loss", 0.0)
-    if entry > 0 and entry > stop_loss:
+    if entry > 0 and stop_loss > 0 and entry > stop_loss:
         risk              = entry - stop_loss
         tp_mult           = getattr(params, "tp_multiple", 2.0)
         signal["take_profit"] = round(entry + tp_mult * risk, 2)
@@ -1459,6 +1459,7 @@ async def _run_scan(
                             except (ValueError, TypeError) as conv_err:
                                 log.warning("HTF conversion failed for %s: %s", ticker, conv_err)
                             else:
+                                _apply_tp_multiple(htf, _LIVE_PARAMS)
                                 htf["sector"]       = SECTORS.get(ticker, "Unknown")
                                 htf["rs_score"]     = rs_score
                                 htf["rs_blue_dot"]  = rs_blue_dot
@@ -1490,6 +1491,7 @@ async def _run_scan(
                             except (ValueError, TypeError) as conv_err:
                                 log.warning("LCE conversion failed for %s: %s", ticker, conv_err)
                             else:
+                                _apply_tp_multiple(lce, _LIVE_PARAMS)
                                 lce["sector"]       = SECTORS.get(ticker, "Unknown")
                                 lce["rs_score"]     = rs_score
                                 lce["rs_blue_dot"]  = rs_blue_dot
