@@ -184,11 +184,11 @@ def _apply_tp_multiple(signal: dict, params) -> dict:
     """
     entry     = signal.get("entry", 0.0)
     stop_loss = signal.get("stop_loss", 0.0)
-    if entry > 0 and stop_loss > 0 and entry > stop_loss:
+    if entry > 0 and entry > stop_loss:
         risk              = entry - stop_loss
         tp_mult           = getattr(params, "tp_multiple", 2.0)
         signal["take_profit"] = round(entry + tp_mult * risk, 2)
-        signal["rr"]          = round(tp_mult, 3)
+        signal["rr"]          = round(tp_mult, 3)  # reward/risk = tp_mult by construction
     return signal
 
 
