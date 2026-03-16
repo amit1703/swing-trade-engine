@@ -394,6 +394,26 @@ def _optimize_window(
     best_trial_n : Optuna trial number of best trial
     best_score   : objective score of best trial
     """
+    # Pre-filter universe to tickers with data overlapping [is_start, is_end].
+    # Done once per window so every trial runs a clean, smaller universe instead
+    # of hitting "no dates in replay window" warnings hundreds of times.
+    filtered_cache: Dict[str, pd.DataFrame] = {}
+    for ticker, df in ticker_cache.items():
+        try:
+            idx = df.index
+            if len(idx) > 0 and str(idx[0].date()) <= is_end and str(idx[-1].date()) >= is_start:
+                filtered_cache[ticker] = df
+        except Exception:
+            pass
+    dropped = len(ticker_cache) - len(filtered_cache)
+    if dropped > 0:
+        print(
+            f"  W{window_num}: Pre-filtered universe — {len(filtered_cache)} tickers "
+            f"({dropped} dropped, no data in {is_start}→{is_end}).",
+            flush=True,
+        )
+    ticker_cache = filtered_cache
+
     try:
         import optuna
     except ImportError:
