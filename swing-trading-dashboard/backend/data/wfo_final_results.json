@@ -1,0 +1,66 @@
+{
+  "generated_at": "2026-03-16T16:07:58.042863",
+  "n_trials": 1,
+  "windows": [
+    {
+      "window_num": 1,
+      "is_start": "2019-01-01",
+      "is_end": "2021-01-01",
+      "oos_start": "2021-01-01",
+      "oos_end": "2022-01-01",
+      "best_trial": 0,
+      "best_score": 0.40774178416196943,
+      "best_params": {
+        "score_threshold": 2.5491958831073385,
+        "tp_multiple": 5.780006901511048,
+        "brk_vol_mult": 1.5569484529561939,
+        "brk_stop_atr": 0.5915868155826752,
+        "brk_min_pct": 0.0374110792678925,
+        "brk_gap_pct": 0.06837278038452536,
+        "brk_trail_mult": 3.4952804278695457
+      },
+      "is_metrics": {
+        "total_trades": 699,
+        "win_rate": 47.9,
+        "expectancy": 0.3909,
+        "profit_factor": 2.296,
+        "max_drawdown_r": -14.42,
+        "portfolio_return_pct": 1059.88,
+        "by_setup": {
+          "PULLBACK": 253,
+          "RES_BREAKOUT": 390,
+          "BASE": 45,
+          "HTF": 11
+        }
+      },
+      "oos_metrics": {
+        "total_trades": 421,
+        "win_rate": 31.1,
+        "expectancy": -0.2025,
+        "profit_factor": 0.592,
+        "max_drawdown_r": -104.65,
+        "portfolio_return_pct": -58.02,
+        "by_setup": {
+          "PULLBACK": 140,
+          "BASE": 9,
+          "RES_BREAKOUT": 268,
+          "HTF": 4
+        }
+      },
+      "frozen_metrics": {
+        "total_trades": 154,
+        "win_rate": 46.8,
+        "expectancy": -0.0429,
+        "profit_factor": 0.823,
+        "max_drawdown_r": -15.21,
+        "portfolio_return_pct": -6.41,
+        "by_setup": {
+          "PULLBACK": 141,
+          "BASE": 9,
+          "HTF": 4
+        }
+      },
+      "spy_pct": 0.30505485344579064
+    }
+  ]
+}

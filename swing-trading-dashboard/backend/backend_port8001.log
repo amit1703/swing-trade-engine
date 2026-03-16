@@ -1,6 +1,0 @@
-12:25:48  INFO      Loaded 809 sectors from sectors.json
-INFO:     Started server process [42972]
-INFO:     Waiting for application startup.
-12:25:48  INFO      SQLite DB initialised at trading.db
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)

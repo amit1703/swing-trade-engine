@@ -59,8 +59,9 @@ def scan_base_pattern(
     """Return the highest-quality base setup found, or None."""
     _vol_ratio   = getattr(params, "base_vol_ratio",   BASE_BRK_MIN_VOL_RATIO)
     _quality_min = getattr(params, "base_quality_min", 25)
-    ch = scan_cup_handle(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, sr_zones, min_vol_ratio=_vol_ratio)
-    fb = scan_flat_base(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, sr_zones, min_vol_ratio=_vol_ratio)
+    _stop_atr    = getattr(params, "base_stop_atr",    0.2)
+    ch = scan_cup_handle(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, sr_zones, min_vol_ratio=_vol_ratio, stop_atr=_stop_atr)
+    fb = scan_flat_base(ticker, df, spy_3m_return, rs_ratio, rs_52w_high, rs_blue_dot, rs_score, sr_zones, min_vol_ratio=_vol_ratio, stop_atr=_stop_atr)
     candidates = [s for s in [ch, fb] if s is not None and s.get("quality_score", 0) >= _quality_min]
     if not candidates:
         return None
@@ -77,6 +78,7 @@ def scan_flat_base(
     rs_score: float = 0.0,
     sr_zones: list = None,
     min_vol_ratio: float = BASE_BRK_MIN_VOL_RATIO,
+    stop_atr: float = 0.2,
 ) -> Optional[Dict]:
     """ATR-Adjusted Darvas Box detector. Returns setup dict or None."""
     try:
@@ -195,7 +197,7 @@ def scan_flat_base(
 
         # ── Risk math ─────────────────────────────────────────────────────
         entry     = round(ceiling * 1.001, 2)
-        stop_loss = round(floor_v - 0.2 * latr, 2)
+        stop_loss = round(floor_v - stop_atr * latr, 2)
         risk = entry - stop_loss
         if risk <= 0 or risk > entry * 0.15:
             return None
@@ -253,6 +255,7 @@ def scan_cup_handle(
     rs_score: float = 0.0,
     sr_zones: list = None,
     min_vol_ratio: float = BASE_BRK_MIN_VOL_RATIO,
+    stop_atr: float = 0.2,
 ) -> Optional[Dict]:
     """Proportional Cup & Handle with ATR-gated depth. Returns setup dict or None."""
     try:
@@ -395,7 +398,7 @@ def scan_cup_handle(
 
         # ── Risk math ─────────────────────────────────────────────────────
         entry     = round(handle_high_price * 1.001, 2)
-        stop_loss = round(handle_low_price - 0.2 * latr, 2)
+        stop_loss = round(handle_low_price - stop_atr * latr, 2)
         risk = entry - stop_loss
         if risk <= 0 or risk > entry * 0.15:
             return None

@@ -16,6 +16,7 @@ from constants import (
     LIQUIDITY_MIN_AVG_VOLUME,
     LIQUIDITY_MIN_DOLLAR_VOLUME,
     EARNINGS_BLACKOUT_DAYS,
+    REGIME_AGGRESSIVE_THRESHOLD,
     REGIME_SELECTIVE_THRESHOLD,
     REGIME_WEIGHT_EMA20,
     REGIME_WEIGHT_SMA50,
@@ -87,9 +88,10 @@ def compute_regime_series(spy_df: pd.DataFrame) -> pd.Series:
 
 # Proportionally scaled thresholds for 4/7 factor backtest regime
 # Max achievable: F1(20)+F2(15)+F3(15)+F4(10) = 60 pts
-# AGGRESSIVE = 70/100 * 60 = 42; SELECTIVE = 40/100 * 60 = 24
-_BACKTEST_REGIME_AGGRESSIVE = 42
-_BACKTEST_REGIME_SELECTIVE  = 24
+# Derived from live thresholds in constants.py so both stay in sync.
+_BACKTEST_REGIME_MAX        = 60
+_BACKTEST_REGIME_AGGRESSIVE = round(REGIME_AGGRESSIVE_THRESHOLD / 100 * _BACKTEST_REGIME_MAX)
+_BACKTEST_REGIME_SELECTIVE  = round(REGIME_SELECTIVE_THRESHOLD  / 100 * _BACKTEST_REGIME_MAX)
 
 
 def compute_regime_label_series(spy_df: pd.DataFrame) -> pd.Series:

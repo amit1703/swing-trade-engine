@@ -1,8 +1,0 @@
-01:48:33  INFO      Loaded active universe: 1915 tickers from active_universe.json
-INFO:     Started server process [86836]
-INFO:     Waiting for application startup.
-01:48:33  INFO      SQLite DB initialised at trading.db
-INFO:     Application startup complete.
-ERROR:    [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8001): only one usage of each socket address (protocol/network address/port) is normally permitted
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.

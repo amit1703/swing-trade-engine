@@ -74,7 +74,7 @@ CCI_RLX_FLOOR = -1.95   # Optuna v4 best (trial #951); was -20.0 (v3)
 ATR_STOP_MULTIPLIER = 1.278  # Optuna v4 best (trial #951); was 1.360 (v3)
 ENTRY_PRICE_MULTIPLIER = 1.001  # 0.1% above current price for entry orders
 MIN_RISK_REWARD_RATIO = 1.0  # Minimum acceptable R:R ratio for setups
-TARGET_RR             = 2.785   # Optuna v4 best (trial #951); was 2.4736 (v3)
+TARGET_RR             = 4.346   # Optuna trial #433 tp_multiple (converged, CV=0.017)
 TRAIL_ATR_MULT        = 4.162   # Optuna v4 best (trial #951) — fallback/BASE default
 
 # V5: Setup-specific trailing ATR multipliers.
@@ -130,7 +130,7 @@ SCORE_SELECTIVE_REGIME_FACTOR = 0.53   # SELECTIVE regime earns 53% of AGGRESSIV
 # ──────────────────────────────────────────────────────────────────────────
 
 DATA_FETCH_PERIOD = "1y"  # Historical data lookback for each ticker (1y = 252 bars, covers all engines)
-CONCURRENCY_LIMIT = 8   # Max concurrent yfinance API requests (lowered to avoid rate limits)
+CONCURRENCY_LIMIT = 64  # Backtest reads local parquet only — no network, safe to run high concurrency
 BATCH_SAVE_SIZE = 100  # Batch size for database operations (if needed)
 FETCH_MAX_RETRIES = 4  # Maximum retry attempts for data fetches
 FETCH_BACKOFF_BASE = 5.0  # Base delay for exponential backoff (seconds) — longer for rate limits

@@ -386,7 +386,7 @@ def compute_setup_score(
 
     # ── 2. Reward-to-Risk (0 – SCORE_WEIGHT_RR pts) ──────────────────────────
     rr     = float(setup.get("rr") or 0.0)
-    rr_pts = min(float(SCORE_WEIGHT_RR), rr / 3.0 * SCORE_WEIGHT_RR)
+    rr_pts = min(float(SCORE_WEIGHT_RR), rr / 5.0 * SCORE_WEIGHT_RR)
 
     # ── 3. Volume / Momentum (0 – SCORE_WEIGHT_VOL pts) ──────────────────────
     vol_pts = _vol_component(setup)

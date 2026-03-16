@@ -82,6 +82,7 @@ def _find_structural_support(
     close: pd.Series,
     volume: pd.Series,
     avg_vol: float,
+    latr: float = 0.0,
 ) -> Optional[Dict]:
     """
     Find the nearest structural support for a pullback.
@@ -129,8 +130,10 @@ def _find_structural_support(
             )
             if bounced < 3:
                 continue
-            # Candidate must be within 3% of current bar's low
-            if abs(ll - candidate) / candidate > 0.03:
+            # Candidate must be within ATR-relative proximity of current bar's low.
+            # Floor of 3% preserves behaviour on low-ATR stocks; expands for high-ATR leaders.
+            _prox_pct = max(0.03, 1.2 * latr / ll) if ll > 0 else 0.03
+            if abs(ll - candidate) / candidate > _prox_pct:
                 continue
             return {
                 "level":  round(candidate, 4),
@@ -158,7 +161,8 @@ def _find_structural_support(
                 bar_open  = float(close_vals[i - 1])  # approximate open with prev close
                 if bar_close <= bar_open:
                     continue
-                if abs(ll - bar_low) / bar_low > 0.03:
+                _prox_pct = max(0.03, 1.2 * latr / ll) if ll > 0 else 0.03
+                if abs(ll - bar_low) / bar_low > _prox_pct:
                     continue
                 # Price must have held above this zone since
                 held = all(
@@ -251,7 +255,7 @@ def scan_pullback(
 
         nearest_sup = _find_structural_support(
             ll, lc, sr_zones, trendline,
-            ind.high, ind.low, ind.close, ind.volume, avg_vol_sup,
+            ind.high, ind.low, ind.close, ind.volume, avg_vol_sup, latr,
         )
         if nearest_sup is None:
             if debug:
@@ -326,6 +330,7 @@ def scan_relaxed_pullback(
     trendline: Optional[Dict] = None,
     rs_score: float = 0.0,
     debug: bool = False,
+    params=None,
 ) -> Optional[Dict]:
     """
     Relaxed tactical pullback: triggers when no strict pullback found.
@@ -379,7 +384,7 @@ def scan_relaxed_pullback(
         # or proximity measured in ATR units — normalized for volatility.
         # 4% on a low-vol stock = many ATRs away; on a high-vol stock = barely 1 ATR.
         # ATR units give consistent meaning across different volatility regimes.
-        EMA_DISTANCE_ATR = 0.75  # within 0.75 ATR of EMA8 or EMA20
+        EMA_DISTANCE_ATR = params.ema_distance if params is not None else 0.75
         penetrates   = (ll <= l8 or ll <= l20)
         atr_to_8     = abs(lc - l8)  / latr if latr > 0 else float("inf")
         atr_to_20    = abs(lc - l20) / latr if latr > 0 else float("inf")
@@ -421,7 +426,7 @@ def scan_relaxed_pullback(
         # ── Structural support (KDE zone / consolidation low / demand zone / TDL) ──
         nearest_sup = _find_structural_support(
             ll, lc, sr_zones, trendline,
-            ind.high, ind.low, ind.close, ind.volume, avg_vol,
+            ind.high, ind.low, ind.close, ind.volume, avg_vol, latr,
         )
         if nearest_sup is None:
             if debug:
@@ -658,7 +663,7 @@ def scan_pullback_scored(
 
         nearest_sup = _find_structural_support(
             ll, lc, sr_zones, trendline,
-            ind.high, ind.low, ind.close, ind.volume, avg_vol_sup,
+            ind.high, ind.low, ind.close, ind.volume, avg_vol_sup, latr,
         )
         if nearest_sup is None:
             return None, 0.0   # hard gate: no structural support
