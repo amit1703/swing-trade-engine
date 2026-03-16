@@ -690,10 +690,23 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
         misfire_grace_time=600,
     )
+    _scheduler.add_job(
+        run_prewarm_job,
+        trigger="cron",
+        hour=9,
+        minute=15,
+        id="prewarm_cache",
+        replace_existing=True,
+        misfire_grace_time=600,
+    )
     _scheduler.start()
     log.info(
-        "[scheduler] Started — scan at 07:30 ET, email at 08:00 ET"
+        "[scheduler] Started — prewarm at 09:15 ET, scan at 07:30 ET, email at 08:00 ET"
     )
+
+    # Warm the price cache in the background immediately on startup.
+    # By the time the first manual scan or dashboard load happens, data is ready.
+    asyncio.create_task(_prewarm_price_cache())
 
     yield
 
@@ -874,6 +887,73 @@ async def _fetch(
             await asyncio.sleep(backoff_delay)
     _ticker_cache[ticker] = (time.time(), None)
     return None
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Price-cache pre-warmer
+# ────────────────────────────────────────────────────────────────────────────
+
+async def _prewarm_price_cache() -> None:
+    """Download 1y OHLCV for every universe ticker and populate _ticker_cache.
+
+    Called in two places:
+      1. Server startup (background task) — so the first manual scan is instant.
+      2. 9:15 AM ET scheduled job — refreshes the cache before market open, so
+         morning scans hit warm data even if the server has been running since
+         before the previous session's cache expired (TTL = 4 h).
+
+    Only fetches tickers that are missing or stale; a warm cache is a no-op.
+    """
+    tickers = [t for t in ACTIVE_UNIVERSE if t != "SPY"]
+    if not tickers:
+        return
+
+    now = time.time()
+    uncached = [
+        t for t in tickers
+        if t not in _ticker_cache
+        or now - _ticker_cache[t][0] >= CACHE_TTL_SUCCESS
+    ]
+
+    if not uncached:
+        log.info("[prewarm] Price cache already warm (%d tickers) — skipping.", len(tickers))
+        return
+
+    log.info("[prewarm] Warming price cache: %d/%d tickers uncached…", len(uncached), len(tickers))
+    t0   = time.time()
+    loop = asyncio.get_running_loop()
+    batches = [
+        uncached[i: i + BULK_DOWNLOAD_BATCH_SIZE]
+        for i in range(0, len(uncached), BULK_DOWNLOAD_BATCH_SIZE)
+    ]
+
+    ok = 0
+    for i, batch in enumerate(batches):
+        try:
+            batch_data = await loop.run_in_executor(
+                None, lambda b=batch: _batch_download_sync(b)
+            )
+            for ticker, df in batch_data.items():
+                _ticker_cache[ticker] = (time.time(), df)
+            ok += len(batch_data)
+            log.info("[prewarm] Batch %d/%d done (%d ok)", i + 1, len(batches), len(batch_data))
+        except Exception as exc:
+            log.warning("[prewarm] Batch %d/%d failed: %s", i + 1, len(batches), exc)
+
+    log.info("[prewarm] Complete — %d tickers cached in %.1fs", ok, time.time() - t0)
+
+
+def run_prewarm_job() -> None:
+    """APScheduler-compatible sync wrapper around _prewarm_price_cache.
+
+    Scheduled at 9:15 AM ET — 15 minutes before market open — so the
+    first morning scan is instant regardless of when the server last ran.
+    """
+    log.info("[scheduler] 9:15 AM pre-warm job starting…")
+    try:
+        asyncio.run(_prewarm_price_cache())
+    except Exception as exc:
+        log.error("[scheduler] Pre-warm job failed: %s", exc)
 
 
 # ────────────────────────────────────────────────────────────────────────────
