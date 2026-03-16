@@ -71,8 +71,10 @@ const SHARED_CHART_OPTS = {
     borderColor: COLORS.border,
     timeVisible: true,
     secondsVisible: false,
-    rightOffset: 8,
-    kineticScrollEnabled: false,
+    rightOffset: 18,            // TradingView-style right breathing room
+    kineticScrollEnabled: true, // smooth kinetic scroll on mobile swipe
+    fixLeftEdge: false,
+    fixRightEdge: false,
   },
   handleScale: {
     mouseWheel: false,          // wheel zooms only when Ctrl/Cmd held (see wheel listener)
@@ -84,7 +86,7 @@ const SHARED_CHART_OPTS = {
     mouseWheel: true,           // default: wheel pans
     pressedMouseMove: true,
     horzTouchDrag: true,
-    vertTouchDrag: false,
+    vertTouchDrag: true,        // capture vertical touch so pan isn't hijacked by browser
   },
 }
 
@@ -861,7 +863,7 @@ export default function TradingChart({ ticker, chartData, loading, setups = [], 
         <div
           ref={mainRef}
           className="chart-container"
-          style={{ width: '100%', height: '100%' }}
+          style={{ width: '100%', height: '100%', touchAction: 'none' }}
         />
       </div>
 
@@ -874,7 +876,7 @@ export default function TradingChart({ ticker, chartData, loading, setups = [], 
             OB&nbsp;+100 &nbsp;/&nbsp; OS&nbsp;-100
           </span>
         </div>
-        <div ref={cciRef} style={{ height: 'calc(100% - 24px)' }} />
+        <div ref={cciRef} style={{ height: 'calc(100% - 24px)', touchAction: 'none' }} />
       </div>
 
     </div>
