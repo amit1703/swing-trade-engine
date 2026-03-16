@@ -1336,6 +1336,7 @@ async def _run_scan(
                             log.warning("Pullback conversion failed for %s: %s", ticker, conv_err)
                             return
 
+                        _apply_tp_multiple(pb, _LIVE_PARAMS)
                         pb["sector"]   = SECTORS.get(ticker, "Unknown")
                         pb["rs_score"] = rs_score
                         pb["vol_ratio"] = pb.get("volume_ratio", pb.get("vol_ratio", 0.0))
@@ -1360,6 +1361,7 @@ async def _run_scan(
                                     log.warning("Relaxed pullback conversion failed for %s: %s", ticker, conv_err)
                                     return
 
+                                _apply_tp_multiple(pb_relaxed, _LIVE_PARAMS)
                                 pb_relaxed["sector"] = SECTORS.get(ticker, "Unknown")
                                 collected_setups.append(pb_relaxed)
                                 pb_count += 1
@@ -1383,6 +1385,7 @@ async def _run_scan(
                         except (ValueError, TypeError) as conv_err:
                             log.warning("Base pattern conversion failed for %s: %s", ticker, conv_err)
                         else:
+                            _apply_tp_multiple(base, _LIVE_PARAMS)
                             base["sector"]       = SECTORS.get(ticker, "Unknown")
                             base["rs_score"]     = rs_score
                             base["rs_blue_dot"]  = rs_blue_dot
@@ -1422,6 +1425,7 @@ async def _run_scan(
                             except (ValueError, TypeError) as conv_err:
                                 log.warning("ResBreakout conversion failed for %s: %s", ticker, conv_err)
                             else:
+                                _apply_tp_multiple(res_brk, _LIVE_PARAMS)
                                 res_brk["sector"]       = SECTORS.get(ticker, "Unknown")
                                 # Inject RS + volume fields not computed by engine6
                                 res_brk["rs_score"]     = rs_score

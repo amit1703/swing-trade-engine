@@ -74,3 +74,11 @@ def test_tp_override_applies_when_stop_loss_is_zero():
     result = _APPLY_TP(signal, FakeParams())
     expected_tp = round(100.0 + 4.3458 * 100.0, 2)  # 534.58
     assert result["take_profit"] == expected_tp
+
+
+def test_tp_override_rr_matches_tp_multiple():
+    """rr field after override equals tp_multiple rounded to 3dp."""
+    signal = {"entry": 150.0, "stop_loss": 145.0, "take_profit": 160.0, "rr": 2.0}
+    result = _APPLY_TP(signal, FakeParams())
+    assert signal["rr"] == round(4.3458, 3)
+    assert signal["take_profit"] == round(150.0 + 4.3458 * 5.0, 2)
