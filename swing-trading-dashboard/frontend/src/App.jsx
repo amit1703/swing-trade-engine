@@ -335,22 +335,17 @@ export default function App() {
               minHeight: 0,
               position: 'relative',
             }}>
-              {/* Chart focus hint */}
-              {chartFocus && (
-                <div style={{
-                  position: 'absolute', top: 8, right: 28, zIndex: 10,
-                  fontSize: 8, color: 'rgba(245,166,35,0.5)',
-                  fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '0.08em',
-                  pointerEvents: 'none',
-                }}>
-                  F — EXIT FOCUS
-                </div>
-              )}
 
-              {/* Chart card */}
+              {/* Chart card — fixed fullscreen overlay when chartFocus is active */}
               <div
                 className="card"
-                style={{ flex: 1, minWidth: 0, overflow: 'hidden', padding: 0, position: 'relative' }}
+                style={chartFocus ? {
+                  position: 'fixed', top: 0, left: 0,
+                  width: '100vw', height: '100vh',
+                  zIndex: 100, overflow: 'hidden', padding: 0, borderRadius: 0,
+                } : {
+                  flex: 1, minWidth: 0, overflow: 'hidden', padding: 0, position: 'relative',
+                }}
               >
                 <TradingChart
                   ticker={selectedTicker}
