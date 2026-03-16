@@ -184,3 +184,42 @@ html, body, #root {
   color: var(--muted);
   font-family: 'IBM Plex Mono', monospace;
 }
+
+/* ── Mobile responsive (≤ 640px) ────────────────────── */
+@media (max-width: 640px) {
+  /* Hide panels that don't fit on a small screen */
+  .mobile-hidden { display: none !important; }
+
+  /* Stat cards — horizontal scroll row */
+  .stat-cards-row {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .stat-card {
+    min-width: 130px;
+    flex-shrink: 0;
+    padding: 12px 14px;
+  }
+  .stat-card-value { font-size: 22px; }
+
+  /* Chart row — stack vertically, chart takes full width */
+  .chart-row {
+    flex-direction: column !important;
+    flex: 0 0 240px !important;
+  }
+
+  /* Scanner section — fill remaining space, allow horizontal scroll */
+  .scanner-section {
+    flex: 1 !important;
+    min-height: 0;
+  }
+
+  /* Tables — don't shrink below content width */
+  .terminal-table { min-width: 520px; }
+
+  /* Sidebar — tighter on mobile */
+  nav { width: 48px !important; }
+  .nav-btn { width: 36px !important; height: 36px !important; }
+}

@@ -100,7 +100,7 @@ function SpyCard({ regime }) {
 
 export default function StatCards({ regime }) {
   return (
-    <div style={{ display: 'flex', gap: 12, padding: '12px 16px', flexShrink: 0 }}>
+    <div className="stat-cards-row" style={{ display: 'flex', gap: 12, padding: '12px 16px', flexShrink: 0 }}>
       <RegimeCard regime={regime} />
       <SpyCard regime={regime} />
     </div>

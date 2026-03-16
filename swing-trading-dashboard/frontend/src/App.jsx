@@ -328,7 +328,7 @@ export default function App() {
             )}
 
             {/* Middle: Chart + Intel Panel */}
-            <div style={{
+            <div className="chart-row" style={{
               flex: chartFocus ? 1 : 1,
               display: 'flex', gap: 12,
               padding: '0 16px 12px',
@@ -360,20 +360,22 @@ export default function App() {
                 />
               </div>
 
-              {/* Right panel — hidden in focus mode */}
+              {/* Right panel — hidden in focus mode and on mobile */}
               {!chartFocus && (
-                <StockIntelPanel
-                  setup={selectedSetup}
-                  livePrices={livePrices}
-                  analysis={analysis}
-                  analysisLoading={analysisLoading}
-                />
+                <div className="mobile-hidden" style={{ display: 'contents' }}>
+                  <StockIntelPanel
+                    setup={selectedSetup}
+                    livePrices={livePrices}
+                    analysis={analysis}
+                    analysisLoading={analysisLoading}
+                  />
+                </div>
               )}
             </div>
 
             {/* Bottom: Filter bar + Scanner table */}
             {!chartFocus && (
-              <div style={{
+              <div className="scanner-section" style={{
                 flex: '0 0 200px', display: 'flex', flexDirection: 'column',
                 margin: '0 16px 16px',
                 background: 'var(--card)',
