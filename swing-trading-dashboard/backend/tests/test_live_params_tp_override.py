@@ -67,11 +67,10 @@ def test_tp_override_fallback_when_no_tp_multiple():
     assert result["rr"] == 2.0
 
 
-def test_tp_override_skips_zero_stop_loss():
-    """stop_loss=0 with valid entry: signal returned unchanged (risk would be entry itself, which is valid since entry > stop_loss=0 and entry > 0). This tests the guard matches backtest: only risk > 0 matters."""
-    # With updated guard (entry > 0 and entry > stop_loss), entry=100, stop_loss=0 → risk=100 → WILL override
-    # This is the correct behavior matching the backtest engine
+def test_tp_override_applies_when_stop_loss_is_zero():
+    """entry=100, stop_loss=0 satisfies guard (entry>0 and entry>stop_loss).
+    Override fires: risk=100, tp = entry + tp_multiple * risk."""
     signal = {"entry": 100.0, "stop_loss": 0.0, "take_profit": 110.0, "rr": 2.0}
     result = _APPLY_TP(signal, FakeParams())
-    expected_tp = round(100.0 + 4.3458 * 100.0, 2)  # 100 + 434.58 = 534.58
+    expected_tp = round(100.0 + 4.3458 * 100.0, 2)  # 534.58
     assert result["take_profit"] == expected_tp
