@@ -75,6 +75,7 @@ if [ -d "$APP_DIR/.git" ]; then
   cd $APP_DIR && git pull --quiet
   echo "✓ Repo updated"
 else
+  rm -rf $APP_DIR
   git clone --quiet $REPO $APP_DIR
   echo "✓ Repo cloned"
 fi
