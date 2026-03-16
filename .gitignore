@@ -1,3 +1,17 @@
 .worktrees/
 .private-journal/
 .claude/
+*.env
+.env
+backend/.env
+__pycache__/
+*.pyc
+*.db
+data/wfo_final_w*.db
+data/optuna_v5.db
+node_modules/
+frontend/dist/
+backend/venv/
+*.log
+nohup.out
+backend.pid
