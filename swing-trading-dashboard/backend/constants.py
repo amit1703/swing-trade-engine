@@ -246,7 +246,7 @@ RES_DECISIVE_MIN_PCT       = 0.02  # Decisive close minimum = 2% above zone (dia
 RES_DECISIVE_ATR_FACTOR    = 0.5400  # Optuna v4 best (trial #951); was 0.4725 (v3)
 RES_STOP_ATR_FACTOR        = 0.8   # Stop = zone_lower − 0.8×ATR (was 0.2; allows normal retests)
 RES_BREAKOUT_VOL_MULT      = 2.0   # Minimum breakout volume (×50d avg); diagnostic: <2x → neg expectancy
-RES_MAX_GAP_PCT            = 0.03  # Skip T+1 entry if open > zone_upper × (1 + 3%); prevents gap-chasing
+RES_MAX_GAP_PCT            = 0.036 # Skip T+1 entry if open > zone_upper × (1 + 3.6%); prevents gap-chasing [WFO v1: aligned with brk_gap_pct]
 RES_SELECTIVE_REGIME_FACTOR = 0.80 # Score multiplier for RES_BREAKOUT in non-AGGRESSIVE regimes
 
 # ──────────────────────────────────────────────────────────────────────────────
