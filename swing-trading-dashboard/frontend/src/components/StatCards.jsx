@@ -98,11 +98,76 @@ function SpyCard({ regime }) {
   )
 }
 
+function RegimeBanner({ regime }) {
+  const regimeType = regime?.regime
+  const isAggr = regimeType === 'AGGRESSIVE'
+  const isSel  = regimeType === 'SELECTIVE'
+  const isDef  = regimeType === 'DEFENSIVE' || (regime && !regime.is_bullish && regimeType)
+
+  if (!regimeType) return null
+
+  let bg, border, icon, title, body
+
+  if (isAggr) {
+    bg     = 'rgba(0,200,122,0.07)'
+    border = 'rgba(0,200,122,0.25)'
+    icon   = '✓'
+    title  = 'BULL MARKET — SYSTEM ACTIVE'
+    body   = 'Conditions are right. Long swing setups have statistical edge. Run the scanner and take high-quality setups.'
+  } else if (isSel) {
+    bg     = 'rgba(245,166,35,0.08)'
+    border = 'rgba(245,166,35,0.35)'
+    icon   = '⚠'
+    title  = 'CHOPPY / SIDEWAYS — REDUCED EDGE'
+    body   = 'Market is mixed. Long-only mechanics underperform in sideways conditions. If you trade, cut position size in half and only take the highest-scoring setups. Consider standing aside.'
+  } else if (isDef) {
+    bg     = 'rgba(255,45,85,0.08)'
+    border = 'rgba(255,45,85,0.40)'
+    icon   = '✕'
+    title  = 'BEAR MARKET — DO NOT TRADE THIS SYSTEM'
+    body   = 'This is a long-only swing scanner. Long setups lose money in downtrends — the WFO data confirms this. Every stop hit accelerates losses. The correct action is cash. Wait for the regime to return to BULL before trading.'
+  } else {
+    return null
+  }
+
+  const titleColor = isAggr ? 'var(--go)' : isSel ? 'var(--accent)' : 'var(--halt)'
+
+  return (
+    <div style={{
+      margin: '0 16px 10px',
+      padding: '10px 14px',
+      background: bg,
+      border: `1px solid ${border}`,
+      borderRadius: 8,
+      display: 'flex',
+      gap: 10,
+      alignItems: 'flex-start',
+      flexShrink: 0,
+    }}>
+      <span style={{ fontSize: 14, color: titleColor, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{
+          fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+          fontFamily: '"IBM Plex Mono", monospace', color: titleColor,
+        }}>
+          {title}
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--text)', lineHeight: 1.5 }}>
+          {body}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export default function StatCards({ regime }) {
   return (
-    <div className="stat-cards-row" style={{ display: 'flex', gap: 12, padding: '12px 16px', flexShrink: 0 }}>
-      <RegimeCard regime={regime} />
-      <SpyCard regime={regime} />
-    </div>
+    <>
+      <div className="stat-cards-row" style={{ display: 'flex', gap: 12, padding: '12px 16px 8px', flexShrink: 0 }}>
+        <RegimeCard regime={regime} />
+        <SpyCard regime={regime} />
+      </div>
+      <RegimeBanner regime={regime} />
+    </>
   )
 }
