@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-16T16:07:58.042863",
-  "n_trials": 1,
+  "generated_at": "2026-03-17T12:37:16.600319",
+  "n_trials": 100,
   "windows": [
     {
       "window_num": 1,
@@ -8,43 +8,43 @@
       "is_end": "2021-01-01",
       "oos_start": "2021-01-01",
       "oos_end": "2022-01-01",
-      "best_trial": 0,
-      "best_score": 0.40774178416196943,
+      "best_trial": 93,
+      "best_score": 4.48580118099383,
       "best_params": {
-        "score_threshold": 2.5491958831073385,
-        "tp_multiple": 5.780006901511048,
-        "brk_vol_mult": 1.5569484529561939,
-        "brk_stop_atr": 0.5915868155826752,
-        "brk_min_pct": 0.0374110792678925,
-        "brk_gap_pct": 0.06837278038452536,
-        "brk_trail_mult": 3.4952804278695457
+        "score_threshold": 3.431986133620564,
+        "tp_multiple": 6.539770576251273,
+        "brk_vol_mult": 3.0199910090160302,
+        "brk_stop_atr": 1.400427065240941,
+        "brk_min_pct": 0.015890360008585937,
+        "brk_gap_pct": 0.0366699686248468,
+        "brk_trail_mult": 5.2020482944741655
       },
       "is_metrics": {
-        "total_trades": 699,
-        "win_rate": 47.9,
-        "expectancy": 0.3909,
-        "profit_factor": 2.296,
-        "max_drawdown_r": -14.42,
-        "portfolio_return_pct": 1059.88,
+        "total_trades": 385,
+        "win_rate": 57.9,
+        "expectancy": 0.4651,
+        "profit_factor": 4.761,
+        "max_drawdown_r": -2.94,
+        "portfolio_return_pct": 351.88,
         "by_setup": {
-          "PULLBACK": 253,
-          "RES_BREAKOUT": 390,
-          "BASE": 45,
+          "PULLBACK": 259,
+          "BASE": 46,
+          "RES_BREAKOUT": 69,
           "HTF": 11
         }
       },
       "oos_metrics": {
-        "total_trades": 421,
-        "win_rate": 31.1,
-        "expectancy": -0.2025,
-        "profit_factor": 0.592,
-        "max_drawdown_r": -104.65,
-        "portfolio_return_pct": -58.02,
+        "total_trades": 188,
+        "win_rate": 43.1,
+        "expectancy": -0.0897,
+        "profit_factor": 0.7,
+        "max_drawdown_r": -21.29,
+        "portfolio_return_pct": -15.23,
         "by_setup": {
-          "PULLBACK": 140,
+          "PULLBACK": 141,
           "BASE": 9,
-          "RES_BREAKOUT": 268,
-          "HTF": 4
+          "HTF": 4,
+          "RES_BREAKOUT": 34
         }
       },
       "frozen_metrics": {
@@ -61,6 +61,66 @@
         }
       },
       "spy_pct": 0.30505485344579064
+    },
+    {
+      "window_num": 2,
+      "is_start": "2020-01-01",
+      "is_end": "2022-01-01",
+      "oos_start": "2022-01-01",
+      "oos_end": "2023-01-01",
+      "best_trial": 81,
+      "best_score": 1.1432470780579311,
+      "best_params": {
+        "score_threshold": 2.468982309442944,
+        "tp_multiple": 8.741989466533017,
+        "brk_vol_mult": 2.428842593166261,
+        "brk_stop_atr": 1.0020064011140553,
+        "brk_min_pct": 0.04032918924543148,
+        "brk_gap_pct": 0.04797037791400429,
+        "brk_trail_mult": 7.494553446554491
+      },
+      "is_metrics": {
+        "total_trades": 401,
+        "win_rate": 51.4,
+        "expectancy": 0.4597,
+        "profit_factor": 3.293,
+        "max_drawdown_r": -7.94,
+        "portfolio_return_pct": 388.08,
+        "by_setup": {
+          "PULLBACK": 297,
+          "BASE": 23,
+          "HTF": 15,
+          "RES_BREAKOUT": 66
+        }
+      },
+      "oos_metrics": {
+        "total_trades": 62,
+        "win_rate": 33.9,
+        "expectancy": -0.3402,
+        "profit_factor": 0.266,
+        "max_drawdown_r": -22.1,
+        "portfolio_return_pct": -19.72,
+        "by_setup": {
+          "BASE": 7,
+          "PULLBACK": 42,
+          "RES_BREAKOUT": 11,
+          "HTF": 2
+        }
+      },
+      "frozen_metrics": {
+        "total_trades": 51,
+        "win_rate": 29.4,
+        "expectancy": -0.4205,
+        "profit_factor": 0.131,
+        "max_drawdown_r": -21.45,
+        "portfolio_return_pct": -19.33,
+        "by_setup": {
+          "BASE": 7,
+          "PULLBACK": 42,
+          "HTF": 2
+        }
+      },
+      "spy_pct": -0.18646390099630294
     }
   ]
 }
