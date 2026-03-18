@@ -91,7 +91,11 @@ def check_market_regime(
             spy.columns = spy.columns.get_level_values(0)
 
         close_col = "Adj Close" if "Adj Close" in spy.columns else "Close"
-        close = spy[close_col].dropna()
+        close_raw = spy[close_col]
+        # Newer yfinance may return a one-column DataFrame instead of a Series
+        if isinstance(close_raw, pd.DataFrame):
+            close_raw = close_raw.iloc[:, 0]
+        close = close_raw.dropna()
 
         if len(close) < 22:
             return _error(f"Insufficient SPY data: {len(close)} bars (need ≥22)")
@@ -118,8 +122,8 @@ def check_market_regime(
         ema20_clean = ema20_s.dropna()
         slope_score = 0
         if len(ema20_clean) >= 6:
-            old = float(ema20_clean.iloc[-6])
-            new = float(ema20_clean.iloc[-1])
+            old = _fv(ema20_clean.iloc[[-6]])
+            new = _fv(ema20_clean.iloc[[-1]])
             if old > 0:
                 pct_slope = (new - old) / old  # e.g. +0.005 = rising 0.5%/5d
                 # Linear scale: ≥+0.5% → full 10pts; ≤-0.5% → 0pts
