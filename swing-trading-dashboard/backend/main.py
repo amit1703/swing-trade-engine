@@ -2307,6 +2307,8 @@ async def scan_status():
         "last_error": _scan_state["last_error"],
         "engine_stats": _scan_state["engine_stats"],
         "dry_run_setups": _scan_state.get("dry_run_setups"),
+        "prefetching": _scan_state.get("prefetching", False),
+        "rebuilding_universe": _scan_state.get("rebuilding_universe", False),
     }
 
 

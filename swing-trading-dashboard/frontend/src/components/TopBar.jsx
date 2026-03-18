@@ -142,7 +142,8 @@ export default function TopBar({
         </span>
       </div>
 
-      {/* Run Scan button */}
+      {/* Run Scan button + status line */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
       <button
         onClick={onRunScan}
         disabled={isScanning}
@@ -169,6 +170,22 @@ export default function TopBar({
           : <><Play size={11} fill="currentColor" /> RUN SCAN</>
         }
       </button>
+      {isScanning && (
+        <span style={{
+          fontSize: 9,
+          fontFamily: '"IBM Plex Mono", monospace',
+          fontWeight: 600,
+          letterSpacing: '0.08em',
+          color: 'var(--muted)',
+        }}>
+          {scanStatus?.rebuilding_universe
+            ? 'REBUILDING UNIVERSE…'
+            : scanStatus?.prefetching
+            ? 'PREFETCHING DATA…'
+            : 'SCANNING TICKERS…'}
+        </span>
+      )}
+      </div>
 
       {/* Dev mode toggles */}
       {devMode && (
