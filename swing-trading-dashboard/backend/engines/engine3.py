@@ -571,6 +571,104 @@ def _prepare_indicators(
     )
 
 
+def scan_pullback_approaching(
+    ticker: str,
+    df: pd.DataFrame,
+    sr_zones: List[Dict],
+    trendline: Optional[Dict] = None,
+    rs_score: float = 0.0,
+    debug: bool = False,
+) -> Optional[Dict]:
+    """
+    Watchlist: stock in uptrend pulling back toward a structural support.
+    Fires before the pin bar / CCI hook — one move away from a PULLBACK setup.
+
+    Conditions:
+      - Trend: EMA8 > EMA20, close > SMA50 × 0.97 (relaxed, same as scan_relaxed_pullback)
+      - CCI declining: cci_today < cci_prev  (pullback actively in progress)
+      - RS not a persistent underperformer (same gate as engine 3)
+      - Structural support within 2 ATR of current low
+        (KDE zone / consolidation low / demand zone / ascending TDL)
+      - Pin bar and CCI hook NOT required
+    """
+    APPROACH_ATR = 2.0   # within 2 ATR of structural support
+
+    try:
+        ind = _prepare_indicators(ticker, df)
+        if ind is None:
+            return None
+
+        data = ind.data
+        lc, lh, ll   = ind.lc, ind.lh, ind.ll
+        l8, l20, l50 = ind.l8, ind.l20, ind.l50
+        latr         = ind.latr
+        cci_today    = ind.cci_today
+        cci_prev     = ind.cci_prev
+
+        # RS gate (same as engine 3)
+        if rs_score < RS_REJECT_THRESHOLD:
+            return None
+
+        # Trend (relaxed — same as scan_relaxed_pullback)
+        if not (l8 > l20 and lc > l50 * 0.97):
+            return None
+
+        # CCI must be declining — pullback is actively in progress
+        if cci_today >= cci_prev:
+            return None
+
+        # Structural support check
+        vol_sma50   = ind.volume.rolling(50).mean()
+        vsm_val     = vol_sma50.iloc[-1]
+        avg_vol_sup = float(vsm_val.item() if hasattr(vsm_val, "item") else vsm_val)
+
+        nearest_sup = _find_structural_support(
+            ll, lc, sr_zones, trendline,
+            ind.high, ind.low, ind.close, ind.volume, avg_vol_sup, latr,
+        )
+        if nearest_sup is None:
+            return None
+
+        # Price must be approaching — within APPROACH_ATR of support level
+        support_level = nearest_sup["level"]
+        if latr > 0 and (lc - support_level) > APPROACH_ATR * latr:
+            return None
+
+        # Support must be below current price
+        if support_level >= lc:
+            return None
+
+        entry     = round(lh * 1.001, 2)
+        stop_base = min(ll, nearest_sup["lower"])
+        stop_loss = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
+        risk      = entry - stop_loss
+        if risk <= 0 or risk > entry * 0.15:
+            return None
+
+        take_profit, actual_rr = nearest_resistance_target(entry, sr_zones, risk)
+
+        return {
+            "ticker":           ticker,
+            "setup_type":       "WATCHLIST",
+            "watchlist_source": "PULLBACK",
+            "entry":            entry,
+            "stop_loss":        stop_loss,
+            "take_profit":      take_profit,
+            "rr":               actual_rr,
+            "support_level":    support_level,
+            "support_source":   nearest_sup["source"],
+            "distance_pct":     round((lc - support_level) / lc * 100, 2),
+            "ema8":             round(l8, 2),
+            "ema20":            round(l20, 2),
+            "cci_today":        round(cci_today, 2),
+            "setup_date":       str(data.index[-1].date()),
+        }
+
+    except Exception as exc:
+        print(f"[Engine3 approaching] {ticker}: {exc}")
+        return None
+
+
 def scan_pullback_scored(
     ticker: str,
     df: pd.DataFrame,

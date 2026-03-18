@@ -308,6 +308,146 @@ def scan_resistance_breakout(
         return None
 
 
+def scan_res_breakout_near(
+    ticker: str,
+    df: pd.DataFrame,
+    zones: List[Dict],
+    debug: bool = False,
+    params=None,
+) -> Optional[Dict]:
+    """
+    Watchlist: stock approaching a resistance breakout but not yet triggered.
+
+    Conditions:
+      - Trend: close > SMA50
+      - Resistance identified (Donchian / pivot / KDE)
+      - Close within NEAR_PCT below resistance (approaching zone)
+      - Close has NOT crossed resistance yet
+      - Consolidation: >= _min_consol bars within _CONSOL_TOLERANCE of resistance
+      - Volume: soft signal only (no hard gate)
+
+    Returns a WATCHLIST setup dict or None.
+    """
+    NEAR_PCT = 0.05   # within 5% below resistance
+
+    try:
+        _stop_atr   = getattr(params, "brk_stop_atr",           RES_STOP_ATR_FACTOR)
+        _donchian_n = int(getattr(params, "brk_donchian_n",     _DONCHIAN_N_DEFAULT))
+        _pivot_str  = int(getattr(params, "brk_pivot_strength", _PIVOT_STRENGTH_DEFAULT))
+        _min_consol = int(getattr(params, "brk_min_consolidation", _MIN_CONSOL_DEFAULT))
+
+        data = _prep(df)
+        if data is None or len(data) < max(60, _donchian_n + 10):
+            return None
+
+        adj      = _adj_col(data)
+        close_s  = data[adj]
+        high_s   = data["High"]
+        low_s    = data["Low"]
+        volume_s = data["Volume"]
+
+        if close_s.dropna().shape[0] < 55:
+            return None
+
+        # Trend filter: close > SMA50
+        sma50   = data["_SMA50"] if "_SMA50" in data.columns else close_s.rolling(50).mean()
+        lc_val  = close_s.iloc[-1]
+        lc      = float(lc_val.item() if hasattr(lc_val, "item") else lc_val)
+        l50_val = sma50.iloc[-1]
+        l50     = float(l50_val.item() if hasattr(l50_val, "item") else l50_val) if pd.notna(l50_val) else 0.0
+        if l50 > 0 and lc < l50:
+            return None
+
+        vol_sma50_s = data["_VOLSMA50"] if "_VOLSMA50" in data.columns else volume_s.rolling(50).mean()
+        vsm50_val   = vol_sma50_s.iloc[-1]
+        vol_sma50   = float(vsm50_val.item() if hasattr(vsm50_val, "item") else vsm50_val)
+        if np.isnan(vol_sma50) or vol_sma50 <= 0:
+            return None
+
+        atr14    = data["_ATR14"] if "_ATR14" in data.columns else _atr(high_s, low_s, close_s, 14)
+        latr_val = atr14.iloc[-1]
+        latr     = float(latr_val.item() if hasattr(latr_val, "item") else latr_val)
+        if np.isnan(latr) or latr <= 0:
+            return None
+
+        close_arr  = close_s.values.astype(float)
+        high_arr   = high_s.values.astype(float)
+        volume_arr = volume_s.values.astype(float)
+        n          = len(close_arr)
+
+        donchian_res = (
+            pd.Series(high_arr)
+            .rolling(_donchian_n)
+            .max()
+            .shift(1)
+            .values
+        )
+        pivot_levels = _find_pivot_highs(high_arr[: n - 1], _pivot_str)
+
+        brk_idx = n - 1
+        if brk_idx < _donchian_n:
+            return None
+
+        candidates = _resistance_candidates(
+            high_arr, lc,
+            brk_idx, donchian_res,
+            pivot_levels, zones,
+        )
+        if not candidates:
+            return None
+
+        for resistance, source in candidates:
+            # Must be above current close (not yet broken)
+            if resistance <= lc:
+                continue
+
+            # Proximity: close within NEAR_PCT below resistance
+            distance_pct = (resistance - lc) / resistance
+            if distance_pct > NEAR_PCT:
+                continue
+
+            # Consolidation: >= _min_consol bars within _CONSOL_TOLERANCE of resistance
+            if _min_consol > 0:
+                consol_start  = max(0, brk_idx - _min_consol - 10)
+                consol_closes = close_arr[consol_start:brk_idx]
+                near_res      = consol_closes >= resistance * (1.0 - _CONSOL_TOLERANCE)
+                if not np.any(near_res):
+                    continue
+
+            # Volume ratio (soft signal only)
+            last_vol  = volume_arr[brk_idx]
+            vol_ratio = last_vol / vol_sma50 if vol_sma50 > 0 else 1.0
+
+            entry     = round(resistance * 1.001, 2)
+            stop_loss = round(resistance - _stop_atr * latr, 2)
+            risk      = entry - stop_loss
+            if risk <= 0 or risk > entry * 0.15:
+                continue
+
+            take_profit, actual_rr = nearest_resistance_target(entry, zones, risk)
+
+            return {
+                "ticker":           ticker,
+                "setup_type":       "WATCHLIST",
+                "watchlist_source": "RES_BREAKOUT",
+                "entry":            entry,
+                "stop_loss":        stop_loss,
+                "take_profit":      take_profit,
+                "rr":               actual_rr,
+                "resistance_level": round(resistance, 2),
+                "distance_pct":     round(distance_pct * 100, 2),
+                "volume_ratio":     round(vol_ratio, 2),
+                "zone_source":      source,
+                "setup_date":       str(data.index[-1].date()),
+            }
+
+        return None
+
+    except Exception as exc:
+        print(f"[Engine6 near] {ticker}: {exc}")
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Resistance candidate collection
 # ─────────────────────────────────────────────────────────────────────────────
