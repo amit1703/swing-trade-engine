@@ -574,12 +574,18 @@ def _prepare_indicators(
 def _find_support_below(
     lc: float,
     sr_zones: List[Dict],
+    high: pd.Series,
     low: pd.Series,
     latr: float,
     max_atr: float,
 ) -> Optional[Dict]:
     """
     Find the nearest structural support BELOW current close within max_atr * latr.
+
+    Three layers in priority order:
+      1. KDE support zone (Engine 1 horizontal zone)
+      2. Broken resistance pivot (prior confirmed high crossed above = breakout-retest)
+      3. Prior consolidation low (swing low where price bounced)
 
     Unlike _find_structural_support (which requires the bar to already be touching
     a zone), this searches for levels the stock is approaching from above.
@@ -603,7 +609,44 @@ def _find_support_below(
             "source": "KDE",
         }
 
-    # 2. Prior consolidation lows (shallow 3-bar pivot lows below current price)
+    # 2. Broken resistance pivot acting as support (breakout-retest setup).
+    # Find confirmed prior highs (strength=5, last 6mo, 3% pullback confirmed)
+    # that are now BELOW current price — price broke above them, now retesting.
+    if len(high) >= 15:
+        high_vals = high.values[-126:] if len(high) >= 126 else high.values
+        hn = len(high_vals)
+        strength = 5
+        best_pivot: Optional[float] = None
+        best_dist  = float("inf")
+        for i in range(strength, hn - strength):
+            h = float(high_vals[i])
+            if h <= 0 or h >= lc:
+                continue
+            if latr > 0 and (lc - h) > max_atr * latr:
+                continue
+            # Structural pivot: highest of 11-bar window
+            left_ok  = all(h >= float(high_vals[i - s]) for s in range(1, strength + 1))
+            right_ok = all(h >= float(high_vals[i + s]) for s in range(1, strength + 1))
+            if not (left_ok and right_ok):
+                continue
+            # Confirmed resistance: price dropped ≥3% after pivot
+            look_end = min(hn, i + 11)
+            post_low = min(float(high_vals[j]) for j in range(i + 1, look_end)) if i + 1 < look_end else h
+            if h <= 0 or (h - post_low) / h < 0.03:
+                continue
+            dist = lc - h
+            if dist < best_dist:
+                best_dist  = dist
+                best_pivot = round(h, 4)
+        if best_pivot is not None:
+            return {
+                "level": best_pivot,
+                "lower": round(best_pivot * 0.99, 4),
+                "upper": round(best_pivot * 1.01, 4),
+                "source": "PIVOT",
+            }
+
+    # 3. Prior consolidation lows (shallow 3-bar pivot lows below current price)
     if len(low) >= 10:
         low_vals = low.values[-60:] if len(low) >= 60 else low.values
         for i in range(len(low_vals) - 3, 3, -1):
@@ -685,7 +728,7 @@ def scan_pullback_approaching(
         # _find_structural_support requires the bar to already BE at support,
         # so we use _find_support_below which searches for levels below current
         # close within APPROACH_ATR — the stock is heading there, not there yet.
-        nearest_sup = _find_support_below(lc, sr_zones, ind.low, latr, APPROACH_ATR)
+        nearest_sup = _find_support_below(lc, sr_zones, ind.high, ind.low, latr, APPROACH_ATR)
         if nearest_sup is None:
             return None
 
