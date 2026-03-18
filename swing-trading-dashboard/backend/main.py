@@ -3267,7 +3267,9 @@ async def diagnostics_report():
 @app.post("/api/diagnostics/backtest/run", status_code=202)
 async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
     """
-    Trigger a background V4 strategy baseline backtest over the full universe.
+    Trigger a background backtest over the full universe using the current live system.
+    Engines: PULLBACK, BASE, RES_BREAKOUT, HTF, LCE (no VCP — disabled in live scanner).
+    Uses V5 per-setup ATR trail multipliers (no single-trail override).
     Returns immediately with 202. Poll /api/diagnostics/backtest/status for progress.
     Returns 409 if a run is already in progress.
     """
@@ -3282,6 +3284,9 @@ async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
     # "completed" / "idle" state (background task starts after response).
     _backtest_diag_status.update({"status": "running", "done": 0, "total": len(tickers)})
 
+    # Current live system: no VCP, V5 per-setup trails (trail_mult_override=None)
+    _CURRENT_SETUP_TYPES = ["PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"]
+
     async def _do_backtest():
         global _backtest_diag_status
         try:
@@ -3292,9 +3297,10 @@ async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
                 tickers,
                 BACKTEST_DIAG_START_DATE,
                 BACKTEST_DIAG_END_DATE,
-                trail_mult_override=BACKTEST_V4_TRAIL_MULT,
+                trail_mult_override=None,        # V5: per-setup trail multipliers
                 params=BacktestParams(),
                 progress_cb=_progress,
+                setup_types=_CURRENT_SETUP_TYPES,
             )
             adapted = [_backtest_trade_to_analytics(t) for t in raw_trades]
 

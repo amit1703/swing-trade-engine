@@ -1037,6 +1037,7 @@ async def run_backtest_universe(
     trail_mult_override: Optional[float] = None,
     params: Optional[BacktestParams] = None,
     progress_cb=None,
+    setup_types: Optional[List[str]] = None,
 ) -> List[dict]:
     """
     Run BacktestEngine concurrently over all tickers.
@@ -1051,6 +1052,8 @@ async def run_backtest_universe(
     params              : BacktestParams for scored mode; None → legacy mode
     progress_cb         : optional async callable(done: int, total: int)
                           called after each ticker completes
+    setup_types         : list of setup types to scan; None → engine default
+                          (["VCP","PULLBACK","BASE","RES_BREAKOUT","HTF","LCE"])
 
     Returns
     -------
@@ -1075,6 +1078,7 @@ async def run_backtest_universe(
                     end_date=end_date,
                     trail_mult_override=trail_mult_override,
                     params=params,
+                    setup_types=setup_types,
                 )
                 summary = await engine.run()
                 return [t.to_dict() for t in summary.trades]
