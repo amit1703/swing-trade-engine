@@ -147,8 +147,9 @@ from wfo_cache import download_and_cache, cache_exists as wfo_cache_exists
 from wfo_engine import run_wfo
 from engines.engine0 import check_market_regime
 from engines.engine1 import calculate_sr_zones
-from engines.engine2 import scan_vcp, detect_trendline, scan_near_breakout
-from engines.engine3 import scan_pullback, scan_relaxed_pullback, scan_pullback_scored
+from engines.engine2 import scan_vcp, detect_trendline
+from engines.engine3 import scan_pullback, scan_relaxed_pullback, scan_pullback_scored, scan_pullback_approaching
+from engines.engine6 import scan_resistance_breakout, scan_res_breakout_near
 from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats, calculate_rs_score, get_rs_signals
 from engines.engine5 import scan_base_pattern
 from engines.engine6 import scan_resistance_breakout
@@ -990,7 +991,8 @@ async def _run_scan(
         engine_stats={
             "e0": {},
             "e1": {"zones_saved": 0},
-            "e2": {"vcp": 0, "watchlist": 0},
+            "e2": {"vcp": 0},
+            "watchlist": {"res_breakout_near": 0, "pullback_approaching": 0},
             "e3": {"pullback": 0, "relaxed": 0},
             "e5": {"cup_handle": 0, "flat_base": 0},
             "e6": {"res_breakout": 0},
@@ -1377,27 +1379,33 @@ async def _run_scan(
                         log.info("  %s      %-6s  entry=%.2f", setup_type, ticker, vcp["entry"])
 
                 # ── Near-breakout / Watchlist (always runs — useful even in DEFENSIVE) ──
-                if not vcp:
-                    try:
-                        near = await loop.run_in_executor(
-                            None, scan_near_breakout, ticker, df, zones, tl
-                        )
-                        if near:
-                            # Sanitize near-breakout output: ensure numeric fields are proper floats
-                            try:
-                                near["entry"] = float(near.get("entry", 0.0))
-                                near["distance_pct"] = float(near.get("distance_pct", 0.0))
-                            except (ValueError, TypeError) as conv_err:
-                                log.warning("Near-breakout conversion failed for %s: %s", ticker, conv_err)
-                                return
+                # ── Watchlist: RES_BREAKOUT approaching ──────────────────────────
+                try:
+                    wl_res = await loop.run_in_executor(
+                        None, scan_res_breakout_near, ticker, df, zones
+                    )
+                    if wl_res:
+                        wl_res["sector"] = SECTORS.get(ticker, "Unknown")
+                        wl_res["rs_blue_dot"] = rs_blue_dot
+                        collected_setups.append(wl_res)
+                        _scan_state["engine_stats"]["watchlist"]["res_breakout_near"] += 1
+                        log.info("  WL_BRK   %-6s  dist=%.1f%%", ticker, wl_res.get("distance_pct", 0))
+                except Exception as wl_exc:
+                    log.warning("WL res_breakout_near failed for %s: %s", ticker, wl_exc)
 
-                            near["sector"] = SECTORS.get(ticker, "Unknown")
-                            near["rs_blue_dot"] = rs_blue_dot
-                            collected_setups.append(near)
-                            _scan_state["engine_stats"]["e2"]["watchlist"] += 1
-                            log.info("  NEAR     %-6s  dist=%.1f%%", ticker, near["distance_pct"])
-                    except Exception as near_exc:
-                        log.warning("Near-breakout check failed for %s: %s", ticker, near_exc)
+                # ── Watchlist: PULLBACK approaching ───────────────────────────────
+                try:
+                    wl_pb = await loop.run_in_executor(
+                        None, scan_pullback_approaching, ticker, df, zones, tl, rs_score
+                    )
+                    if wl_pb:
+                        wl_pb["sector"] = SECTORS.get(ticker, "Unknown")
+                        wl_pb["rs_blue_dot"] = rs_blue_dot
+                        collected_setups.append(wl_pb)
+                        _scan_state["engine_stats"]["watchlist"]["pullback_approaching"] += 1
+                        log.info("  WL_PB    %-6s  sup=%.2f  src=%s", ticker, wl_pb.get("support_level", 0), wl_pb.get("support_source", ""))
+                except Exception as wl_exc:
+                    log.warning("WL pullback_approaching failed for %s: %s", ticker, wl_exc)
 
                 # ── Engine 3: Pullback (SELECTIVE/AGGRESSIVE only) ────────────────────
                 if regime["is_bullish"] or force:
