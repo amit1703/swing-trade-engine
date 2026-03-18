@@ -198,6 +198,8 @@ def check_market_regime(
         }
 
     except Exception as exc:
+        import traceback
+        print(f"[Engine0] FULL TRACEBACK:\n{traceback.format_exc()}")
         return _error(str(exc)[:120])
 
 
