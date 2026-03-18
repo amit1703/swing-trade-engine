@@ -382,16 +382,18 @@ def scan_res_breakout_near(
             .shift(1)
             .values
         )
-        pivot_levels = _find_pivot_highs(high_arr[: n - 1], _pivot_str)
+        # Watchlist uses confirmed structural pivots only (strength=5, last 6mo,
+        # must have pulled back ≥3% after the pivot to prove it was real resistance).
+        # Strength=2 is fine for the live scanner (volume+cross gates filter noise),
+        # but without those gates every minor local high within 5% shows as a signal.
+        pivot_levels = _find_confirmed_pivot_highs(high_arr[: n - 1], strength=5, lookback=126, min_pullback=0.03)
 
         brk_idx = n - 1
         if brk_idx < _donchian_n:
             return None
 
-        # Watchlist: structural resistance only — pivot highs + KDE zones.
-        # Donchian (63-bar rolling high) is excluded here because for any
-        # trending stock the current price is always within 5% of it, flooding
-        # the watchlist with stocks that are just running (no real resistance).
+        # Watchlist: structural resistance only — confirmed pivot highs + KDE zones.
+        # Donchian excluded (would flag any trending stock within 5% of recent high).
         raw_wl: List[Tuple[float, str]] = []
         for ph in pivot_levels:
             if ph > lc:
@@ -528,6 +530,50 @@ def _resistance_candidates(
 # ─────────────────────────────────────────────────────────────────────────────
 # Pivot high detection
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _find_confirmed_pivot_highs(
+    high_arr: np.ndarray,
+    strength: int = 5,
+    lookback: int = 126,
+    min_pullback: float = 0.03,
+) -> List[float]:
+    """
+    Find structural pivot highs that were confirmed as real resistance.
+
+    Stricter than _find_pivot_highs — used by the watchlist scanner where
+    the volume/cross gates that filter noise in the live scanner are absent.
+
+    Requirements:
+      - strength=5 minimum (bar must be highest of 11-bar window)
+      - only considers last `lookback` bars (default 126 = ~6 months)
+      - pivot must have been followed by a drop of at least `min_pullback`
+        within the next 10 bars (confirms the level was actual resistance)
+
+    Returns sorted unique list of confirmed pivot high values.
+    """
+    n = len(high_arr)
+    start = max(0, n - lookback)
+    window = high_arr[start:]
+    wn = len(window)
+
+    if wn < 2 * strength + 1:
+        return []
+
+    pivots: set = set()
+    for i in range(strength, wn - strength):
+        h = window[i]
+        left_ok  = all(h >= window[i - s] for s in range(1, strength + 1))
+        right_ok = all(h >= window[i + s] for s in range(1, strength + 1))
+        if not (left_ok and right_ok):
+            continue
+        # Confirm real resistance: price must have dropped ≥ min_pullback after pivot
+        look_end = min(wn, i + 11)
+        post_low = np.min(window[i + 1:look_end]) if i + 1 < look_end else h
+        if h > 0 and (h - post_low) / h >= min_pullback:
+            pivots.add(round(float(h), 6))
+
+    return sorted(pivots)
+
 
 def _find_pivot_highs(
     high_arr: np.ndarray,
