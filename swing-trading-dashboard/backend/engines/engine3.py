@@ -571,6 +571,70 @@ def _prepare_indicators(
     )
 
 
+def _find_support_below(
+    lc: float,
+    sr_zones: List[Dict],
+    low: pd.Series,
+    latr: float,
+    max_atr: float,
+) -> Optional[Dict]:
+    """
+    Find the nearest structural support BELOW current close within max_atr * latr.
+
+    Unlike _find_structural_support (which requires the bar to already be touching
+    a zone), this searches for levels the stock is approaching from above.
+    Used exclusively by scan_pullback_approaching.
+    """
+    # 1. KDE support zones — find the closest one below current price
+    for z in sorted(
+        [z for z in sr_zones if z.get("type") == "SUPPORT"],
+        key=lambda z: float(z.get("level", 0)),
+        reverse=True,  # highest first = closest below
+    ):
+        level = float(z.get("level", 0))
+        if level <= 0 or level >= lc:
+            continue
+        if latr > 0 and (lc - level) > max_atr * latr:
+            continue
+        return {
+            "level": level,
+            "lower": float(z.get("lower", level * 0.99)),
+            "upper": float(z.get("upper", level * 1.01)),
+            "source": "KDE",
+        }
+
+    # 2. Prior consolidation lows (shallow 3-bar pivot lows below current price)
+    if len(low) >= 10:
+        low_vals = low.values[-60:] if len(low) >= 60 else low.values
+        for i in range(len(low_vals) - 3, 3, -1):
+            candidate = float(low_vals[i])
+            if candidate <= 0 or candidate >= lc:
+                continue
+            if latr > 0 and (lc - candidate) > max_atr * latr:
+                continue
+            # Must be a local low (lower than 3 bars each side)
+            if not (
+                candidate <= min(low_vals[max(0, i - 3):i])
+                and candidate <= min(low_vals[i + 1:min(len(low_vals), i + 4)])
+            ):
+                continue
+            # Price bounced from this level at least 3 of next 5 bars
+            bounced = sum(
+                1 for j in range(i + 1, min(len(low_vals), i + 6))
+                if float(low_vals[j]) > candidate * 1.005
+            )
+            if bounced < 3:
+                continue
+            return {
+                "level": round(candidate, 4),
+                "lower": round(candidate * 0.99, 4),
+                "upper": round(candidate * 1.01, 4),
+                "source": "CONSOLIDATION_LOW",
+            }
+
+    return None
+
+
 def scan_pullback_approaching(
     ticker: str,
     df: pd.DataFrame,
@@ -617,26 +681,15 @@ def scan_pullback_approaching(
         if cci_today >= cci_prev:
             return None
 
-        # Structural support check
-        vol_sma50   = ind.volume.rolling(50).mean()
-        vsm_val     = vol_sma50.iloc[-1]
-        avg_vol_sup = float(vsm_val.item() if hasattr(vsm_val, "item") else vsm_val)
-
-        nearest_sup = _find_structural_support(
-            ll, lc, sr_zones, trendline,
-            ind.high, ind.low, ind.close, ind.volume, avg_vol_sup, latr,
-        )
+        # Find structural support below current price (not yet reached).
+        # _find_structural_support requires the bar to already BE at support,
+        # so we use _find_support_below which searches for levels below current
+        # close within APPROACH_ATR — the stock is heading there, not there yet.
+        nearest_sup = _find_support_below(lc, sr_zones, ind.low, latr, APPROACH_ATR)
         if nearest_sup is None:
             return None
 
-        # Price must be approaching — within APPROACH_ATR of support level
-        support_level = nearest_sup["level"]
-        if latr > 0 and (lc - support_level) > APPROACH_ATR * latr:
-            return None
-
-        # Support must be below current price
-        if support_level >= lc:
-            return None
+        support_level = nearest_sup["level"]  # already guaranteed < lc
 
         entry     = round(lh * 1.001, 2)
         stop_base = min(ll, nearest_sup["lower"])

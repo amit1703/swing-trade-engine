@@ -388,11 +388,25 @@ def scan_res_breakout_near(
         if brk_idx < _donchian_n:
             return None
 
-        candidates = _resistance_candidates(
-            high_arr, lc,
-            brk_idx, donchian_res,
-            pivot_levels, zones,
-        )
+        # Watchlist: structural resistance only — pivot highs + KDE zones.
+        # Donchian (63-bar rolling high) is excluded here because for any
+        # trending stock the current price is always within 5% of it, flooding
+        # the watchlist with stocks that are just running (no real resistance).
+        raw_wl: List[Tuple[float, str]] = []
+        for ph in pivot_levels:
+            if ph > lc:
+                raw_wl.append((ph, "pivot"))
+        for zone in zones:
+            if zone.get("type") == "RESISTANCE":
+                upper = float(zone.get("upper", 0))
+                if upper > lc:
+                    raw_wl.append((upper, "kde"))
+        raw_wl.sort(key=lambda x: x[0])
+        candidates: List[Tuple[float, str]] = []
+        for level, source in raw_wl:
+            if not candidates or (level - candidates[-1][0]) / candidates[-1][0] > _DEDUP_THRESHOLD:
+                candidates.append((level, source))
+
         if not candidates:
             return None
 
