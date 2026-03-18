@@ -26,7 +26,7 @@ function SortIcon({ col, sortCol, sortDir }) {
   return sortDir === 'desc' ? <ArrowDown size={9} color="var(--accent)" /> : <ArrowUp size={9} color="var(--accent)" />
 }
 
-export default function ScannerTable({ allSetups, filters, selectedTicker, onSelectTicker, livePrices = {}, devMode = false, onDebug }) {
+export default function ScannerTable({ allSetups, filters, selectedTicker, onSelectTicker, livePrices = {}, devMode = false, onDebug, favorites = [], onToggleFavorite }) {
   const [sortCol, setSortCol] = useState('score')
   const [sortDir, setSortDir] = useState('desc')
 
@@ -129,6 +129,7 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
             const rsLabel     = rsInt === null ? '—' : rsInt >= 0 ? `+${rsInt}` : `${rsInt}`
             const rsColor     = rsInt === null ? 'var(--muted)' : rsInt >= 5 ? 'var(--go)' : 'var(--muted)'
             const daysOld     = s.setup_date ? Math.floor((Date.now() - new Date(s.setup_date).getTime()) / 86400000) : null
+            const isFavorited = favorites.includes(s.ticker)
             const rowBg       = isVolSurge ? 'rgba(0,200,122,0.04)' : isSelected ? 'rgba(245,166,35,0.05)' : undefined
             const borderLeft  = isSelected ? '2px solid var(--accent)' : isNearEntry ? '2px solid rgba(245,166,35,0.6)' : isVolSurge ? '2px solid rgba(0,200,122,0.4)' : '2px solid transparent'
 
@@ -153,6 +154,21 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
                       {s.rs_blue_dot && (
                         <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--blue)', flexShrink: 0, boxShadow: '0 0 4px var(--blue)' }} />
                       )}
+                      <button
+                        onClick={e => { e.stopPropagation(); onToggleFavorite?.(s.ticker) }}
+                        title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          padding: '0 1px', fontSize: 10, lineHeight: 1,
+                          color: isFavorited ? 'var(--accent)' : 'var(--muted)',
+                          opacity: isFavorited ? 1 : 0.35,
+                          transition: 'color 0.15s, opacity 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--accent)' }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = isFavorited ? '1' : '0.35'; e.currentTarget.style.color = isFavorited ? 'var(--accent)' : 'var(--muted)' }}
+                      >
+                        {isFavorited ? '★' : '☆'}
+                      </button>
                     </div>
                     {daysOld != null && daysOld >= 1 && (
                       <span style={{ fontSize: 8, color: daysOld >= 5 ? 'rgba(255,45,85,0.6)' : 'var(--muted)' }}>{daysOld}d ago</span>

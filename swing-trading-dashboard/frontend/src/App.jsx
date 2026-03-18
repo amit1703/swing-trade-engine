@@ -36,6 +36,7 @@ import ScannerFilters   from './components/ScannerFilters.jsx'
 import TradingChart     from './components/TradingChart.jsx'
 import PortfolioTab     from './components/PortfolioTab.jsx'
 import WatchlistPanel   from './components/WatchlistPanel.jsx'
+import FavoritesPage    from './components/FavoritesPage.jsx'
 import SystemGuideModal from './components/SystemGuideModal.jsx'
 import EngineHealthPanel from './components/EngineHealthPanel.jsx'
 import DebugDrawer      from './components/DebugDrawer.jsx'
@@ -86,6 +87,17 @@ export default function App() {
   })
   const [analysis,        setAnalysis       ] = useState(null)
   const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [favorites,       setFavorites      ] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('swt_favorites') ?? '[]') } catch { return [] }
+  })
+
+  const toggleFavorite = useCallback((ticker) => {
+    setFavorites(prev => {
+      const next = prev.includes(ticker) ? prev.filter(t => t !== ticker) : [...prev, ticker]
+      try { localStorage.setItem('swt_favorites', JSON.stringify(next)) } catch {}
+      return next
+    })
+  }, [])
 
   const pollTimerRef = useRef(null)
 
@@ -390,6 +402,8 @@ export default function App() {
                   livePrices={livePrices}
                   devMode={devMode}
                   onDebug={handleDebug}
+                  favorites={favorites}
+                  onToggleFavorite={toggleFavorite}
                 />
               </div>
             )}
@@ -404,6 +418,23 @@ export default function App() {
               selectedTicker={selectedTicker}
               onSelectTicker={handleTickerClick}
               loading={loadingSetups}
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
+            />
+          </div>
+        )}
+
+        {/* ── FAVORITES PAGE ────────────────────────────────── */}
+        {activePage === 'favorites' && (
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <FavoritesPage
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
+              allSetups={allSetups}
+              watchlistItems={watchlistItems}
+              selectedTicker={selectedTicker}
+              onSelectTicker={handleTickerClick}
+              livePrices={livePrices}
             />
           </div>
         )}

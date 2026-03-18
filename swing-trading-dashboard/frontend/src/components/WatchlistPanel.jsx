@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, loading }) {
+export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, loading, favorites = [], onToggleFavorite }) {
   const [showAllBrk, setShowAllBrk] = useState(false)
   const [showAllPb,  setShowAllPb]  = useState(false)
 
@@ -59,9 +59,10 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
   }
 
   const WatchRow = ({ item }) => {
-    const isSelected = selectedTicker === item.ticker
-    const isBrk      = item.watchlist_source === 'RES_BREAKOUT'
-    const hasBlueDot = !!item.rs_blue_dot
+    const isSelected  = selectedTicker === item.ticker
+    const isBrk       = item.watchlist_source === 'RES_BREAKOUT'
+    const hasBlueDot  = !!item.rs_blue_dot
+    const isFavorited = favorites.includes(item.ticker)
 
     const dist      = item.distance_pct ?? 0
     const distLabel = isBrk ? `${dist.toFixed(1)}% away` : `${dist.toFixed(1)}% to sup`
@@ -121,7 +122,7 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
           </span>
         </div>
 
-        {/* Right: source badge + TV link */}
+        {/* Right: source badge + star + TV link */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <span style={{
             fontSize: 8, padding: '2px 5px', borderRadius: 4,
@@ -131,6 +132,21 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
           }}>
             {sourceLabel}
           </span>
+          <button
+            onClick={e => { e.stopPropagation(); onToggleFavorite?.(item.ticker) }}
+            title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '1px 2px', fontSize: 11, lineHeight: 1,
+              color: isFavorited ? 'var(--accent)' : 'var(--muted)',
+              opacity: isFavorited ? 1 : 0.4,
+              transition: 'color 0.15s, opacity 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--accent)' }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = isFavorited ? '1' : '0.4'; e.currentTarget.style.color = isFavorited ? 'var(--accent)' : 'var(--muted)' }}
+          >
+            {isFavorited ? '★' : '☆'}
+          </button>
           <a
             href={`https://www.tradingview.com/chart/?symbol=${item.ticker}&interval=D`}
             target="_blank"
