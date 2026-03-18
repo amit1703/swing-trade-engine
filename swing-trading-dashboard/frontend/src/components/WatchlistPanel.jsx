@@ -1,30 +1,19 @@
 import { useState } from 'react'
 
 export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, loading }) {
-  const [showAll, setShowAll] = useState(false)
+  const [showAllBrk, setShowAllBrk] = useState(false)
+  const [showAllPb,  setShowAllPb]  = useState(false)
 
-  // Filter: hide KDE-BRK items that are >1% above breakout (too extended)
-  const filtered = items.filter(item =>
-    !(item.pattern_type === 'KDE-BRK' && (item.distance_pct ?? 0) > 1.0)
-  )
+  const brkItems = items
+    .filter(item => item.watchlist_source === 'RES_BREAKOUT')
+    .sort((a, b) => (a.distance_pct ?? 99) - (b.distance_pct ?? 99))
 
-  const scoreItem = (item) => {
-    const distScore = Math.max(0, 1 - (item.distance_pct ?? 5) / 5.0) * 0.5
-    const rsRaw = item.rs_score ?? 0
-    const rsScore = Math.max(0, Math.min(1, (rsRaw + 1) / 2)) * 0.3
-    const blueDot = (item.rs_blue_dot ? 1 : 0) * 0.2
-    return distScore + rsScore + blueDot
-  }
+  const pbItems = items
+    .filter(item => item.watchlist_source === 'PULLBACK')
+    .sort((a, b) => (a.distance_pct ?? 99) - (b.distance_pct ?? 99))
 
-  const nearItems = filtered
-    .filter(item => item.pattern_type === 'KDE' || item.pattern_type === 'TDL')
-    .sort((a, b) => scoreItem(b) - scoreItem(a))
-
-  const confirmedItems = filtered
-    .filter(item => item.pattern_type === 'KDE-BRK' || item.pattern_type === 'TDL-BRK')
-    .sort((a, b) => (a.distance_pct ?? 999) - (b.distance_pct ?? 999))
-
-  const visibleNearItems = showAll ? nearItems : nearItems.slice(0, 15)
+  const visibleBrk = showAllBrk ? brkItems : brkItems.slice(0, 15)
+  const visiblePb  = showAllPb  ? pbItems  : pbItems.slice(0, 15)
 
   const SectionHeader = ({ label, count }) => (
     <div style={{
@@ -49,39 +38,56 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
     </div>
   )
 
+  const ShowMoreBtn = ({ allItems, visible, onToggle }) => {
+    if (allItems.length <= 15) return null
+    return (
+      <button
+        onClick={() => onToggle(v => !v)}
+        style={{
+          width: '100%', padding: '6px',
+          background: 'transparent', border: 'none',
+          borderTop: '1px solid var(--border)',
+          color: 'var(--muted)', cursor: 'pointer',
+          fontSize: 9, letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          fontFamily: '"IBM Plex Mono", monospace',
+        }}
+      >
+        {visible ? `▲ Show top 15` : `▼ Show all ${allItems.length}`}
+      </button>
+    )
+  }
+
   const WatchRow = ({ item }) => {
-    const isSelected      = selectedTicker === item.ticker
-    const isConfirmedBrk  = item.pattern_type === 'KDE-BRK' || item.pattern_type === 'TDL-BRK'
-    const hasRsBlueDot    = !!item.rs_blue_dot
-    const rsRaw           = item.rs_score ?? 0
-    const rsInt           = Math.round(rsRaw * 100)
-    const rsLabel         = rsInt === 0 ? '±0' : rsInt > 0 ? `+${rsInt}` : `${rsInt}`
-    const rsColor         = rsInt >= 5 ? 'var(--go)' : rsInt <= -5 ? 'var(--halt)' : 'var(--muted)'
-    const distLabel       = isConfirmedBrk
-      ? `▲${item.distance_pct?.toFixed(1)}%`
-      : `${item.distance_pct?.toFixed(1)}%`
-    const distColor       = isConfirmedBrk ? 'var(--go)'
-      : (item.distance_pct ?? 99) < 0.8 ? 'var(--go)' : 'var(--accent)'
+    const isSelected = selectedTicker === item.ticker
+    const isBrk      = item.watchlist_source === 'RES_BREAKOUT'
+    const hasBlueDot = !!item.rs_blue_dot
+
+    const dist      = item.distance_pct ?? 0
+    const distLabel = isBrk ? `${dist.toFixed(1)}% away` : `${dist.toFixed(1)}% to sup`
+    const distColor = dist < 1.5 ? 'var(--go)' : dist < 3 ? 'var(--accent)' : 'var(--muted)'
+
+    const sourceLabel = isBrk
+      ? (item.zone_source ?? 'BRK').toUpperCase().slice(0, 6)
+      : (item.support_source ?? 'SUP').replace('_', ' ').slice(0, 6)
+
+    const badgeBg    = isBrk ? 'rgba(0,200,122,0.10)' : 'rgba(100,180,255,0.10)'
+    const badgeBord  = isBrk ? 'rgba(0,200,122,0.30)' : 'rgba(100,180,255,0.30)'
+    const badgeColor = isBrk ? 'var(--go)' : '#64b4ff'
 
     return (
       <div
         onClick={() => onSelectTicker(item.ticker)}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '8px 12px',
           borderBottom: '1px solid var(--border)',
           borderLeft: isSelected
             ? '3px solid var(--accent)'
-            : isConfirmedBrk
-            ? '3px solid rgba(0,200,122,0.5)'
-            : '3px solid transparent',
-          background: isSelected
-            ? 'rgba(245,166,35,0.06)'
-            : isConfirmedBrk
-            ? 'rgba(0,200,122,0.03)'
-            : 'transparent',
+            : isBrk
+            ? '3px solid rgba(0,200,122,0.4)'
+            : '3px solid rgba(100,180,255,0.4)',
+          background: isSelected ? 'rgba(245,166,35,0.06)' : 'transparent',
           cursor: 'pointer',
           transition: 'background 0.1s',
           gap: 8,
@@ -90,50 +96,40 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
           if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
         }}
         onMouseLeave={e => {
-          e.currentTarget.style.background = isSelected
-            ? 'rgba(245,166,35,0.06)'
-            : isConfirmedBrk ? 'rgba(0,200,122,0.03)' : 'transparent'
+          e.currentTarget.style.background = isSelected ? 'rgba(245,166,35,0.06)' : 'transparent'
         }}
       >
-        {/* Left: ticker + RS */}
+        {/* Left: ticker + blue dot */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
             <span style={{
               fontSize: 12, fontWeight: 700, letterSpacing: '0.03em',
-              color: isSelected ? 'var(--accent)' : isConfirmedBrk ? 'var(--go)' : 'var(--text)',
+              color: isSelected ? 'var(--accent)' : 'var(--text)',
               fontFamily: '"IBM Plex Mono", monospace',
             }}>
               {item.ticker}
             </span>
-            {hasRsBlueDot && (
+            {hasBlueDot && (
               <span style={{ color: 'var(--blue)', fontSize: 9 }}>●</span>
             )}
           </div>
           <span style={{
-            fontSize: 9, color: rsColor,
-            fontFamily: '"IBM Plex Mono", monospace',
-          }}>
-            RS {rsLabel}
-          </span>
-        </div>
-
-        {/* Right: distance + pattern badge + TV link */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{
-            fontSize: 10, fontWeight: 700, color: distColor,
+            fontSize: 9, color: distColor,
             fontFamily: '"IBM Plex Mono", monospace',
           }}>
             {distLabel}
           </span>
+        </div>
+
+        {/* Right: source badge + TV link */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <span style={{
             fontSize: 8, padding: '2px 5px', borderRadius: 4,
             fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700,
             letterSpacing: '0.04em',
-            background: isConfirmedBrk ? 'rgba(0,200,122,0.15)' : 'rgba(0,200,255,0.08)',
-            color: isConfirmedBrk ? 'var(--go)' : 'var(--blue)',
-            border: isConfirmedBrk ? '1px solid rgba(0,200,122,0.35)' : '1px solid rgba(0,200,255,0.25)',
+            background: badgeBg, color: badgeColor, border: `1px solid ${badgeBord}`,
           }}>
-            {item.pattern_type}
+            {sourceLabel}
           </span>
           <a
             href={`https://www.tradingview.com/chart/?symbol=${item.ticker}&interval=D`}
@@ -154,6 +150,8 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
       </div>
     )
   }
+
+  const totalCount = brkItems.length + pbItems.length
 
   return (
     <div style={{
@@ -181,7 +179,7 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
           background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)',
           color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700,
         }}>
-          {filtered.length}
+          {totalCount}
         </span>
       </div>
 
@@ -197,43 +195,29 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
               }} />
             ))}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : totalCount === 0 ? (
           <div style={{
             padding: '32px 16px', textAlign: 'center',
             color: 'var(--muted)', fontSize: 10,
             fontFamily: '"IBM Plex Mono", monospace',
             letterSpacing: '0.1em', textTransform: 'uppercase',
           }}>
-            No items
+            No items — run a scan
           </div>
         ) : (
           <>
-            {nearItems.length > 0 && (
+            {brkItems.length > 0 && (
               <>
-                <SectionHeader label="Near Breakout" count={nearItems.length} />
-                {visibleNearItems.map(item => <WatchRow key={item.ticker} item={item} />)}
-                {nearItems.length > 15 && (
-                  <button
-                    onClick={() => setShowAll(v => !v)}
-                    style={{
-                      width: '100%', padding: '6px',
-                      background: 'transparent', border: 'none',
-                      borderTop: '1px solid var(--border)',
-                      color: 'var(--muted)', cursor: 'pointer',
-                      fontSize: 9, letterSpacing: '0.1em',
-                      textTransform: 'uppercase',
-                      fontFamily: '"IBM Plex Mono", monospace',
-                    }}
-                  >
-                    {showAll ? '▲ Show top 15' : `▼ Show all ${nearItems.length}`}
-                  </button>
-                )}
+                <SectionHeader label="Near Breakout" count={brkItems.length} />
+                {visibleBrk.map(item => <WatchRow key={item.ticker} item={item} />)}
+                <ShowMoreBtn allItems={brkItems} visible={showAllBrk} onToggle={setShowAllBrk} />
               </>
             )}
-            {confirmedItems.length > 0 && (
+            {pbItems.length > 0 && (
               <>
-                <SectionHeader label="Confirmed Break" count={confirmedItems.length} />
-                {confirmedItems.map(item => <WatchRow key={item.ticker} item={item} />)}
+                <SectionHeader label="Pullback Setup" count={pbItems.length} />
+                {visiblePb.map(item => <WatchRow key={item.ticker} item={item} />)}
+                <ShowMoreBtn allItems={pbItems} visible={showAllPb} onToggle={setShowAllPb} />
               </>
             )}
           </>
