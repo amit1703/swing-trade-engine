@@ -297,17 +297,19 @@ SELECTIVE_EXPECTANCY_FLOOR = 0.10  # minimum expectancy (R) to classify as STRON
 #   1.0  = no change (full score)
 #   0.5  = 50% score penalty — setup needs to be stronger to survive MIN_SETUP_SCORE gate
 #   0.0  = effectively blocked in soft mode; hard-blocked when SELECTIVE_HARD_FILTER=True
-# Derived from 2020-2024 backtest (668 trades, 78 SELECTIVE):
-#   PULLBACK:     n=73  win=42%  exp=+0.039R → WEAK  (below 0.10R floor)
-#   BASE:         n=4   → INSUFFICIENT DATA — no penalty until more data
-#   HTF:          n=1   → INSUFFICIENT DATA — no penalty until more data
-#   RES_BREAKOUT: 0 SELECTIVE trades (already blocked by brk_aggressive_only)
+# Derived from 2020-2024 legacy-mode backtest (828 tickers, full universe):
+#   PULLBACK:     n=351  win=48%  exp=+0.106R → WEAK  (below 0.10R floor, keep 0.5 penalty)
+#   RES_BREAKOUT: n=191  win=35%  exp=+0.164R → EDGE  (≈ AGGRESSIVE +0.175R — full weight)
+#   BASE:         n=4    → INSUFFICIENT DATA — no penalty until more data
+#   HTF:          n=1    → INSUFFICIENT DATA — no penalty until more data
 #
 # Weight=0.5 on PULLBACK means score×0.5 < 70 for all setups (max score=100),
 # effectively pausing new entries in SELECTIVE regime. Revisit when PULLBACK
 # expectancy in SELECTIVE rises above SELECTIVE_EXPECTANCY_FLOOR=0.10R.
+# RES_BREAKOUT: diagnostic confirmed edge in SELECTIVE (n=191, +0.164R) — weight=1.0.
 SELECTIVE_SETUP_WEIGHTS: dict = {
-    "PULLBACK": 0.5,   # WEAK: exp=+0.039R — effectively blocks in soft mode
+    "PULLBACK":     0.5,   # WEAK:  exp=+0.106R — effectively blocks in soft mode
+    "RES_BREAKOUT": 1.0,   # EDGE:  exp=+0.164R — same as AGGRESSIVE, full weight
 }
 
 # Hard filter mode: if True, setups with weight == 0.0 are skipped entirely.
