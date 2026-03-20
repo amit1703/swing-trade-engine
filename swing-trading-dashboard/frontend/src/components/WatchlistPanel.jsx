@@ -6,11 +6,9 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
 
   const brkItems = items
     .filter(item => item.watchlist_source === 'RES_BREAKOUT')
-    .sort((a, b) => (a.distance_pct ?? 99) - (b.distance_pct ?? 99))
 
   const pbItems = items
     .filter(item => item.watchlist_source === 'PULLBACK')
-    .sort((a, b) => (a.distance_pct ?? 99) - (b.distance_pct ?? 99))
 
   const visibleBrk = showAllBrk ? brkItems : brkItems.slice(0, 15)
   const visiblePb  = showAllPb  ? pbItems  : pbItems.slice(0, 15)
@@ -65,8 +63,15 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
     const isFavorited = favorites.includes(item.ticker)
 
     const dist      = item.distance_pct ?? 0
-    const distLabel = isBrk ? `${dist.toFixed(1)}% away` : `${dist.toFixed(1)}% to sup`
-    const distColor = dist < 1.5 ? 'var(--go)' : dist < 3 ? 'var(--accent)' : 'var(--muted)'
+    const atrDist   = (item.atr > 0 && item.entry > 0)
+      ? (dist / (item.atr / item.entry * 100))
+      : null
+    const distLabel = isBrk
+      ? `${dist.toFixed(1)}%${atrDist !== null ? ` (${atrDist.toFixed(1)}atr)` : ''} away`
+      : `${dist.toFixed(1)}%${atrDist !== null ? ` (${atrDist.toFixed(1)}atr)` : ''} to sup`
+    const distColor = atrDist !== null
+      ? (atrDist < 0.5 ? 'var(--go)' : atrDist < 1.5 ? 'var(--accent)' : 'var(--muted)')
+      : (dist < 1.5 ? 'var(--go)' : dist < 3 ? 'var(--accent)' : 'var(--muted)')
 
     const sourceLabel = isBrk
       ? (item.zone_source ?? 'BRK').toUpperCase().slice(0, 6)
