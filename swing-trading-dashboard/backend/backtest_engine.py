@@ -47,6 +47,8 @@ from constants import (
     BACKTEST_RS_THRESHOLD_DEFAULT,
     RES_MAX_GAP_PCT,
     RES_SELECTIVE_REGIME_FACTOR,
+    SELECTIVE_SETUP_WEIGHTS,
+    SELECTIVE_HARD_FILTER,
 )
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
 
@@ -111,7 +113,7 @@ class BacktestParams:
     brk_gap_pct:         float = 0.036   # skip T+1 if open > res×(1+gap_pct)  [WFO v1: 4/4 windows consensus 0.037–0.053; was 0.010]
     brk_trail_mult:      float = 6.9060  # ATR trail multiplier
     brk_regime_factor:   float = 0.861  # score penalty in SELECTIVE (unused when aggressive_only=True)
-    brk_aggressive_only: bool  = True   # skip BRK in SELECTIVE regime (OOS finding)
+    brk_aggressive_only: bool  = False  # diagnostic: enable BRK in SELECTIVE to measure raw performance
     # ── Multi-source resistance detection (converged in brk run 1, deferred) ─
     brk_donchian_n:        int   = 87   # rolling-high lookback bars
     brk_pivot_strength:    int   = 2    # bars each side for pivot detection
@@ -883,6 +885,19 @@ class BacktestEngine:
                 )
             if signal is None:
                 continue
+
+            # Legacy mode SELECTIVE filter: hard-block only (no score in legacy mode).
+            # Scored mode applies weight to final_score above; this handles params=None.
+            if (
+                self.params is None
+                and _current_regime == "SELECTIVE"
+                and SELECTIVE_SETUP_WEIGHTS
+                and SELECTIVE_HARD_FILTER
+            ):
+                _sig_type = signal.get("setup_type", "")
+                if SELECTIVE_SETUP_WEIGHTS.get(_sig_type, 1.0) == 0.0:
+                    continue
+
             if signal is not None:
                 signal["_regime"] = signal.get("_regime", _current_regime)
 
@@ -915,6 +930,14 @@ class BacktestEngine:
                             else RES_SELECTIVE_REGIME_FACTOR
                         )
                         final_score *= _regime_factor
+
+                # SELECTIVE per-setup weight: soft penalty or hard block.
+                # Reads SELECTIVE_SETUP_WEIGHTS from constants.py (empty = inactive).
+                if _current_regime == "SELECTIVE" and SELECTIVE_SETUP_WEIGHTS:
+                    _sel_weight = SELECTIVE_SETUP_WEIGHTS.get(setup_type_sig, 1.0)
+                    if SELECTIVE_HARD_FILTER and _sel_weight == 0.0:
+                        continue   # hard block
+                    final_score *= _sel_weight
 
                 if final_score < self.params.score_threshold:
                     continue

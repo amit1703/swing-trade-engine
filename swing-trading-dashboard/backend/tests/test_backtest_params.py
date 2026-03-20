@@ -66,3 +66,9 @@ def test_trade_record_final_score_set():
     )
     assert tr.final_score == pytest.approx(7.5)
     assert tr.to_dict()["final_score"] == pytest.approx(7.5)
+
+
+def test_brk_aggressive_only_default_false():
+    """brk_aggressive_only must be False so SELECTIVE RES_BREAKOUT runs in diagnostic."""
+    p = BacktestParams()
+    assert p.brk_aggressive_only is False
