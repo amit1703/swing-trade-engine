@@ -8,7 +8,7 @@ and capital curve vs SPY.
 Usage:
     cd backend
     python ../scripts/backtest_full_validation.py               # default: exclude EXTENDED
-    python ../scripts/backtrack_full_validation.py --show-extended
+    python ../scripts/backtest_full_validation.py --show-extended
 
 Requirements:
     - Parquet cache at backend/data/price_cache/
