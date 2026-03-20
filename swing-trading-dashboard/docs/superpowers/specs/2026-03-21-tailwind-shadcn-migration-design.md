@@ -106,7 +106,7 @@ export default defineConfig({
 
 Add `darkMode: 'class'` at the top level of the config export. Some shadcn component variants use `dark:` prefixes. Since our app is permanently dark, we do not add a `dark` class to `<html>` — all our colors are defined in `:root`, so `dark:` variants remain unused. Adding the key prevents Tailwind from tree-shaking `dark:` utilities that shadcn components reference internally.
 
-**Step 4: Run shadcn init**
+**Step 4: Run shadcn init** (requires Steps 1–3 to be applied first — alias must exist before the wizard validates paths)
 ```bash
 npx shadcn@latest init
 ```
@@ -132,20 +132,25 @@ Resolution: **delete the shadcn-generated `:root` block entirely**, then add onl
 
 ```css
 /* Add these to the existing :root block — hex format matches our convention */
---background:           #000000;   /* = t.bg */
---foreground:           #c8cdd6;   /* = t.text */
---primary:              #F5A623;   /* = t.accent / --accent */
---primary-foreground:   #000000;
---secondary:            #1a2535;   /* = t.border */
---secondary-foreground: #c8cdd6;
---popover:              #0f1520;   /* = t.card / --card */
---popover-foreground:   #c8cdd6;
---ring:                 #F5A623;   /* = --accent */
---input:                #1a2535;   /* = --border */
---radius:               0.5rem;
+--background:            #000000;   /* = t.bg */
+--foreground:            #c8cdd6;   /* = t.text */
+--card-foreground:       #c8cdd6;   /* text on card surfaces */
+--primary:               #F5A623;   /* = t.accent / --accent */
+--primary-foreground:    #000000;   /* text on amber backgrounds */
+--secondary:             #1a2535;   /* = t.border */
+--secondary-foreground:  #c8cdd6;
+--muted-foreground:      #4a5a72;   /* = --muted */
+--accent-foreground:     #c8cdd6;   /* text on accent hover bg (ghost button hover) */
+--destructive:           #ff2d55;   /* = --halt */
+--destructive-foreground:#ffffff;
+--popover:               #0f1520;   /* = t.card */
+--popover-foreground:    #c8cdd6;
+--ring:                  #F5A623;   /* = --accent */
+--input:                 #1a2535;   /* = --border */
+--radius:                0.5rem;
 ```
 
-Do NOT redefine `--card`, `--border`, `--accent`, `--muted`, `--destructive` — our existing hex values for these are already correct and shadcn's entries would duplicate them.
+Do NOT redefine `--card`, `--border`, `--accent`, `--muted` — our existing hex values for these are already correct and shadcn's entries would duplicate them. `--destructive` IS defined above because our existing `:root` uses `--halt` for red, not `--destructive`.
 
 **Step 6: Fix `tailwind.config.js` shadcn color entries**
 
@@ -191,6 +196,7 @@ Commit all three files together — they are coupled by the sidebar width change
 
 **`Sidebar.jsx`** — Left navigation (significant visual redesign)
 - Width: `w-56` (224px) — **wider than current icon-only sidebar**
+- Root element must be `<aside>` or `<nav>` (not `<div>`) — `src/index.css` has a mobile media query `nav { width: 48px !important }` that collapses the sidebar on screens ≤640px. If using `<aside>`, migrate that mobile rule to `aside { width: 48px !important }` at the same time.
 - Background: `bg-t-panel border-r border-t-border flex flex-col h-full`
 - Logo area (top): amber gradient icon + `"SCANR"` label — `font-mono text-t-accent text-lg font-semibold`
 - Nav items (map to existing pages + all their existing `onClick` callbacks):
