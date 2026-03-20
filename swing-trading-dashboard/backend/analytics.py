@@ -207,6 +207,229 @@ def compute_regime_performance(trades: list) -> dict:
     return result
 
 
+def _suggest_weight(expectancy: float, count: int, min_sample: int) -> float:
+    """
+    Suggest a SELECTIVE_SETUP_WEIGHTS value based on expectancy and sample size.
+    Returns 1.0 for insufficient data (don't penalise what you can't measure).
+    """
+    if count < min_sample:
+        return 1.0   # insufficient data — no penalty
+    if expectancy >= 0.25:
+        return 1.0   # strong edge — no penalty
+    if expectancy >= 0.10:
+        return 0.8   # moderate edge — light penalty
+    if expectancy >= 0.0:
+        return 0.5   # near-breakeven — meaningful penalty
+    return 0.2       # negative expectancy — heavy penalty (hard-block if SELECTIVE_HARD_FILTER)
+
+
+def compute_selective_breakdown(trades: list) -> dict:
+    """
+    Analyse performance by setup type within the SELECTIVE regime only.
+
+    Classifies each setup as STRONG / WEAK / INSUFFICIENT_DATA and provides:
+      - per-setup metrics table
+      - before/after simulation (all vs STRONG-only SELECTIVE trades)
+      - suggested SELECTIVE_SETUP_WEIGHTS values for constants.py
+
+    Parameters
+    ----------
+    trades : list of trade dicts with keys regime, setup_type, close_price,
+             entry_price, stop_loss, status (analytics.py contract)
+
+    Returns
+    -------
+    dict with keys:
+        total_selective_trades   : int
+        setup_breakdown          : dict[setup_type → metrics + classification]
+        before                   : overall SELECTIVE metrics (no filter)
+        after_simulated          : SELECTIVE metrics for STRONG setups only
+        strong_setups            : list[str]
+        weak_setups              : list[str]
+        insufficient_data_setups : list[str]
+        suggested_weights        : dict[setup_type → float]  — paste into constants.py
+    """
+    from constants import SELECTIVE_MIN_SAMPLE, SELECTIVE_EXPECTANCY_FLOOR
+
+    selective = [
+        t for t in trades
+        if str(t.get("regime", "")).upper() == "SELECTIVE" and _is_closed(t)
+    ]
+
+    _empty = {
+        "total_selective_trades":   0,
+        "setup_breakdown":          {},
+        "before":                   None,
+        "after_simulated":          None,
+        "strong_setups":            [],
+        "weak_setups":              [],
+        "insufficient_data_setups": [],
+        "suggested_weights":        {},
+    }
+
+    if not selective:
+        return _empty
+
+    # Group by setup_type
+    by_setup: dict = {}
+    for t in selective:
+        stype = str(t.get("setup_type", "UNKNOWN")).upper()
+        by_setup.setdefault(stype, []).append(t)
+
+    breakdown: dict = {}
+    for stype, group in by_setup.items():
+        m = compute_live_diagnostics(group)
+        count = m["total_trades"]
+        exp   = m["expectancy"]
+
+        if count < SELECTIVE_MIN_SAMPLE:
+            classification = "INSUFFICIENT_DATA"
+        elif exp > SELECTIVE_EXPECTANCY_FLOOR:
+            classification = "STRONG"
+        else:
+            classification = "WEAK"
+
+        breakdown[stype] = {
+            **m,
+            "count":          count,
+            "classification": classification,
+            "suggested_weight": _suggest_weight(exp, count, SELECTIVE_MIN_SAMPLE),
+        }
+
+    # Classify buckets
+    strong     = sorted(k for k, v in breakdown.items() if v["classification"] == "STRONG")
+    weak       = sorted(k for k, v in breakdown.items() if v["classification"] == "WEAK")
+    insuf      = sorted(k for k, v in breakdown.items() if v["classification"] == "INSUFFICIENT_DATA")
+
+    # Before: all SELECTIVE trades (no filter)
+    before = compute_live_diagnostics(selective)
+
+    # After (simulated): only STRONG setups
+    after_trades = [t for t in selective if str(t.get("setup_type", "")).upper() in set(strong)]
+    after = compute_live_diagnostics(after_trades) if after_trades else None
+
+    # Suggested weights: STRONG=weight, WEAK=weight, INSUFFICIENT_DATA=1.0
+    suggested_weights = {
+        k: v["suggested_weight"] for k, v in breakdown.items()
+    }
+
+    return {
+        "total_selective_trades":   len(selective),
+        "setup_breakdown":          breakdown,
+        "before":                   before,
+        "after_simulated":          after,
+        "strong_setups":            strong,
+        "weak_setups":              weak,
+        "insufficient_data_setups": insuf,
+        "suggested_weights":        suggested_weights,
+    }
+
+
+def compute_regime_stability(regime_history: list) -> dict:
+    """
+    Measure regime stability from a list of {scan_timestamp, regime} dicts
+    ordered ascending by scan_timestamp (as returned by get_regime_history).
+
+    A flip is counted only when a new regime persists for >= 2 consecutive
+    scans — single-scan interludes are treated as noise and not counted.
+
+    Parameters
+    ----------
+    regime_history : list of dicts with keys scan_timestamp (str), regime (str)
+
+    Returns
+    -------
+    dict with keys:
+        total_scans              : int
+        flip_count               : int   — meaningful regime changes
+        flip_rate_per_month      : float — flips per 30-day period
+        avg_regime_duration_days : float — mean days per stable regime period
+        distribution             : dict  — {AGGRESSIVE, SELECTIVE, DEFENSIVE} counts
+        date_range_days          : int   — days from first to last scan
+    """
+    from datetime import datetime as _dt
+
+    _empty = {
+        "total_scans":               0,
+        "flip_count":                0,
+        "flip_rate_per_month":       0.0,
+        "avg_regime_duration_days":  0.0,
+        "distribution":              {"AGGRESSIVE": 0, "SELECTIVE": 0, "DEFENSIVE": 0},
+        "date_range_days":           0,
+    }
+
+    if not regime_history:
+        return _empty
+
+    labels     = [r.get("regime", "UNKNOWN") for r in regime_history]
+    timestamps = [r.get("scan_timestamp", "")[:10] for r in regime_history]
+
+    # Distribution count (only the three meaningful labels)
+    dist = {"AGGRESSIVE": 0, "SELECTIVE": 0, "DEFENSIVE": 0}
+    for label in labels:
+        if label in dist:
+            dist[label] += 1
+
+    # Date range: first scan → last scan
+    date_range_days = 0
+    try:
+        t0 = _dt.fromisoformat(timestamps[0])
+        t1 = _dt.fromisoformat(timestamps[-1])
+        date_range_days = max(1, (t1 - t0).days)
+    except Exception:
+        date_range_days = len(labels)
+
+    # Build run-length encoding: [(regime, start_idx, end_idx), ...]
+    runs: list = []
+    i = 0
+    while i < len(labels):
+        j = i + 1
+        while j < len(labels) and labels[j] == labels[i]:
+            j += 1
+        runs.append((labels[i], i, j - 1))
+        i = j
+
+    # Count flips: transition run[k] → run[k+1] is a flip only if run[k+1]
+    # has length >= 2 (ignores single-scan noise blips).
+    flip_count = sum(
+        1 for k in range(1, len(runs))
+        if (runs[k][2] - runs[k][1] + 1) >= 2
+    )
+
+    # Compute duration for each run in calendar days.
+    # Duration of run k = start of run k+1 − start of run k.
+    # Last run: last timestamp − start of last run (or 1 day minimum).
+    durations: list = []
+    for k, (_regime, start, end) in enumerate(runs):
+        try:
+            d_start = _dt.fromisoformat(timestamps[start])
+            if k + 1 < len(runs):
+                d_next = _dt.fromisoformat(timestamps[runs[k + 1][1]])
+                dur = max(1, (d_next - d_start).days)
+            else:
+                d_end = _dt.fromisoformat(timestamps[end])
+                dur = max(1, (d_end - d_start).days) if start != end else 1
+            durations.append(dur)
+        except Exception:
+            durations.append(1)
+
+    avg_regime_duration_days = (
+        round(sum(durations) / len(durations), 1) if durations else 0.0
+    )
+    flip_rate_per_month = (
+        round(flip_count / date_range_days * 30, 2) if date_range_days > 0 else 0.0
+    )
+
+    return {
+        "total_scans":               len(regime_history),
+        "flip_count":                flip_count,
+        "flip_rate_per_month":       flip_rate_per_month,
+        "avg_regime_duration_days":  avg_regime_duration_days,
+        "distribution":              dist,
+        "date_range_days":           date_range_days,
+    }
+
+
 def print_backtest_diagnostics(trades: list) -> str:
     """
     Format a human-readable diagnostics summary for a completed backtest run.

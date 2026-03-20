@@ -44,6 +44,8 @@ from constants import (
     SECTOR_TIER1_N,
     SECTOR_TIER2_FACTOR,
     TOP_SECTORS_N,
+    SELECTIVE_SETUP_WEIGHTS,
+    SELECTIVE_HARD_FILTER,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -466,6 +468,17 @@ def score_and_filter_setups(
         score = compute_setup_score(
             setup, rs_rank, regime_score, regime_str, top_sectors
         )
+
+        # SELECTIVE per-setup weight: apply soft penalty or hard block.
+        # Weight is read from SELECTIVE_SETUP_WEIGHTS in constants.py.
+        # Empty dict (default) = no filtering active; safe until data is reviewed.
+        if regime_str == "SELECTIVE" and SELECTIVE_SETUP_WEIGHTS:
+            setup_type = setup.get("setup_type", "")
+            sel_weight = SELECTIVE_SETUP_WEIGHTS.get(setup_type, 1.0)
+            if SELECTIVE_HARD_FILTER and sel_weight == 0.0:
+                continue   # hard block
+            score = max(0, int(round(score * sel_weight)))
+
         setup["setup_score"] = score
 
         # WATCHLIST items bypass the score threshold — proximity to resistance is

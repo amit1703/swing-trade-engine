@@ -125,6 +125,7 @@ from database import (
     get_latest_scan_timestamp,
     get_latest_setups,
     get_sr_zones_for_ticker_from_db,
+    get_regime_history,
     init_db,
     save_regime,
     save_scan_run,
@@ -165,6 +166,8 @@ from analytics import (
     compute_setup_breakdown,
     compute_ticker_distribution,
     compute_regime_performance,
+    compute_regime_stability,
+    compute_selective_breakdown,
 )
 from email_digest import send_digest
 from services.macro_service import get_market_overview
@@ -3232,32 +3235,63 @@ async def diagnostics_report():
     """
     Strategy-level performance diagnostics computed from closed trades.
 
-    Returns four sections:
+    Returns five sections:
       summary             — overall portfolio metrics (total_trades, profit_factor,
                             win_rate, avg_R, expectancy, max_drawdown, equity_curve_R)
       setup_breakdown     — metrics per setup type (with low_sample flag)
       ticker_distribution — ranked ticker R contribution
       regime_performance  — metrics bucketed by market regime tier
+      regime_stability    — flip frequency and duration metrics from scan history
     """
     try:
-        raw_trades = await get_closed_trades(DB_PATH, limit=10000)
+        raw_trades, regime_history = await asyncio.gather(
+            get_closed_trades(DB_PATH, limit=10000),
+            get_regime_history(DB_PATH),
+        )
 
-        # Normalize DB field names to analytics.py contract:
-        #   exit_price  → close_price   (analytics uses close_price for R calculation)
-        #   regime_score: not stored on trades table → default None (→ UNKNOWN bucket)
+        # Retrospective regime enrichment: for each closed trade look up the
+        # closest market_regime scan at or before entry_date.
+        # Single bulk fetch + in-memory binary search — O(n log m).
         normalized = []
-        for t in raw_trades:
-            normalized.append({
-                **t,
-                "close_price":  t.get("exit_price"),
-                "regime_score": t.get("regime_score"),  # None for all current trades
-            })
+        if regime_history:
+            from bisect import bisect_right as _bisect_right
+            ts_dates = [h["scan_timestamp"][:10] for h in regime_history]
+
+            for t in raw_trades:
+                entry_date = (t.get("entry_date") or "")[:10]
+                idx = _bisect_right(ts_dates, entry_date) - 1
+                if idx >= 0:
+                    regime_label = regime_history[idx]["regime"] or "UNKNOWN"
+                    regime_score = regime_history[idx]["regime_score"] or 0
+                else:
+                    # entry_date predates all scans — use earliest available
+                    regime_label = regime_history[0]["regime"] or "UNKNOWN"
+                    regime_score = regime_history[0]["regime_score"] or 0
+                normalized.append({
+                    **t,
+                    "close_price":  t.get("exit_price"),
+                    "regime":       regime_label,
+                    "regime_score": regime_score,
+                    "status":       "closed",
+                })
+        else:
+            # No regime data available — analytics still work; regime bucket = UNKNOWN
+            for t in raw_trades:
+                normalized.append({
+                    **t,
+                    "close_price":  t.get("exit_price"),
+                    "regime":       "UNKNOWN",
+                    "regime_score": 0,
+                    "status":       "closed",
+                })
 
         return {
             "summary":              compute_live_diagnostics(normalized),
             "setup_breakdown":      compute_setup_breakdown(normalized),
             "ticker_distribution":  compute_ticker_distribution(normalized),
             "regime_performance":   compute_regime_performance(normalized),
+            "regime_stability":     compute_regime_stability(regime_history),
+            "selective_analysis":   compute_selective_breakdown(normalized),
         }
     except Exception as exc:
         log.error("diagnostics_report failed: %s", exc)
@@ -3314,6 +3348,7 @@ async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
                 "setup_breakdown":     compute_setup_breakdown(adapted),
                 "ticker_distribution": compute_ticker_distribution(adapted),
                 "regime_performance":  compute_regime_performance(adapted),
+                "selective_analysis":  compute_selective_breakdown(adapted),
                 "trades":              raw_trades,   # full TradeRecord dicts for deep analysis
             }
 

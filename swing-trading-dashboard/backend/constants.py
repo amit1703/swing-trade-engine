@@ -278,10 +278,39 @@ DISCOVERY_VOL_RATIO     = 1.5   # 5-day avg vol must be >= 1.5x 50-day avg
 DISCOVERY_MAX_PCT       = 0.10  # cap discovery candidates at 10% of universe size
 
 # ── V4 Backtest Diagnostics ───────────────────────────────────────────────────
-BACKTEST_DIAG_START_DATE = "2023-01-01"   # fixed 2-year baseline window start
+BACKTEST_DIAG_START_DATE = "2020-01-01"   # extended to 5-year window for SELECTIVE analysis
 BACKTEST_DIAG_END_DATE   = "2024-12-31"   # fixed 2-year baseline window end
 BACKTEST_V4_TRAIL_MULT   = 4.162          # strict V4 single trail multiplier (all setup types)
 BACKTEST_DIAG_CACHE_FILE = "cache/backtest_diagnostics.json"   # relative to backend/
 
 # V5 Scored-mode defaults (Optuna-tunable, used as BacktestParams defaults)
 BACKTEST_RS_THRESHOLD_DEFAULT = -0.01219   # V4 Optuna best; RS_REJECT_THRESHOLD in engine3
+
+# ── SELECTIVE Regime Setup Filtering ──────────────────────────────────────────
+# Controls which setup types are allowed / penalized in SELECTIVE regime.
+# Populated after running the 2020-2024 backtest and reviewing selective_analysis.
+
+SELECTIVE_MIN_SAMPLE      = 30    # minimum trades to classify a setup (raised from 20)
+SELECTIVE_EXPECTANCY_FLOOR = 0.10  # minimum expectancy (R) to classify as STRONG
+
+# Per-setup score weights in SELECTIVE regime.
+#   1.0  = no change (full score)
+#   0.5  = 50% score penalty — setup needs to be stronger to survive MIN_SETUP_SCORE gate
+#   0.0  = effectively blocked in soft mode; hard-blocked when SELECTIVE_HARD_FILTER=True
+# Derived from 2020-2024 backtest (668 trades, 78 SELECTIVE):
+#   PULLBACK:     n=73  win=42%  exp=+0.039R → WEAK  (below 0.10R floor)
+#   BASE:         n=4   → INSUFFICIENT DATA — no penalty until more data
+#   HTF:          n=1   → INSUFFICIENT DATA — no penalty until more data
+#   RES_BREAKOUT: 0 SELECTIVE trades (already blocked by brk_aggressive_only)
+#
+# Weight=0.5 on PULLBACK means score×0.5 < 70 for all setups (max score=100),
+# effectively pausing new entries in SELECTIVE regime. Revisit when PULLBACK
+# expectancy in SELECTIVE rises above SELECTIVE_EXPECTANCY_FLOOR=0.10R.
+SELECTIVE_SETUP_WEIGHTS: dict = {
+    "PULLBACK": 0.5,   # WEAK: exp=+0.039R — effectively blocks in soft mode
+}
+
+# Hard filter mode: if True, setups with weight == 0.0 are skipped entirely.
+# If False (default), weight is applied as a score multiplier and the
+# MIN_SETUP_SCORE gate naturally filters out penalized setups.
+SELECTIVE_HARD_FILTER: bool = False

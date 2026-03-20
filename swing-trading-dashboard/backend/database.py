@@ -386,6 +386,30 @@ async def save_sr_zones(
 # Read helpers
 # ---------------------------------------------------------------------------
 
+async def get_regime_history(db_path: str) -> List[Dict]:
+    """
+    Return all market_regime rows ordered ascending by scan_timestamp.
+    Used by compute_regime_stability and for retrospective trade enrichment.
+    Returns [] if the table is empty (no scans completed yet).
+    """
+    async with aiosqlite.connect(db_path) as db:
+        async with db.execute(
+            """SELECT scan_timestamp, regime, regime_score
+               FROM market_regime
+               ORDER BY scan_timestamp ASC"""
+        ) as cur:
+            rows = await cur.fetchall()
+            return [
+                {
+                    "scan_timestamp": r[0],
+                    "regime":         r[1] or "UNKNOWN",
+                    "regime_score":   r[2] or 0,
+                }
+                for r in rows
+                if r[0] and r[1]   # skip malformed rows
+            ]
+
+
 async def get_latest_regime(db_path: str) -> Optional[Dict]:
     import json as _json
     scan_ts = await get_latest_scan_timestamp(db_path)

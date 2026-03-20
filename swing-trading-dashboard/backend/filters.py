@@ -42,17 +42,19 @@ def _compute_spy_regime_score(spy_df: pd.DataFrame) -> pd.Series:
     ema20  = close.ewm(span=20, adjust=False).mean()
     sma50  = close.rolling(50).mean()
     sma200 = close.rolling(200).mean()
-    slope5 = ema20 - ema20.shift(5)
-
     # Vectorized scoring — all operations stay in NumPy speed
     score = pd.Series(0, index=spy_df.index, dtype=int)
     score += (close > ema20).astype(int) * REGIME_WEIGHT_EMA20
     score += (close > sma50).astype(int) * REGIME_WEIGHT_SMA50
     score += (sma50 > sma200).astype(int) * REGIME_WEIGHT_MA_STACK
 
-    # f4: EMA20 slope scaled to 0..REGIME_WEIGHT_SLOPE, then clipped
-    slope_norm = (slope5 / (sma50 * 0.01 + 1e-9)).fillna(0.0)
-    slope_pts  = (slope_norm * REGIME_WEIGHT_SLOPE).clip(0, REGIME_WEIGHT_SLOPE).astype(int)
+    # f4: EMA20 slope over 5 bars — pct-change with ±1% midpoint mapping.
+    # Matches engine0.py convention: flat EMA = 0.5 → 5 pts (neutral midpoint).
+    # Range: -1% → 0 pts, 0% → 5 pts, +1% → 10 pts. Wider than ±0.5% to
+    # reduce noise and prevent excessive regime flipping.
+    slope5_pct = ((ema20 - ema20.shift(5)) / ema20.shift(5)).fillna(0.0)
+    slope_norm = (slope5_pct + 0.01) / 0.02   # -1%→0, 0%→0.5, +1%→1
+    slope_pts  = (slope_norm.clip(0, 1) * REGIME_WEIGHT_SLOPE).astype(int)
     score += slope_pts
 
     # Zero out any bars where SMA200 is NaN (insufficient history)
