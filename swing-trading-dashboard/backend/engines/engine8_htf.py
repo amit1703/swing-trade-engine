@@ -189,6 +189,7 @@ def scan_htf(
             "rs_near_high":     False,
             "rs_acceleration":  0.0,
             "setup_date":       str(data.index[-1].date()),
+            "atr":              round(latr, 4),
         }
 
     except Exception as exc:

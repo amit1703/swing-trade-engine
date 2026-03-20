@@ -232,6 +232,7 @@ def scan_flat_base(
             "rs_vs_spy": round(rs_vs_spy * 100, 2),
             "rs_score": round(rs_score, 4),
             "setup_date": str(data.index[-1].date()),
+            "atr": round(latr, 4),
             "geometry": {
                 "start_date": str(data.index[base_start_idx].date()),
                 "end_date": str(data.index[-1].date()),
@@ -442,6 +443,7 @@ def scan_cup_handle(
             "rs_vs_spy": round(rs_vs_spy * 100, 2),
             "rs_score": round(rs_score, 4),
             "setup_date": str(data.index[-1].date()),
+            "atr": round(latr, 4),
             "geometry": {
                 "left_peak_date":   str(data.index[left_peak_abs].date()) if left_peak_abs < len(data) else None,
                 "left_peak_price":  round(left_peak, 2),

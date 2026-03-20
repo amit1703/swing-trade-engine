@@ -292,6 +292,7 @@ def scan_resistance_breakout(
                     "zone_source":         source,
                     "setup_date":          str(data.index[-1].date()),
                     "_raw_score":          round(_score, 1),
+                    "atr":                 round(latr, 4),
                 }
 
                 if days_back < best_days:
@@ -455,6 +456,7 @@ def scan_res_breakout_near(
                 "volume_ratio":     round(vol_ratio, 2),
                 "zone_source":      source,
                 "setup_date":       str(data.index[-1].date()),
+                "atr":              round(latr, 4),
             }
 
         return None

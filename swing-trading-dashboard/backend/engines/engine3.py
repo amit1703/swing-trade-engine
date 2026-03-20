@@ -316,6 +316,7 @@ def scan_pullback(
             "ema8": round(l8, 2),
             "ema20": round(l20, 2),
             "is_ascending_tdl": is_ascending_tdl,
+            "atr": round(latr, 4),
         }
 
     except Exception as exc:  # noqa: BLE001
@@ -471,6 +472,7 @@ def scan_relaxed_pullback(
             "ema20":            round(l20, 2),
             "is_relaxed":       True,
             "is_ascending_tdl": is_ascending_tdl,
+            "atr":              round(latr, 4),
         }
 
     except Exception as exc:  # noqa: BLE001
@@ -758,6 +760,7 @@ def scan_pullback_approaching(
             "ema20":            round(l20, 2),
             "cci_today":        round(cci_today, 2),
             "setup_date":       str(data.index[-1].date()),
+            "atr":              round(latr, 4),
         }
 
     except Exception as exc:

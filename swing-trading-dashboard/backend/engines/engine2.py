@@ -496,6 +496,12 @@ def scan_near_breakout(
 
         is_confirmed_break = best_type in ("KDE-BRK",)
 
+        # ATR for entry quality classification
+        from indicators import atr as _atr_fn
+        _adj_nb = "Adj Close" if "Adj Close" in data.columns else "Close"
+        _atr14_nb = data["_ATR14"] if "_ATR14" in data.columns else _atr_fn(data["High"], data["Low"], data[_adj_nb], 14)
+        _latr_nb  = float(_atr14_nb.iloc[-1]) if not pd.isna(_atr14_nb.iloc[-1]) else 0.0
+
         return {
             "ticker":      ticker,
             "setup_type":  "WATCHLIST",
@@ -508,6 +514,7 @@ def scan_near_breakout(
             "pattern_type": best_type,
             "level":        round(best_level, 2),
             "is_confirmed_break": is_confirmed_break,
+            "atr":          round(_latr_nb, 4),
         }
 
     except Exception as exc:
@@ -1000,6 +1007,7 @@ def scan_vcp(
             "rs_near_high":        rs_near_high,
             "rs_acceleration":     rs_acceleration,
             "tight_range_5d":      tight_range_5d,
+            "atr":                 round(latr, 4),
         }
 
     except Exception as exc:  # noqa: BLE001
