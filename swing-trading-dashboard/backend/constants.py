@@ -314,3 +314,15 @@ SELECTIVE_SETUP_WEIGHTS: dict = {
 # If False (default), weight is applied as a score multiplier and the
 # MIN_SETUP_SCORE gate naturally filters out penalized setups.
 SELECTIVE_HARD_FILTER: bool = False
+
+# ──────────────────────────────────────────────────────────────────────────
+# ATR-Normalized Entry Quality Thresholds (Task 1)
+# ──────────────────────────────────────────────────────────────────────────
+
+# ATR-normalized entry quality thresholds (used in frontend scanner filter)
+# entryAtrDist = (livePrice - entry) / atr
+#   < EARLY_THRESHOLD  → EARLY  (hasn't reached entry yet or barely touched)
+#   < EXTENDED_THRESHOLD → OPTIMAL (within range — good R:R)
+#   >= EXTENDED_THRESHOLD → EXTENDED (chasing — hide by default)
+ATR_ENTRY_EARLY_THRESHOLD:    float = 0.1   # < 0.1 ATR above entry = still early
+ATR_ENTRY_EXTENDED_THRESHOLD: float = 0.5   # >= 0.5 ATR above entry = extended
