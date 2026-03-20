@@ -2411,8 +2411,18 @@ async def get_lce_setups():
 async def get_watchlist():
     """Near-breakout tickers from the latest scan (within 1.5% of KDE/TDL level)."""
     items = await get_latest_setups(DB_PATH, setup_type="WATCHLIST")
-    # Sort by distance_pct ascending (closest first)
-    items.sort(key=lambda x: x.get("distance_pct", 99))
+    # Sort by ATR-normalized distance (closest in ATR terms first).
+    # atr_distance = distance_pct / (atr/entry * 100) — how many ATRs away.
+    # Falls back to raw distance_pct sort if atr/entry not available.
+    def _wl_sort_key(x):
+        dist  = x.get("distance_pct", 99)
+        atr   = x.get("atr", 0)
+        entry = x.get("entry", 0)
+        if atr > 0 and entry > 0:
+            atr_pct = atr / entry * 100
+            return dist / atr_pct if atr_pct > 0 else 99
+        return 99
+    items.sort(key=_wl_sort_key)
     await _inject_narratives(items)
     return {"items": items, "count": len(items)}
 
