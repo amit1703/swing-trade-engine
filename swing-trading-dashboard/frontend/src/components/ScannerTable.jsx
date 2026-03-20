@@ -29,6 +29,7 @@ function SortIcon({ col, sortCol, sortDir }) {
 export default function ScannerTable({ allSetups, filters, selectedTicker, onSelectTicker, livePrices = {}, devMode = false, onDebug, favorites = [], onToggleFavorite }) {
   const [sortCol, setSortCol] = useState('score')
   const [sortDir, setSortDir] = useState('desc')
+  const [showExtended, setShowExtended] = useState(false)
 
   const handleSort = (col) => {
     if (sortCol === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
@@ -67,8 +68,18 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
         ? (typeof av === 'string' ? bv.localeCompare(av) : bv - av)
         : (typeof av === 'string' ? av.localeCompare(bv) : av - bv)
     })
+
+    if (!showExtended) {
+      data = data.filter(s => {
+        const lp  = livePrices[s.ticker]
+        const atr = s.atr ?? 0
+        if (!lp || atr <= 0 || !s.entry) return true
+        return (lp - s.entry) / atr < 0.5
+      })
+    }
+
     return data
-  }, [allSetups, filters, sortCol, sortDir])
+  }, [allSetups, filters, sortCol, sortDir, showExtended, livePrices])
 
   const COLS = [
     { col: 'score',  label: 'SCR',    align: 'right' },
@@ -85,6 +96,23 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
   ]
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div style={{ padding: '4px 10px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', flexShrink: 0, background: 'var(--card)' }}>
+        <button
+          onClick={() => setShowExtended(v => !v)}
+          style={{
+            background: showExtended ? 'rgba(255,45,85,0.12)' : 'transparent',
+            border: `1px solid ${showExtended ? 'rgba(255,45,85,0.3)' : 'var(--border)'}`,
+            color: showExtended ? 'var(--halt)' : 'var(--muted)',
+            cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
+            fontSize: 8, fontFamily: '"IBM Plex Mono", monospace',
+            fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+            transition: 'all 0.15s',
+          }}
+        >
+          {showExtended ? '✕ hide extended' : '+ show extended'}
+        </button>
+      </div>
     <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
       <table className="terminal-table" style={{ background: 'var(--card)' }}>
         <thead>
@@ -116,6 +144,12 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
             const livePrice   = livePrices[s.ticker]
             const dist        = (livePrice && s.entry > 0) ? ((livePrice - s.entry) / s.entry) * 100 : null
             const isNearEntry = dist !== null && dist > -3 && dist < 0
+            const atr         = s.atr ?? 0
+            const entryAtrDist = (livePrice && atr > 0 && s.entry > 0) ? (livePrice - s.entry) / atr : null
+            const entryQuality = entryAtrDist === null ? null
+              : entryAtrDist < 0.1 ? 'EARLY'
+              : entryAtrDist < 0.5 ? 'OPTIMAL'
+              : 'EXTENDED'
             const isVolSurge  = s.is_vol_surge
             const score       = typeof s.setup_score === 'number' ? Math.round(s.setup_score) : null
             const scoreColor  = score === null ? 'var(--muted)' : score >= 80 ? 'var(--go)' : score >= 60 ? 'var(--accent)' : 'var(--muted)'
@@ -182,13 +216,24 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
                 </td>
                 <td style={{ textAlign: 'right' }}>
                   {livePrice ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                       <span style={{ color: dist === null ? 'var(--text)' : dist >= 0 ? 'var(--go)' : dist > -3 ? 'var(--accent)' : 'var(--muted)', fontWeight: 600 }}>
                         ${livePrice.toFixed(2)}
                       </span>
                       {dist !== null && (
                         <span style={{ fontSize: 8, color: dist >= 0 ? 'var(--go)' : dist > -3 ? 'var(--accent)' : 'var(--muted)' }}>
                           {dist >= 0 ? `▲${Math.abs(dist).toFixed(1)}%` : `${Math.abs(dist).toFixed(1)}%↓`}
+                        </span>
+                      )}
+                      {entryQuality && (
+                        <span style={{
+                          fontSize: 7, padding: '1px 3px', borderRadius: 3, fontWeight: 700,
+                          letterSpacing: '0.05em',
+                          background: entryQuality === 'EARLY' ? 'rgba(0,200,122,0.15)' : entryQuality === 'OPTIMAL' ? 'rgba(245,166,35,0.15)' : 'rgba(255,45,85,0.15)',
+                          color: entryQuality === 'EARLY' ? 'var(--go)' : entryQuality === 'OPTIMAL' ? 'var(--accent)' : 'var(--halt)',
+                          border: `1px solid ${entryQuality === 'EARLY' ? 'rgba(0,200,122,0.3)' : entryQuality === 'OPTIMAL' ? 'rgba(245,166,35,0.3)' : 'rgba(255,45,85,0.3)'}`,
+                        }}>
+                          {entryQuality}
                         </span>
                       )}
                     </div>
@@ -208,6 +253,7 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
           })}
         </tbody>
       </table>
+    </div>
     </div>
   )
 }
