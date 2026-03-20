@@ -979,7 +979,8 @@ class BacktestEngine:
             # Capture engine-specific metadata for diagnostics
             _meta_keys = ("volume_ratio", "breakout_pct", "resistance_level",
                           "zone_upper", "support_source", "zone_source",
-                          "pullback_score", "days_since_breakout")
+                          "pullback_score", "days_since_breakout",
+                          "atr", "entry")  # entry = signal-day close; atr = ATR14 at signal
             _setup_meta = {k: signal[k] for k in _meta_keys if k in signal}
 
             # For RES_BREAKOUT in V5 scored mode, use params.brk_trail_mult as the per-trade
