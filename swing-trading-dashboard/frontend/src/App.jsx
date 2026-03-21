@@ -150,7 +150,7 @@ export default function App() {
 
   // ── Ticker click → load chart data + analysis; optionally switch to scanner
   const handleTickerClick = useCallback(async (ticker, switchTab = true) => {
-    const isMobile = window.innerWidth < 640
+    const isMobile = window.innerWidth <= 640
     if (switchTab && !isMobile) setActivePage('scanner')
     if (isMobile) setMobileSheetOpen(true)
     setSelectedTicker(ticker)
