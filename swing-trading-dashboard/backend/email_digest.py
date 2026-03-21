@@ -48,7 +48,7 @@ log = logging.getLogger("swing.email")
 # ── Constants ────────────────────────────────────────────────────────────────
 
 SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 465
+SMTP_PORT = 587
 DEFAULT_RECIPIENT = "amit.izhari@gmail.com"
 
 # Dark-theme palette
@@ -328,7 +328,8 @@ def send_digest(scan_results: Dict) -> None:
             context = ssl.create_default_context(cafile=certifi.where())
         except ImportError:
             context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=context) as server:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls(context=context)
             server.login(email_from, email_password)
             server.sendmail(email_from, email_to, msg.as_string())
 
