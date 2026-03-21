@@ -2,7 +2,7 @@
 email_digest.py — Daily Swing Trading Email Digest
 ====================================================
 Builds a dark-themed HTML email summarising today's scan results and sends
-it via Gmail SMTP (port 465, SSL).
+it via Gmail SMTP (port 587, STARTTLS).
 
 Usage
 -----
@@ -20,16 +20,19 @@ scan_results dict shape (matches _digest_cache populated by run_morning_scan)
 ---------------------------------------------------------------------------
     {
         "regime": {
-            "regime":     "BULLISH" | "BEARISH" | "NEUTRAL" | "NO_DATA",
-            "spy_close":  float,
-            "spy_sma50":  float,  # optional, used for BULL/BEAR badge
-            "is_bullish": bool,
+            "regime":       "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE",
+            "regime_score": float 0-100,
+            "spy_close":    float,
+            "spy_sma50":    float,
+            "is_bullish":   bool,
         },
-        "vcp":              [ {ticker, entry, stop_loss, rr, rs_score, ...}, ... ],
-        "vcp_dry":          [ {ticker, entry, stop_loss, rr, rs_score, ...}, ... ],
-        "res_breakout":     [ {ticker, entry, stop_loss, rr, rs_score, ...}, ... ],
-        "pullback":         [ {ticker, entry, stop_loss, rr, rs_score, ...}, ... ],
-        "options_catalyst": [ {ticker, entry, stop_loss, rr, rs_score, ...}, ... ],
+        "vcp":              [ {ticker, entry, stop_loss, rr, rs_score, setup_score, sector, ...} ],
+        "vcp_dry":          [ ... ],
+        "res_breakout":     [ ... ],   # top 5 shown
+        "pullback":         [ ... ],   # top 5 shown
+        "htf":              [ ... ],
+        "lce":              [ ... ],
+        "options_catalyst": [ ... ],
     }
 """
 
@@ -45,178 +48,238 @@ from zoneinfo import ZoneInfo
 
 log = logging.getLogger("swing.email")
 
-# ── Constants ────────────────────────────────────────────────────────────────
+# ── Constants ─────────────────────────────────────────────────────────────────
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 DEFAULT_RECIPIENT = "amit.izhari@gmail.com"
 
-# Dark-theme palette
-COLOR_BG        = "#1a1a1a"
-COLOR_SURFACE   = "#252525"
-COLOR_BORDER    = "#333333"
-COLOR_TEXT      = "#e0e0e0"
-COLOR_MUTED     = "#999999"
-COLOR_GREEN     = "#00ff88"
-COLOR_RED       = "#ff4d4d"
-COLOR_AMBER     = "#ffaa00"
-COLOR_BLUE      = "#4da6ff"
+# Palette
+C_BG      = "#141414"
+C_SURFACE = "#1e1e1e"
+C_CARD    = "#242424"
+C_BORDER  = "#2e2e2e"
+C_TEXT    = "#e2e2e2"
+C_MUTED   = "#6b6b6b"
+C_GREEN   = "#00c87a"
+C_RED     = "#ff3b3b"
+C_AMBER   = "#f5a623"
+C_BLUE    = "#4da6ff"
+C_PURPLE  = "#9b6eff"
+C_PINK    = "#ff6ec7"
 
 
-# ── HTML builder ─────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _fmt(val, prefix="$", decimals=2) -> str:
+    if val is None or val == 0:
+        return "—"
+    return f"{prefix}{val:.{decimals}f}" if prefix else f"{val:.{decimals}f}"
+
+def _rs_color(rs) -> str:
+    if rs is None: return C_MUTED
+    if rs >= 80:   return C_GREEN
+    if rs >= 50:   return C_AMBER
+    return C_MUTED
+
+def _rr_color(rr) -> str:
+    if rr is None: return C_MUTED
+    if rr >= 3.0:  return C_GREEN
+    if rr >= 2.0:  return C_AMBER
+    return C_MUTED
+
+def _score_color(s) -> str:
+    if s is None: return C_MUTED
+    if s >= 80:   return C_GREEN
+    if s >= 65:   return C_AMBER
+    return C_MUTED
+
+def _sector_short(sector: Optional[str]) -> str:
+    if not sector: return "—"
+    MAP = {
+        "Technology": "Tech", "Healthcare": "Health", "Financials": "Fin",
+        "Consumer Discretionary": "Cons Disc", "Consumer Staples": "Cons Stap",
+        "Industrials": "Indust", "Energy": "Energy", "Materials": "Matrl",
+        "Real Estate": "RE", "Utilities": "Util", "Communication Services": "Comm",
+    }
+    return MAP.get(sector, sector[:10])
+
+
+# ── Table builder ─────────────────────────────────────────────────────────────
+
+def _table(setups: List[Dict], limit: Optional[int] = None) -> str:
+    rows = setups[:limit] if limit else setups
+    if not rows:
+        return ""
+
+    th = lambda t, align="right": f'<th style="text-align:{align};padding:6px 10px;border-bottom:1px solid {C_BORDER};color:{C_MUTED};font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;white-space:nowrap;">{t}</th>'
+    td = lambda val, color=C_TEXT, bold=False, align="right": (
+        f'<td style="text-align:{align};padding:7px 10px;border-bottom:1px solid {C_BORDER};'
+        f'color:{color};{"font-weight:700;" if bold else ""}font-size:12px;white-space:nowrap;">{val}</td>'
+    )
+
+    header = f"""<tr>
+        {th("Ticker", "left")}{th("Score")}{th("Entry")}{th("Stop")}{th("R:R")}{th("RS")}{th("Sector", "left")}
+    </tr>"""
+
+    body = ""
+    for i, s in enumerate(rows):
+        ticker = s.get("ticker", "—")
+        score  = s.get("setup_score")
+        entry  = s.get("entry")
+        stop   = s.get("stop_loss")
+        rr     = s.get("rr")
+        rs     = s.get("rs_score")
+        sector = _sector_short(s.get("sector"))
+        vol_surge = s.get("is_vol_surge", False)
+
+        score_str = str(int(score)) if score is not None else "—"
+        rr_str    = f"{float(rr):.1f}×" if rr is not None else "—"
+        rs_str    = str(int(rs)) if rs is not None else "—"
+
+        # Zebra stripe
+        row_bg = C_SURFACE if i % 2 == 0 else C_CARD
+        vol_indicator = " 🔥" if vol_surge else ""
+
+        body += f"""<tr style="background:{row_bg};">
+            {td(f"{ticker}{vol_indicator}", color=C_GREEN, bold=True, align="left")}
+            {td(score_str, color=_score_color(score))}
+            {td(_fmt(entry), color=C_TEXT)}
+            {td(_fmt(stop), color=C_RED)}
+            {td(rr_str, color=_rr_color(rr))}
+            {td(rs_str, color=_rs_color(rs))}
+            {td(sector, color=C_MUTED, align="left")}
+        </tr>"""
+
+    return f"""<table style="width:100%;border-collapse:collapse;font-family:'Courier New',monospace;">
+        <thead>{header}</thead>
+        <tbody>{body}</tbody>
+    </table>"""
+
+
+# ── Section builder ───────────────────────────────────────────────────────────
+
+def _section(title: str, color: str, setups: List[Dict],
+             limit: Optional[int] = None, note: str = "") -> str:
+    """Returns empty string if setups is empty (section is hidden)."""
+    if not setups:
+        return ""
+
+    shown = setups[:limit] if limit else setups
+    count = len(setups)
+    cap_note = f'  <span style="color:{C_MUTED};font-size:10px;">showing top {limit} of {count}</span>' if limit and count > limit else f'  <span style="color:{C_MUTED};font-size:10px;">{count} setup{"s" if count!=1 else ""}</span>'
+
+    return f"""
+    <div style="background:{C_SURFACE};border:1px solid {C_BORDER};border-radius:8px;
+                margin-bottom:14px;overflow:hidden;">
+        <div style="padding:11px 16px;border-bottom:1px solid {C_BORDER};
+                    display:flex;align-items:center;gap:8px;">
+            <span style="width:3px;height:16px;background:{color};
+                         border-radius:2px;display:inline-block;flex-shrink:0;"></span>
+            <span style="font-size:12px;font-weight:700;color:{color};
+                         text-transform:uppercase;letter-spacing:1px;">{title}</span>
+            {cap_note}
+            {"<span style='font-size:10px;color:"+C_MUTED+";margin-left:4px;'>"+note+"</span>" if note else ""}
+        </div>
+        <div style="overflow-x:auto;">
+            {_table(shown)}
+        </div>
+    </div>"""
+
+
+# ── Regime bar ────────────────────────────────────────────────────────────────
+
+def _regime_block(regime_data: Dict) -> str:
+    score     = regime_data.get("regime_score", 0) or 0
+    label     = regime_data.get("regime", "NEUTRAL").upper()
+    spy_close = regime_data.get("spy_close",  0.0) or 0.0
+    spy_sma50 = regime_data.get("spy_sma50",  None)
+
+    if "AGGRESSIVE" in label or score >= 70:
+        tier, tier_color, bar_color = "AGGRESSIVE", C_GREEN, C_GREEN
+    elif "SELECTIVE" in label or score >= 40:
+        tier, tier_color, bar_color = "SELECTIVE", C_AMBER, C_AMBER
+    else:
+        tier, tier_color, bar_color = "DEFENSIVE", C_RED, C_RED
+
+    bar_width = max(4, min(100, int(score)))
+
+    spy_line = ""
+    if spy_close:
+        diff = ""
+        if spy_sma50:
+            pct  = (spy_close - spy_sma50) / spy_sma50 * 100
+            diff_color = C_GREEN if pct >= 0 else C_RED
+            diff = f' &nbsp;<span style="color:{diff_color};font-size:11px;">{"▲" if pct>=0 else "▼"}{abs(pct):.1f}% vs SMA50</span>'
+        spy_line = f'<div style="margin-top:6px;font-size:12px;color:{C_MUTED};">SPY <span style="color:{C_TEXT};font-weight:600;">${spy_close:.2f}</span>{diff}</div>'
+
+    return f"""
+    <div style="background:{C_SURFACE};border:1px solid {C_BORDER};border-radius:8px;
+                padding:16px 20px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+                <span style="font-size:11px;color:{C_MUTED};text-transform:uppercase;
+                             letter-spacing:1px;">Market Regime</span>
+                <div style="margin-top:4px;display:flex;align-items:baseline;gap:10px;">
+                    <span style="font-size:22px;font-weight:700;color:{tier_color};
+                                 letter-spacing:0.5px;">{tier}</span>
+                    <span style="font-size:28px;font-weight:800;color:{tier_color};">{int(score)}</span>
+                    <span style="font-size:13px;color:{C_MUTED};">/ 100</span>
+                </div>
+            </div>
+            <div style="text-align:right;">
+                {spy_line}
+            </div>
+        </div>
+        <!-- score bar -->
+        <div style="margin-top:12px;background:{C_CARD};border-radius:4px;height:6px;overflow:hidden;">
+            <div style="width:{bar_width}%;height:100%;background:{bar_color};
+                        border-radius:4px;transition:width 0.3s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+            <span style="font-size:9px;color:{C_MUTED};">0 — DEFENSIVE</span>
+            <span style="font-size:9px;color:{C_MUTED};">40 — SELECTIVE</span>
+            <span style="font-size:9px;color:{C_MUTED};">70 — AGGRESSIVE — 100</span>
+        </div>
+    </div>"""
+
+
+# ── Main HTML builder ─────────────────────────────────────────────────────────
 
 def build_html_email(scan_results: Dict) -> str:
-    """
-    Build and return a dark-themed HTML email string from scan_results.
-
-    Parameters
-    ----------
-    scan_results : dict
-        Keys: regime, vcp, vcp_dry, res_breakout, pullback, options_catalyst
-        Any missing key falls back to an empty list / default regime.
-    """
-    et_tz = ZoneInfo("America/New_York")
-    now_et = datetime.now(et_tz)
+    et_tz    = ZoneInfo("America/New_York")
+    now_et   = datetime.now(et_tz)
     date_str = now_et.strftime("%A, %B %-d %Y")
     time_str = now_et.strftime("%-I:%M %p ET")
 
-    regime_data: Dict = scan_results.get("regime") or {}
-    spy_close   = regime_data.get("spy_close",  0.0)
-    spy_sma50   = regime_data.get("spy_sma50",  None)
-    is_bullish  = regime_data.get("is_bullish", False)
-    regime_str  = regime_data.get("regime", "NEUTRAL")
+    regime_data = scan_results.get("regime") or {}
 
-    # Derive BULL / BEAR / NEUTRAL badge
-    if regime_str.upper().startswith("BULL") or is_bullish:
-        badge_label = "BULL"
-        badge_color = COLOR_GREEN
-    elif regime_str.upper().startswith("BEAR"):
-        badge_label = "BEAR"
-        badge_color = COLOR_RED
-    else:
-        badge_label = "NEUTRAL"
-        badge_color = COLOR_AMBER
+    vcp_setups  = scan_results.get("vcp")              or []
+    dry_setups  = scan_results.get("vcp_dry")          or []
+    res_setups  = scan_results.get("res_breakout")     or []
+    pb_setups   = scan_results.get("pullback")         or []
+    htf_setups  = scan_results.get("htf")              or []
+    lce_setups  = scan_results.get("lce")              or []
+    opt_setups  = scan_results.get("options_catalyst") or []
 
-    vcp_setups      = scan_results.get("vcp")              or []
-    vcp_dry_setups  = scan_results.get("vcp_dry")          or []
-    res_setups      = scan_results.get("res_breakout")      or []
-    pb_setups       = scan_results.get("pullback")          or []
-    opt_setups      = scan_results.get("options_catalyst")  or []
+    total = len(vcp_setups) + len(res_setups) + len(pb_setups) + len(htf_setups) + len(lce_setups) + len(opt_setups)
 
-    total_setups = (
-        len(vcp_setups) + len(vcp_dry_setups) +
-        len(res_setups) + len(pb_setups) + len(opt_setups)
-    )
-
-    # ── Global styles ─────────────────────────────────────────────────────────
-    css = f"""
-        body {{ margin:0; padding:0; background:{COLOR_BG}; font-family:'Segoe UI',Arial,sans-serif; color:{COLOR_TEXT}; }}
-        .wrapper {{ max-width:700px; margin:0 auto; padding:20px 10px; }}
-        .header {{ background:{COLOR_SURFACE}; border:1px solid {COLOR_BORDER}; border-radius:8px;
-                   padding:20px 24px; margin-bottom:16px; }}
-        .header h1 {{ margin:0 0 6px; font-size:22px; color:{COLOR_GREEN}; letter-spacing:0.5px; }}
-        .header .sub {{ font-size:13px; color:{COLOR_MUTED}; margin:0; }}
-        .badge {{ display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px;
-                  font-weight:700; letter-spacing:1px; color:#000;
-                  background:{badge_color}; margin-left:10px; vertical-align:middle; }}
-        .spy-info {{ font-size:13px; color:{COLOR_MUTED}; margin-top:8px; }}
-        .section {{ background:{COLOR_SURFACE}; border:1px solid {COLOR_BORDER}; border-radius:8px;
-                    padding:16px 20px; margin-bottom:14px; }}
-        .section-title {{ font-size:14px; font-weight:700; color:{COLOR_GREEN};
-                          text-transform:uppercase; letter-spacing:1px; margin:0 0 12px; }}
-        .empty {{ font-size:13px; color:{COLOR_MUTED}; font-style:italic; }}
-        table {{ width:100%; border-collapse:collapse; font-size:13px; }}
-        th {{ text-align:left; padding:6px 8px; border-bottom:1px solid {COLOR_BORDER};
-              color:{COLOR_MUTED}; font-weight:600; font-size:11px; text-transform:uppercase;
-              letter-spacing:0.5px; }}
-        td {{ padding:7px 8px; border-bottom:1px solid {COLOR_BORDER}; color:{COLOR_TEXT}; vertical-align:middle; }}
-        tr:last-child td {{ border-bottom:none; }}
-        .ticker {{ font-weight:700; color:{COLOR_GREEN}; font-size:14px; }}
-        .num {{ font-family:'Courier New',monospace; }}
-        .rs-high {{ color:{COLOR_GREEN}; font-weight:600; }}
-        .rs-mid  {{ color:{COLOR_AMBER}; }}
-        .rs-low  {{ color:{COLOR_MUTED}; }}
-        .rr-good {{ color:{COLOR_GREEN}; font-weight:600; }}
-        .rr-ok   {{ color:{COLOR_TEXT}; }}
-        .footer  {{ font-size:11px; color:{COLOR_MUTED}; text-align:center; padding-top:12px; }}
-        .summary {{ background:{COLOR_BG}; border:1px solid {COLOR_BORDER}; border-radius:6px;
-                    padding:10px 16px; margin-bottom:16px; font-size:13px; }}
-        .summary span {{ color:{COLOR_GREEN}; font-weight:600; }}
-    """
-
-    # ── Section builder ───────────────────────────────────────────────────────
-    def _setup_rows(setups: List[Dict], show_rr: bool = True) -> str:
-        if not setups:
-            return '<p class="empty">No setups found.</p>'
-
-        headers = ["Ticker", "Entry", "Stop", "R:R", "RS Score"] if show_rr else ["Ticker", "Entry", "Stop", "RS Score"]
-
-        th_cells = "".join(f"<th>{h}</th>" for h in headers)
-        rows_html = f"<table><thead><tr>{th_cells}</tr></thead><tbody>"
-
-        for s in setups:
-            ticker   = s.get("ticker", "—")
-            entry    = s.get("entry",    0.0)
-            stop     = s.get("stop_loss", 0.0)
-            rr       = s.get("rr",        None)
-            rs_score = s.get("rs_score",  None)
-
-            entry_str = f"{entry:.2f}" if entry else "—"
-            stop_str  = f"{stop:.2f}"  if stop  else "—"
-
-            if rr is not None:
-                rr_class = "rr-good" if rr >= 2.5 else "rr-ok"
-                rr_str   = f'<span class="{rr_class}">{rr:.1f}×</span>'
-            else:
-                rr_str = "—"
-
-            if rs_score is not None:
-                rs_class = "rs-high" if rs_score >= 80 else ("rs-mid" if rs_score >= 50 else "rs-low")
-                rs_str   = f'<span class="{rs_class}">{int(rs_score)}</span>'
-            else:
-                rs_str = "—"
-
-            if show_rr:
-                cells = (
-                    f'<td class="ticker">{ticker}</td>'
-                    f'<td class="num">{entry_str}</td>'
-                    f'<td class="num">{stop_str}</td>'
-                    f'<td class="num">{rr_str}</td>'
-                    f'<td class="num">{rs_str}</td>'
-                )
-            else:
-                cells = (
-                    f'<td class="ticker">{ticker}</td>'
-                    f'<td class="num">{entry_str}</td>'
-                    f'<td class="num">{stop_str}</td>'
-                    f'<td class="num">{rs_str}</td>'
-                )
-
-            rows_html += f"<tr>{cells}</tr>"
-
-        rows_html += "</tbody></table>"
-        return rows_html
-
-    def _section(title: str, setups: List[Dict], show_rr: bool = True) -> str:
-        count = len(setups)
-        count_badge = f' <span style="color:{COLOR_MUTED};font-weight:400;font-size:12px;">({count})</span>'
-        return f"""
-        <div class="section">
-            <p class="section-title">{title}{count_badge}</p>
-            {_setup_rows(setups, show_rr)}
-        </div>"""
-
-    # SPY SMA50 context line
-    if spy_sma50 and spy_close:
-        spy_vs_sma50 = "above" if spy_close >= spy_sma50 else "below"
-        spy_info_html = (
-            f'<p class="spy-info">SPY {spy_close:.2f} &nbsp;|&nbsp; '
-            f'50-day SMA {spy_sma50:.2f} &nbsp;|&nbsp; {spy_vs_sma50} SMA50</p>'
-        )
-    elif spy_close:
-        spy_info_html = f'<p class="spy-info">SPY {spy_close:.2f}</p>'
-    else:
-        spy_info_html = ""
+    # Summary pills (only non-zero)
+    pills_html = ""
+    pill_items = [
+        ("VCP",  C_AMBER,  len(vcp_setups)),
+        ("BRK",  C_GREEN,  len(res_setups)),
+        ("HTF",  C_PINK,   len(htf_setups)),
+        ("PB",   C_BLUE,   len(pb_setups)),
+        ("LCE",  C_PURPLE, len(lce_setups)),
+        ("OPT",  C_MUTED,  len(opt_setups)),
+        ("WATCH",C_MUTED,  len(dry_setups)),
+    ]
+    for label, color, count in pill_items:
+        if count > 0:
+            pills_html += f"""<span style="display:inline-block;padding:3px 10px;
+                border-radius:12px;background:{color}18;border:1px solid {color}40;
+                color:{color};font-size:11px;font-weight:700;margin:2px;">{label} {count}</span>"""
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -224,39 +287,46 @@ def build_html_email(scan_results: Dict) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Swing Trading Digest — {date_str}</title>
-<style>{css}</style>
 </head>
-<body>
-<div class="wrapper">
+<body style="margin:0;padding:0;background:{C_BG};font-family:'Segoe UI',Arial,sans-serif;color:{C_TEXT};">
+<div style="max-width:680px;margin:0 auto;padding:20px 12px;">
 
   <!-- Header -->
-  <div class="header">
-    <h1>Swing Trading Digest
-      <span class="badge">{badge_label}</span>
-    </h1>
-    <p class="sub">{date_str}</p>
-    {spy_info_html}
+  <div style="margin-bottom:14px;">
+    <div style="font-size:11px;color:{C_MUTED};text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;">
+      Swing Trading Dashboard
+    </div>
+    <div style="font-size:24px;font-weight:700;color:{C_TEXT};letter-spacing:-0.3px;">
+      Morning Digest
+    </div>
+    <div style="font-size:12px;color:{C_MUTED};margin-top:2px;">{date_str} &nbsp;·&nbsp; {time_str}</div>
   </div>
 
-  <!-- Summary bar -->
-  <div class="summary">
-    <span>{total_setups}</span> setup{"s" if total_setups != 1 else ""} across all strategies &nbsp;|&nbsp;
-    VCP: <span>{len(vcp_setups)}</span> &nbsp;
-    VCP Dry: <span>{len(vcp_dry_setups)}</span> &nbsp;
-    Resistance: <span>{len(res_setups)}</span> &nbsp;
-    Pullback: <span>{len(pb_setups)}</span> &nbsp;
-    Options: <span>{len(opt_setups)}</span>
+  <!-- Regime block -->
+  {_regime_block(regime_data)}
+
+  <!-- Summary -->
+  <div style="background:{C_SURFACE};border:1px solid {C_BORDER};border-radius:8px;
+              padding:12px 16px;margin-bottom:14px;">
+    <div style="font-size:11px;color:{C_MUTED};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">
+      Today's Setups &nbsp;
+      <span style="font-size:18px;font-weight:700;color:{C_TEXT};vertical-align:middle;">{total}</span>
+    </div>
+    <div style="line-height:1.8;">{pills_html if pills_html else f'<span style="color:{C_MUTED};font-size:12px;">No setups today.</span>'}</div>
   </div>
 
-  {_section("VCP Breakouts", vcp_setups)}
-  {_section("VCP Dry Setups (Near-Breakout Watchlist)", vcp_dry_setups, show_rr=False)}
-  {_section("Resistance Breakouts", res_setups)}
-  {_section("Pullbacks", pb_setups)}
-  {_section("Options Plays", opt_setups)}
+  <!-- Sections (only rendered if non-empty) -->
+  {_section("VCP Breakouts", C_AMBER, vcp_setups)}
+  {_section("Resistance Breakouts", C_GREEN, res_setups, limit=5)}
+  {_section("High Tight Flag", C_PINK, htf_setups)}
+  {_section("Pullbacks", C_BLUE, pb_setups, limit=5)}
+  {_section("Low Cheat Entry", C_PURPLE, lce_setups)}
+  {_section("Options Plays", C_MUTED, opt_setups)}
+  {_section("Near-Breakout Watch", C_MUTED, dry_setups, limit=10, note="watchlist")}
 
   <!-- Footer -->
-  <div class="footer">
-    Generated at {time_str} &nbsp;&middot;&nbsp; Swing Trading Dashboard
+  <div style="text-align:center;font-size:10px;color:{C_MUTED};padding-top:10px;border-top:1px solid {C_BORDER};">
+    Generated at {time_str} &nbsp;·&nbsp; Swing Trading Dashboard &nbsp;·&nbsp; Do not trade based on email alone.
   </div>
 
 </div>
@@ -270,9 +340,9 @@ def build_html_email(scan_results: Dict) -> str:
 
 def send_digest(scan_results: Dict) -> None:
     """
-    Build the HTML email from scan_results and send via Gmail SMTP (SSL, port 465).
+    Build the HTML email from scan_results and send via Gmail SMTP (port 587, STARTTLS).
 
-    Reads credentials from environment variables (loaded by python-dotenv in main.py):
+    Reads credentials from environment variables (loaded from .env via systemd EnvironmentFile):
         EMAIL_FROM      — Gmail address to send from
         EMAIL_PASSWORD  — Gmail App Password (not account password)
         EMAIL_TO        — Recipient address (default: amit.izhari@gmail.com)
@@ -298,24 +368,25 @@ def send_digest(scan_results: Dict) -> None:
         date_str = now_et.strftime("%A, %B %-d %Y")
 
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"Swing Trading Digest — {date_str}"
+        msg["Subject"] = f"📊 Swing Digest — {date_str}"
         msg["From"]    = email_from
         msg["To"]      = email_to
 
-        # Plain-text fallback (minimal)
         regime_data = scan_results.get("regime") or {}
         regime_str  = regime_data.get("regime", "UNKNOWN")
+        regime_score = regime_data.get("regime_score", 0) or 0
         spy_close   = regime_data.get("spy_close", 0.0)
         total = (
             len(scan_results.get("vcp")              or []) +
-            len(scan_results.get("vcp_dry")          or []) +
-            len(scan_results.get("res_breakout")      or []) +
-            len(scan_results.get("pullback")          or []) +
-            len(scan_results.get("options_catalyst")  or [])
+            len(scan_results.get("res_breakout")     or []) +
+            len(scan_results.get("pullback")         or []) +
+            len(scan_results.get("htf")              or []) +
+            len(scan_results.get("lce")              or []) +
+            len(scan_results.get("options_catalyst") or [])
         )
         plain = (
             f"Swing Trading Digest — {date_str}\n"
-            f"Regime: {regime_str}  SPY: {spy_close:.2f}\n"
+            f"Regime: {regime_str} ({int(regime_score)}/100)  SPY: ${spy_close:.2f}\n"
             f"Total setups: {total}\n\n"
             "See HTML version for full details."
         )
@@ -328,14 +399,15 @@ def send_digest(scan_results: Dict) -> None:
             context = ssl.create_default_context(cafile=certifi.where())
         except ImportError:
             context = ssl.create_default_context()
+
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
             server.starttls(context=context)
             server.login(email_from, email_password)
             server.sendmail(email_from, email_to, msg.as_string())
 
         log.info(
-            "Email digest sent to %s  (setups=%d  regime=%s)",
-            email_to, total, regime_str,
+            "Email digest sent to %s  (setups=%d  regime=%s  score=%d)",
+            email_to, total, regime_str, int(regime_score),
         )
 
     except smtplib.SMTPAuthenticationError as exc:
