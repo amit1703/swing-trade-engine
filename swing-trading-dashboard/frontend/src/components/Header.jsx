@@ -47,7 +47,7 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
   }
 
   return (
-    <header className="relative flex flex-col border-b border-t-border select-none" style={{ background: 'var(--surface)' }}>
+    <header className="relative flex flex-col border-b border-t-border select-none bg-t-surface">
 
       {/* Progress bar — sits at very top, 0px height when idle */}
       <div className="progress-bar w-full" style={{ opacity: scanStatus.in_progress ? 1 : 0, transition: 'opacity 0.3s' }}>

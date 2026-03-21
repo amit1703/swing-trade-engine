@@ -6,82 +6,57 @@ export default function ScannerFilters({ filters, onFiltersChange }) {
   const { minScore, setupType, hotOnly, searchQuery } = filters
   const update = (key, val) => onFiltersChange({ ...filters, [key]: val })
 
-  const inputStyle = {
-    background: 'var(--panel)',
-    border: '1px solid var(--border)',
-    borderRadius: 6,
-    padding: '4px 8px',
-    color: 'var(--text)',
-    fontSize: 11,
-    fontFamily: '"IBM Plex Mono", monospace',
-    outline: 'none',
-  }
-
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      padding: '8px 16px',
-      background: 'var(--card)',
-      borderBottom: '1px solid var(--card-border)',
-      flexShrink: 0,
-      flexWrap: 'wrap',
-    }}>
-      <Filter size={13} color="var(--muted)" />
-      <span style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '0.08em', fontWeight: 600 }}>FILTER</span>
+    <div className="flex items-center gap-2.5 flex-wrap px-4 py-2 bg-t-card border-b border-t-cardBorder flex-shrink-0">
+      <Filter size={13} className="text-t-muted flex-shrink-0" />
+      <span className="font-mono text-[10px] text-t-muted tracking-wider font-semibold">FILTER</span>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 10, color: 'var(--muted)' }}>Score ≥</span>
+      <div className="flex items-center gap-1.5">
+        <span className="font-mono text-[10px] text-t-muted">Score ≥</span>
         <input
           type="number" min={0} max={100} step={5}
           value={minScore}
           onChange={e => update('minScore', Number(e.target.value))}
-          style={{ ...inputStyle, width: 50, textAlign: 'center' }}
+          className="w-12 text-center bg-t-panel border border-t-border rounded px-2 py-0.5 font-mono text-[11px] text-t-text outline-none focus:border-t-accent"
         />
       </div>
 
-      <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
+      <div className="w-px h-4 bg-t-border flex-shrink-0" />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div className="flex items-center gap-1">
         {SETUP_TYPES.map(t => (
           <button
             key={t}
             onClick={() => update('setupType', t)}
-            style={{
-              padding: '3px 7px', borderRadius: 5, fontSize: 9,
-              fontWeight: 700, fontFamily: '"IBM Plex Mono", monospace',
-              letterSpacing: '0.06em', border: 'none', cursor: 'pointer',
-              background: setupType === t ? 'rgba(0,200,122,0.15)' : 'var(--panel)',
-              color: setupType === t ? 'var(--go)' : 'var(--muted)',
-              outline: setupType === t ? '1px solid rgba(0,200,122,0.35)' : 'none',
-            }}
+            className={`font-mono text-[9px] font-bold px-2 py-0.5 rounded border transition-colors ${
+              setupType === t
+                ? 'bg-t-accent/10 text-t-accent border-t-accent/30'
+                : 'bg-t-panel text-t-muted border-transparent hover:text-t-text'
+            }`}
           >
             {t}
           </button>
         ))}
       </div>
 
-      <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
+      <div className="w-px h-4 bg-t-border flex-shrink-0" />
 
       <input
         value={searchQuery}
         onChange={e => update('searchQuery', e.target.value.toUpperCase())}
         placeholder="TICKER..."
-        style={{ ...inputStyle, width: 80 }}
+        className="w-20 bg-t-panel border border-t-border rounded px-2 py-0.5 font-mono text-[11px] text-t-text outline-none focus:border-t-accent"
       />
 
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
       <button
         onClick={() => update('hotOnly', !hotOnly)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700,
-          fontFamily: '"IBM Plex Mono", monospace',
-          background: hotOnly ? 'rgba(245,166,35,0.12)' : 'var(--panel)',
-          color: hotOnly ? 'var(--accent)' : 'var(--muted)',
-          border: `1px solid ${hotOnly ? 'rgba(245,166,35,0.35)' : 'var(--border)'}`,
-          cursor: 'pointer',
-        }}
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded border font-mono text-[10px] font-bold transition-colors ${
+          hotOnly
+            ? 'bg-t-accent/10 text-t-accent border-t-accent/30'
+            : 'bg-t-panel text-t-muted border-t-border hover:text-t-text'
+        }`}
       >
         <Flame size={11} /> HOT
       </button>

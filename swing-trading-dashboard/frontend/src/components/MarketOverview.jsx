@@ -124,16 +124,10 @@ export default function MarketOverview() {
   const fgLabel = fg?.label ?? '—'
   const fgClr   = fgColor(fgScore)
 
-  const panelBase = {
-    flexShrink: 0,
-    background: 'var(--surface)',
-    borderBottom: '1px solid var(--border)',
-  }
-
   // ── Collapsed strip ────────────────────────────────────────────────────────
   if (collapsed) {
     return (
-      <div style={{ ...panelBase, height: 26, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px' }}>
+      <div className="flex-shrink-0 bg-t-surface border-b border-t-border h-[26px] flex items-center gap-2.5 px-3">
         <ToggleBtn collapsed onClick={toggle} />
 
         {loading ? (
@@ -164,7 +158,7 @@ export default function MarketOverview() {
 
   // ── Expanded panel ─────────────────────────────────────────────────────────
   return (
-    <div style={panelBase}>
+    <div className="flex-shrink-0 bg-t-surface border-b border-t-border">
 
       {/* Row 1: toggle + F&G gauge + indices */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '5px 12px', borderBottom: '1px solid var(--border)', height: 42 }}>

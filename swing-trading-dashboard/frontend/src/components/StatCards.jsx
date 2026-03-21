@@ -163,7 +163,7 @@ function RegimeBanner({ regime }) {
 export default function StatCards({ regime }) {
   return (
     <>
-      <div className="stat-cards-row" style={{ display: 'flex', gap: 12, padding: '12px 16px 8px', flexShrink: 0 }}>
+      <div className="stat-cards-row flex gap-3 px-4 py-3 flex-shrink-0">
         <RegimeCard regime={regime} />
         <SpyCard regime={regime} />
       </div>
