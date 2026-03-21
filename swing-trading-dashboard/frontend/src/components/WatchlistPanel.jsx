@@ -50,7 +50,7 @@ function SectionHeader({ label, count }) {
   )
 }
 
-function SortHeader({ sort, onSort, isBrk }) {
+function SortHeader({ sort, onSort }) {
   const th = (label, col) => {
     const active = sort.col === col
     const arrow  = active ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''
@@ -209,7 +209,7 @@ function ShowMoreBtn({ allItems, showAll, onToggle }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, loading, favorites = [], onToggleFavorite }) {
+export default function WatchlistPanel({ items = [], selectedTicker, onSelectTicker, loading, favorites = [], onToggleFavorite }) {
   const [brkSort, setBrkSort] = useState({ col: 'dist', dir: 'asc' })
   const [pbSort,  setPbSort]  = useState({ col: 'dist', dir: 'asc' })
   const [showAllBrk, setShowAllBrk] = useState(false)
@@ -243,7 +243,7 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
       <>
         <SectionHeader label={label} count={sectionItems.length} />
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <SortHeader sort={sort} onSort={col => handleSort(setSort, sort, col)} isBrk={isBrk} />
+          <SortHeader sort={sort} onSort={col => handleSort(setSort, sort, col)} />
           <tbody>
             {visibleItems.map(item => (
               <WatchRow
