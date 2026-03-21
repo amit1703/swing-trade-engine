@@ -168,6 +168,8 @@ from services.macro_service import get_market_overview
 from services.narrative import generate_narrative
 from backtest_engine import BacktestEngine, BacktestParams, run_backtest_universe
 from execution.trailing_engine import compute_live_trail as _compute_live_trail
+from config.trailing_config import validate_trail_config
+from execution.trailing_engine import log_trail_config as _log_trail_config
 
 # Shared optimized params instance used by live scanner engines (engine6, etc.)
 _LIVE_PARAMS = BacktestParams()
@@ -656,6 +658,11 @@ def send_morning_email() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _semaphore, _scheduler
+
+    # Validate and log trailing stop configuration
+    validate_trail_config()   # raises AssertionError if mode != "ema20"
+    _log_trail_config()
+
     _semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     await init_db(DB_PATH)
     log.info("SQLite DB initialised at %s", DB_PATH)
