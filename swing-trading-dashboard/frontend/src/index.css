@@ -7,38 +7,38 @@
 /* ── Root variables ──────────────────────────────────── */
 :root {
   --bg:           #000000;
-  --surface:      #080c12;
-  --panel:        #0c111a;
-  --card:         #0f1520;
-  --card-border:  #1e2d42;
-  --border:       #1a2535;
-  --border-light: #253347;
-  --text:         #c8cdd6;
-  --muted:        #4a5a72;
-  --accent:       #F5A623;
+  --surface:      #0d0d0d;
+  --panel:        #111111;
+  --card:         #131313;
+  --card-border:  #222222;
+  --border:       #1e1e1e;
+  --border-light: #2a2a2a;
+  --text:         #e0e0e0;
+  --muted:        #555555;
+  --accent:       #50d8f0;
   --go:           #00c87a;
   --halt:         #ff2d55;
-  --blue:         #00C8FF;
+  --blue:         #4a9eff;
   --purple:       #9B6EFF;
   --radius-card:  12px;
   --shadow-card:  0 4px 24px rgba(0,0,0,0.5);
 
   /* shadcn/ui required variables — hex format, matching our palette */
   --background:            #000000;
-  --foreground:            #c8cdd6;
-  --card-foreground:       #c8cdd6;
-  --primary:               #F5A623;
+  --foreground:            #e0e0e0;
+  --card-foreground:       #e0e0e0;
+  --primary:               #50d8f0;
   --primary-foreground:    #000000;
-  --secondary:             #1a2535;
-  --secondary-foreground:  #c8cdd6;
-  --muted-foreground:      #4a5a72;
-  --accent-foreground:     #c8cdd6;
+  --secondary:             #1e1e1e;
+  --secondary-foreground:  #e0e0e0;
+  --muted-foreground:      #555555;
+  --accent-foreground:     #e0e0e0;
   --destructive:           #ff2d55;
   --destructive-foreground:#ffffff;
-  --popover:               #0f1520;
-  --popover-foreground:    #c8cdd6;
-  --ring:                  #F5A623;
-  --input:                 #1a2535;
+  --popover:               #131313;
+  --popover-foreground:    #e0e0e0;
+  --ring:                  #50d8f0;
+  --input:                 #1e1e1e;
   --radius:                0.5rem;
   --radius-md:             0.375rem;
 }
@@ -67,7 +67,7 @@ html, body, #root {
 ::-webkit-scrollbar-thumb:hover{ background: var(--accent); }
 
 /* ── Selection ───────────────────────────────────────── */
-::selection { background: rgba(245,166,35,0.25); color: #fff; }
+::selection { background: rgba(80,216,240,0.2); color: #fff; }
 
 /* ── Card utility ────────────────────────────────────── */
 .card {
@@ -142,10 +142,10 @@ html, body, #root {
     @apply border-l-2 border-t-accent;
   }
   .row-near-entry td {
-    background: rgba(245,166,35,0.035) !important;
+    background: rgba(80,216,240,0.035) !important;
   }
   .row-near-entry td:first-child {
-    border-left: 3px solid rgba(245,166,35,0.65) !important;
+    border-left: 3px solid rgba(80,216,240,0.65) !important;
     padding-left: 5px !important;
   }
 }
