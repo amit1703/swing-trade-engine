@@ -270,7 +270,7 @@ def _compute_score(oos_windows: list, atr_early: float, atr_extended: float) -> 
 
 _CSV_FIELDNAMES = [
     "trial_number", "score",
-    "trail_mult", "risk_per_trade", "max_position_pct",
+    "risk_per_trade", "max_position_pct",
     "atr_entry_early", "atr_entry_extended",
     "expectancy", "profit_factor", "avg_r", "max_dd", "dd_volatility", "n_trades",
 ] + [f"{s}_{m}" for s in _SETUP_TYPES for m in ("expectancy", "pf", "winrate", "n")]
