@@ -61,6 +61,14 @@ _TRAIL_ATR_BY_SETUP = {
     "BASE":         lambda: _constants.BASE_TRAIL_ATR_MULT,
 }
 
+# Keys captured from signal into trade state _setup_meta (exposed for tests)
+_BACKTEST_META_KEYS = (
+    "volume_ratio", "breakout_pct", "resistance_level",
+    "zone_upper", "support_level", "support_source", "zone_source",
+    "pullback_score", "days_since_breakout", "geometry",
+    "atr", "entry",
+)
+
 from filters import compute_regime_series, compute_regime_label_series, passes_liquidity, in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 from analytics import print_backtest_diagnostics as _print_backtest_diagnostics
@@ -978,11 +986,7 @@ class BacktestEngine:
                 continue
 
             # Capture engine-specific metadata for diagnostics
-            _meta_keys = ("volume_ratio", "breakout_pct", "resistance_level",
-                          "zone_upper", "support_source", "zone_source",
-                          "pullback_score", "days_since_breakout",
-                          "atr", "entry")  # entry = signal-day close; atr = ATR14 at signal
-            _setup_meta = {k: signal[k] for k in _meta_keys if k in signal}
+            _setup_meta = {k: signal[k] for k in _BACKTEST_META_KEYS if k in signal}
 
             # For RES_BREAKOUT in V5 scored mode, use params.brk_trail_mult as the per-trade
             # trail override. This lets Optuna tune trail independently from other setups.
