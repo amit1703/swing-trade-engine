@@ -1,196 +1,277 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 
-export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, loading, favorites = [], onToggleFavorite }) {
-  const [showAllBrk, setShowAllBrk] = useState(false)
-  const [showAllPb,  setShowAllPb]  = useState(false)
+// ── Pure sort helper ──────────────────────────────────────────────────────────
 
-  const brkItems = items
-    .filter(item => item.watchlist_source === 'RES_BREAKOUT')
+function atrDist(item) {
+  const dist  = item.distance_pct ?? 0
+  const atr   = item.atr ?? 0
+  const entry = item.entry ?? 0
+  if (atr > 0 && entry > 0) {
+    const atrPct = atr / entry * 100
+    return atrPct > 0 ? dist / atrPct : 99
+  }
+  return dist
+}
 
-  const pbItems = items
-    .filter(item => item.watchlist_source === 'PULLBACK')
+function sortItems(items, sort) {
+  return [...items].sort((a, b) => {
+    let av, bv
+    if (sort.col === 'dist') {
+      av = atrDist(a)
+      bv = atrDist(b)
+    } else {
+      // scr
+      av = a.setup_score ?? 0
+      bv = b.setup_score ?? 0
+    }
+    return sort.dir === 'asc' ? av - bv : bv - av
+  })
+}
 
-  const visibleBrk = showAllBrk ? brkItems : brkItems.slice(0, 15)
-  const visiblePb  = showAllPb  ? pbItems  : pbItems.slice(0, 15)
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-  const SectionHeader = ({ label, count }) => (
+const MONO = '"IBM Plex Mono", monospace'
+
+function SectionHeader({ label, count }) {
+  return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '6px 12px',
       borderBottom: '1px solid var(--border)',
       background: 'rgba(255,255,255,0.02)',
     }}>
-      <span style={{
-        fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase',
-        color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700,
-      }}>
+      <span style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', fontFamily: MONO, fontWeight: 700 }}>
         {label}
       </span>
-      <span style={{
-        fontSize: 9, padding: '1px 6px', borderRadius: 4,
-        background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)',
-        color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700,
-      }}>
+      <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)', color: 'var(--muted)', fontFamily: MONO, fontWeight: 700 }}>
         {count}
       </span>
     </div>
   )
+}
 
-  const ShowMoreBtn = ({ allItems, visible, onToggle }) => {
-    if (allItems.length <= 15) return null
+function SortHeader({ sort, onSort, isBrk }) {
+  const th = (label, col) => {
+    const active = sort.col === col
+    const arrow  = active ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''
     return (
-      <button
-        onClick={() => onToggle(v => !v)}
+      <th
+        onClick={col ? () => onSort(col) : undefined}
         style={{
-          width: '100%', padding: '6px',
-          background: 'transparent', border: 'none',
-          borderTop: '1px solid var(--border)',
-          color: 'var(--muted)', cursor: 'pointer',
-          fontSize: 9, letterSpacing: '0.1em',
+          padding: '4px 6px',
+          textAlign: col === 'ticker' ? 'left' : 'right',
+          fontSize: 8,
+          fontWeight: 700,
+          letterSpacing: '0.08em',
           textTransform: 'uppercase',
-          fontFamily: '"IBM Plex Mono", monospace',
+          fontFamily: MONO,
+          color: active ? 'var(--accent)' : 'var(--muted)',
+          cursor: col ? 'pointer' : 'default',
+          userSelect: 'none',
+          whiteSpace: 'nowrap',
+          borderBottom: '1px solid var(--border)',
+          background: 'rgba(255,255,255,0.02)',
         }}
       >
-        {visible ? `▲ Show top 15` : `▼ Show all ${allItems.length}`}
-      </button>
+        {label}{arrow}
+      </th>
     )
   }
 
-  const WatchRow = ({ item }) => {
-    const isSelected  = selectedTicker === item.ticker
-    const isBrk       = item.watchlist_source === 'RES_BREAKOUT'
-    const hasBlueDot  = !!item.rs_blue_dot
-    const isFavorited = favorites.includes(item.ticker)
+  return (
+    <thead>
+      <tr>
+        {th('Ticker', 'ticker')}
+        {th('Dist',   'dist')}
+        {th('Scr',    'scr')}
+        {th('Entry',  null)}
+        {th('SL',     null)}
+        {th('R:R',    null)}
+        {th('',       null)}
+      </tr>
+    </thead>
+  )
+}
 
-    const dist      = item.distance_pct ?? 0
-    const atrDist   = (item.atr > 0 && item.entry > 0)
-      ? (dist / (item.atr / item.entry * 100))
-      : null
-    const distLabel = isBrk
-      ? `${dist.toFixed(1)}%${atrDist !== null ? ` (${atrDist.toFixed(1)}atr)` : ''} away`
-      : `${dist.toFixed(1)}%${atrDist !== null ? ` (${atrDist.toFixed(1)}atr)` : ''} to sup`
-    const distColor = atrDist !== null
-      ? (atrDist < 0.5 ? 'var(--go)' : atrDist < 1.5 ? 'var(--accent)' : 'var(--muted)')
-      : (dist < 1.5 ? 'var(--go)' : dist < 3 ? 'var(--accent)' : 'var(--muted)')
+function WatchRow({ item, isBrk, isSelected, isFavorited, onSelect, onToggleFavorite }) {
+  const dist    = atrDist(item)
+  const hasBlueDot  = !!item.rs_blue_dot
 
-    const sourceLabel = isBrk
-      ? (item.zone_source ?? 'BRK').toUpperCase().slice(0, 6)
-      : (item.support_source ?? 'SUP').replace('_', ' ').slice(0, 6)
+  // DIST display
+  const distLabel  = dist < 99
+    ? `${dist.toFixed(1)}${isBrk ? 'atr↓' : 'atr↑'}`
+    : `${(item.distance_pct ?? 0).toFixed(1)}%`
+  const distColor  = dist < 0.5 ? 'var(--go)' : dist < 1.5 ? 'var(--accent)' : 'var(--muted)'
 
-    const badgeBg    = isBrk ? 'rgba(0,200,122,0.10)' : 'rgba(100,180,255,0.10)'
-    const badgeBord  = isBrk ? 'rgba(0,200,122,0.30)' : 'rgba(100,180,255,0.30)'
-    const badgeColor = isBrk ? 'var(--go)' : '#64b4ff'
+  // SCR
+  const scr      = item.setup_score
+  const scrStr   = (scr && scr > 0) ? String(Math.round(scr)) : '—'
+  const scrColor = scr >= 80 ? 'var(--go)' : scr >= 65 ? 'var(--accent)' : 'var(--muted)'
 
-    return (
-      <div
-        onClick={() => onSelectTicker(item.ticker)}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '8px 12px',
-          borderBottom: '1px solid var(--border)',
-          borderLeft: isSelected
-            ? '3px solid var(--accent)'
-            : isBrk
-            ? '3px solid rgba(0,200,122,0.4)'
-            : '3px solid rgba(100,180,255,0.4)',
-          background: isSelected ? 'rgba(245,166,35,0.06)' : 'transparent',
-          cursor: 'pointer',
-          transition: 'background 0.1s',
-          gap: 8,
-        }}
-        onMouseEnter={e => {
-          if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.background = isSelected ? 'rgba(245,166,35,0.06)' : 'transparent'
-        }}
-      >
-        {/* Left: ticker + blue dot */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
-            <span style={{
-              fontSize: 12, fontWeight: 700, letterSpacing: '0.03em',
-              color: isSelected ? 'var(--accent)' : 'var(--text)',
-              fontFamily: '"IBM Plex Mono", monospace',
-            }}>
-              {item.ticker}
-            </span>
-            {hasBlueDot && (
-              <span style={{ color: 'var(--blue)', fontSize: 9 }}>●</span>
-            )}
-          </div>
-          <span style={{
-            fontSize: 9, color: distColor,
-            fontFamily: '"IBM Plex Mono", monospace',
-          }}>
-            {distLabel}
+  // ENTRY / SL
+  const entryStr = (item.entry  && item.entry  > 0) ? `$${item.entry.toFixed(2)}`    : '—'
+  const slStr    = (item.stop_loss && item.stop_loss > 0) ? `$${item.stop_loss.toFixed(2)}` : '—'
+
+  // R:R
+  const rr       = item.rr
+  const rrStr    = (rr && rr > 0) ? `${Number(rr).toFixed(1)}×` : '—'
+  const rrColor  = rr >= 2 ? 'var(--go)' : 'var(--muted)'
+
+  const borderColor = isSelected
+    ? 'var(--accent)'
+    : isBrk
+    ? 'rgba(0,200,122,0.4)'
+    : 'rgba(100,180,255,0.4)'
+
+  const td = (content, opts = {}) => (
+    <td style={{
+      padding: '5px 6px',
+      textAlign: opts.align ?? 'right',
+      fontSize: opts.size ?? 10,
+      fontFamily: MONO,
+      color: opts.color ?? 'var(--text)',
+      fontWeight: opts.bold ? 700 : 400,
+      borderBottom: '1px solid var(--border)',
+      whiteSpace: 'nowrap',
+    }}>
+      {content}
+    </td>
+  )
+
+  return (
+    <tr
+      onClick={onSelect}
+      style={{
+        borderLeft: `3px solid ${borderColor}`,
+        background: isSelected ? 'rgba(245,166,35,0.06)' : 'transparent',
+        cursor: 'pointer',
+        transition: 'background 0.1s',
+      }}
+      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+      onMouseLeave={e => { e.currentTarget.style.background = isSelected ? 'rgba(245,166,35,0.06)' : 'transparent' }}
+    >
+      {/* Ticker */}
+      <td style={{
+        padding: '5px 6px',
+        textAlign: 'left',
+        borderBottom: '1px solid var(--border)',
+        whiteSpace: 'nowrap',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: MONO, color: isSelected ? 'var(--accent)' : 'var(--go)', letterSpacing: '0.03em' }}>
+            {item.ticker}
           </span>
-        </div>
-
-        {/* Right: source badge + star + TV link */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{
-            fontSize: 8, padding: '2px 5px', borderRadius: 4,
-            fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700,
-            letterSpacing: '0.04em',
-            background: badgeBg, color: badgeColor, border: `1px solid ${badgeBord}`,
-          }}>
-            {sourceLabel}
-          </span>
+          {hasBlueDot && <span style={{ color: 'var(--blue)', fontSize: 8 }}>●</span>}
           <button
             onClick={e => { e.stopPropagation(); onToggleFavorite?.(item.ticker) }}
-            title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: '1px 2px', fontSize: 11, lineHeight: 1,
-              color: isFavorited ? 'var(--accent)' : 'var(--muted)',
-              opacity: isFavorited ? 1 : 0.4,
-              transition: 'color 0.15s, opacity 0.15s',
-            }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, color: isFavorited ? 'var(--accent)' : 'var(--muted)', opacity: isFavorited ? 1 : 0.4, transition: 'color 0.15s, opacity 0.15s' }}
             onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--accent)' }}
             onMouseLeave={e => { e.currentTarget.style.opacity = isFavorited ? '1' : '0.4'; e.currentTarget.style.color = isFavorited ? 'var(--accent)' : 'var(--muted)' }}
           >
             {isFavorited ? '★' : '☆'}
           </button>
-          <a
-            href={`https://www.tradingview.com/chart/?symbol=${item.ticker}&interval=D`}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
-            style={{
-              fontSize: 8, padding: '2px 4px', borderRadius: 3,
-              border: '1px solid rgba(245,166,35,0.25)',
-              color: 'rgba(245,166,35,0.5)',
-              fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700,
-              textDecoration: 'none',
-            }}
-          >
-            TV
-          </a>
         </div>
-      </div>
-    )
+      </td>
+
+      {td(distLabel, { color: distColor })}
+      {td(scrStr,    { color: scrColor })}
+      {td(entryStr,  { size: 10 })}
+      {td(slStr,     { color: 'var(--halt)' })}
+      {td(rrStr,     { color: rrColor })}
+
+      {/* TV link */}
+      <td style={{ padding: '5px 6px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>
+        <a
+          href={`https://www.tradingview.com/chart/?symbol=${item.ticker}&interval=D`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          style={{ fontSize: 8, padding: '1px 3px', borderRadius: 2, border: '1px solid rgba(245,166,35,0.25)', color: 'rgba(245,166,35,0.5)', fontFamily: MONO, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}
+        >
+          TV
+        </a>
+      </td>
+    </tr>
+  )
+}
+
+function ShowMoreBtn({ allItems, showAll, onToggle }) {
+  if (allItems.length <= 15) return null
+  return (
+    <button
+      onClick={() => onToggle(v => !v)}
+      style={{ width: '100%', padding: '6px', background: 'transparent', border: 'none', borderTop: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: MONO }}
+    >
+      {showAll ? `▲ Show top 15` : `▼ Show all ${allItems.length}`}
+    </button>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, loading, favorites = [], onToggleFavorite }) {
+  const [brkSort, setBrkSort] = useState({ col: 'dist', dir: 'asc' })
+  const [pbSort,  setPbSort]  = useState({ col: 'dist', dir: 'asc' })
+  const [showAllBrk, setShowAllBrk] = useState(false)
+  const [showAllPb,  setShowAllPb]  = useState(false)
+
+  const handleSort = (setSort, currentSort, col) => {
+    if (currentSort.col === col) {
+      setSort(s => ({ ...s, dir: s.dir === 'asc' ? 'desc' : 'asc' }))
+    } else {
+      // dist always starts asc (closest first); scr starts desc (highest first)
+      setSort({ col, dir: col === 'dist' ? 'asc' : 'desc' })
+    }
   }
 
+  const brkItems = useMemo(() =>
+    sortItems(items.filter(i => i.watchlist_source === 'RES_BREAKOUT'), brkSort),
+    [items, brkSort]
+  )
+  const pbItems = useMemo(() =>
+    sortItems(items.filter(i => i.watchlist_source === 'PULLBACK'), pbSort),
+    [items, pbSort]
+  )
+
+  const visibleBrk = showAllBrk ? brkItems : brkItems.slice(0, 15)
+  const visiblePb  = showAllPb  ? pbItems  : pbItems.slice(0, 15)
   const totalCount = brkItems.length + pbItems.length
+
+  const renderSection = (label, sectionItems, visibleItems, isBrk, sort, setSort, showAll, setShowAll) => {
+    if (sectionItems.length === 0) return null
+    return (
+      <>
+        <SectionHeader label={label} count={sectionItems.length} />
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <SortHeader sort={sort} onSort={col => handleSort(setSort, sort, col)} isBrk={isBrk} />
+          <tbody>
+            {visibleItems.map(item => (
+              <WatchRow
+                key={item.ticker}
+                item={item}
+                isBrk={isBrk}
+                isSelected={selectedTicker === item.ticker}
+                isFavorited={favorites.includes(item.ticker)}
+                onSelect={() => onSelectTicker(item.ticker)}
+                onToggleFavorite={onToggleFavorite}
+              />
+            ))}
+          </tbody>
+        </table>
+        <ShowMoreBtn allItems={sectionItems} showAll={showAll} onToggle={setShowAll} />
+      </>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-t-panel">
 
-      {/* Header */}
+      {/* Panel header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-t-border flex-shrink-0">
-        <span style={{
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
-          textTransform: 'uppercase', color: 'var(--muted)',
-          fontFamily: '"IBM Plex Mono", monospace',
-        }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted)', fontFamily: MONO }}>
           Watchlist
         </span>
-        <span style={{
-          fontSize: 9, padding: '1px 7px', borderRadius: 4,
-          background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)',
-          color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700,
-        }}>
+        <span style={{ fontSize: 9, padding: '1px 7px', borderRadius: 4, background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)', color: 'var(--accent)', fontFamily: MONO, fontWeight: 700 }}>
           {totalCount}
         </span>
       </div>
@@ -200,11 +281,7 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12 }}>
             {[...Array(4)].map((_, i) => (
-              <div key={i} style={{
-                height: 48, borderRadius: 6,
-                background: 'rgba(255,255,255,0.04)',
-                opacity: 1 - i * 0.2,
-              }} />
+              <div key={i} style={{ height: 34, borderRadius: 6, background: 'rgba(255,255,255,0.04)', opacity: 1 - i * 0.2 }} />
             ))}
           </div>
         ) : totalCount === 0 ? (
@@ -213,20 +290,8 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
           </div>
         ) : (
           <>
-            {brkItems.length > 0 && (
-              <>
-                <SectionHeader label="Near Breakout" count={brkItems.length} />
-                {visibleBrk.map(item => <WatchRow key={item.ticker} item={item} />)}
-                <ShowMoreBtn allItems={brkItems} visible={showAllBrk} onToggle={setShowAllBrk} />
-              </>
-            )}
-            {pbItems.length > 0 && (
-              <>
-                <SectionHeader label="Pullback Setup" count={pbItems.length} />
-                {visiblePb.map(item => <WatchRow key={item.ticker} item={item} />)}
-                <ShowMoreBtn allItems={pbItems} visible={showAllPb} onToggle={setShowAllPb} />
-              </>
-            )}
+            {renderSection('Near Breakout', brkItems, visibleBrk, true,  brkSort, setBrkSort, showAllBrk, setShowAllBrk)}
+            {renderSection('Pullback Setup', pbItems,  visiblePb,  false, pbSort,  setPbSort,  showAllPb,  setShowAllPb)}
           </>
         )}
       </div>
