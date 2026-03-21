@@ -406,9 +406,10 @@ def _manage_open_trade(
     target = state["take_profit"]
     entry  = state["entry_price"]
 
-    # 1. Stop hit first (low ≤ stop → filled at stop price)
+    # 1. Stop hit first (low ≤ stop → filled at worst of open vs stop — gap-realistic)
     if low <= stop:
-        return True, stop, "STOP"
+        exit_price = min(bar["open"], stop)
+        return True, exit_price, "STOP"
 
     # 2. Target hit (high ≥ target → filled at target)
     if high >= target:
