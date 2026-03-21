@@ -459,7 +459,7 @@ def _manage_open_trade(
         state["_bars_since_entry"] = bars
 
         # Initialise prev_ema20 on first bar
-        prev_ema20 = state.get("_prev_ema20") or ema20
+        prev_ema20 = ema20 if state.get("_prev_ema20") is None else state["_prev_ema20"]
 
         if not state.get("_trail_triggered", False) and bars >= 2:
             ref_level = state.get("_ref_level")
