@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { BarChart2, Activity, Settings as SettingsIcon } from 'lucide-react'
 
 import {
   fetchRegime,
@@ -42,6 +43,8 @@ import EngineHealthPanel from './components/EngineHealthPanel.jsx'
 import DebugDrawer      from './components/DebugDrawer.jsx'
 import BacktestPanel    from './components/BacktestPanel.jsx'
 import DiagnosticsTab   from './components/DiagnosticsTab.jsx'
+import BottomTabBar       from './components/BottomTabBar.jsx'
+import MobileSignalSheet  from './components/MobileSignalSheet.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -90,6 +93,7 @@ export default function App() {
   const [favorites,       setFavorites      ] = useState(() => {
     try { return JSON.parse(localStorage.getItem('swt_favorites') ?? '[]') } catch { return [] }
   })
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
 
   const toggleFavorite = useCallback((ticker) => {
     setFavorites(prev => {
@@ -146,7 +150,9 @@ export default function App() {
 
   // ── Ticker click → load chart data + analysis; optionally switch to scanner
   const handleTickerClick = useCallback(async (ticker, switchTab = true) => {
-    if (switchTab) setActivePage('scanner')
+    const isMobile = window.innerWidth <= 640
+    if (switchTab && !isMobile) setActivePage('scanner')
+    if (isMobile) setMobileSheetOpen(true)
     setSelectedTicker(ticker)
     setChartData(null)
     setLoadingChart(true)
@@ -308,7 +314,7 @@ export default function App() {
       <Sidebar activePage={activePage} onNavigate={setActivePage} />
 
       {/* ── Main content ─────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 pb-[56px] sm:pb-0">
 
         {/* Top bar */}
         <TopBar
@@ -370,7 +376,7 @@ export default function App() {
 
               {/* Right panel — hidden in focus mode and on mobile */}
               {!chartFocus && (
-                <div className="mobile-hidden" style={{ display: 'contents' }}>
+                <div className="intel-panel-desktop">
                   <StockIntelPanel
                     setup={selectedSetup}
                     livePrices={livePrices}
@@ -464,6 +470,35 @@ export default function App() {
           </div>
         )}
 
+        {/* ── MORE PAGE (mobile only — desktop sidebar never sets this) ── */}
+        {activePage === 'more' && (
+          <div style={{ flex: 1, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { id: 'analytics',   label: 'Analytics',   Icon: BarChart2     },
+              { id: 'diagnostics', label: 'Diagnostics', Icon: Activity      },
+              { id: 'settings',    label: 'Settings',    Icon: SettingsIcon  },
+            ].map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActivePage(id)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'var(--card)', border: '1px solid var(--card-border)',
+                  borderRadius: 10, padding: '14px 16px', cursor: 'pointer',
+                  color: 'var(--text)', fontFamily: '"IBM Plex Mono", monospace',
+                  fontSize: 13, textAlign: 'left',
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Icon size={16} strokeWidth={1.75} />
+                  <span>{label}</span>
+                </span>
+                <span style={{ color: 'var(--muted)', fontSize: 18 }}>›</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ── SETTINGS — stub ───────────────────────────────── */}
         {['settings'].includes(activePage) && (
           <div style={{
@@ -478,8 +513,23 @@ export default function App() {
         )}
       </div>
 
+      {/* ── Bottom tab bar (mobile only) ─────────────────────── */}
+      <BottomTabBar
+        activePage={activePage}
+        onNavigate={(page) => { setActivePage(page); setMobileSheetOpen(false) }}
+      />
+
       {/* ── Overlays (all pages) ─────────────────────────────── */}
       <SystemGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
+      {mobileSheetOpen && (
+        <MobileSignalSheet
+          onClose={() => setMobileSheetOpen(false)}
+          setup={selectedSetup}
+          livePrices={livePrices}
+          analysis={analysis?.ticker === selectedTicker ? analysis : null}
+          analysisLoading={analysisLoading}
+        />
+      )}
       {devMode && debugTicker && (
         <DebugDrawer
           ticker={debugTicker}
