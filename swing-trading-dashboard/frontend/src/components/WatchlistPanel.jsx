@@ -81,7 +81,7 @@ function SortHeader({ sort, onSort, isBrk }) {
   return (
     <thead>
       <tr>
-        {th('Ticker', 'ticker')}
+        {th('Ticker', null)}
         {th('Dist',   'dist')}
         {th('Scr',    'scr')}
         {th('Entry',  null)}
