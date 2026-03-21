@@ -161,6 +161,11 @@ class BacktestParams:
     # ── Take-profit multiplier ───────────── WFO mean across 4 windows (5.80) ─
     tp_multiple:   float = 5.80
 
+    # ── Trail mode ───────────────────────────────────────────────────────────
+    # "ema20" = dynamic EMA20-based trail (Phase 1 initial → Phase 2 EMA20)
+    # "atr"   = legacy fixed ATR multiplier (backward-compatible fallback)
+    trail_mode: str = "ema20"
+
 
 # Base scores for non-pullback signals (used in scored mode post-signal gate)
 _SIGNAL_BASE_SCORES: dict = {
@@ -1035,6 +1040,14 @@ class BacktestEngine:
                 "_regime":            signal.get("_regime", "UNKNOWN"),
                 "_rs_score":          float(_rs_t.get("rs_score", 0.0)),
                 "_setup_meta":        _setup_meta,
+                # ── EMA20 trail state ─────────────────────────────────────────────
+                "_trail_mode":       (self.params.trail_mode
+                                      if self.params is not None
+                                      else _constants.TRAIL_MODE),
+                "_trail_triggered":  False,
+                "_bars_since_entry": 0,
+                "_ref_level":        _extract_ref_level(_setup_meta, _sig_type),
+                "_prev_ema20":       None,
             })
 
         # ── 5. Close any still-open trades at end of period ───────────────

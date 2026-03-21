@@ -48,3 +48,15 @@ def test_extract_ref_level_missing_key_returns_none():
     from backtest_engine import _extract_ref_level
     assert _extract_ref_level({}, "PULLBACK") is None
     assert _extract_ref_level({}, "VCP") is None
+
+
+def test_backtest_params_default_trail_mode():
+    """Default trail_mode must be 'ema20'."""
+    from backtest_engine import BacktestParams
+    assert BacktestParams().trail_mode == "ema20"
+
+def test_backtest_params_atr_mode():
+    """trail_mode='atr' must be accepted."""
+    from backtest_engine import BacktestParams
+    p = BacktestParams(trail_mode="atr")
+    assert p.trail_mode == "atr"
