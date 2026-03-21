@@ -315,7 +315,7 @@ export default function App() {
           activePage={activePage}
           scanStatus={scanStatus}
           onRunScan={handleRunScan}
-          onSearchTicker={(t) => handleTickerClick(t, false)}
+          onSearchTicker={(t) => handleTickerClick(t, true)}
           devMode={devMode}
           dryRun={dryRun}
           onToggleDev={() => {
@@ -374,7 +374,7 @@ export default function App() {
                   <StockIntelPanel
                     setup={selectedSetup}
                     livePrices={livePrices}
-                    analysis={analysis}
+                    analysis={analysis?.ticker === selectedTicker ? analysis : null}
                     analysisLoading={analysisLoading}
                   />
                 </div>
