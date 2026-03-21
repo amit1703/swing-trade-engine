@@ -79,13 +79,10 @@ export default function PortfolioTab({ onTickerClick }) {
   const openCount = trades.length
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--bg)' }}>
+    <div className="flex flex-col h-full overflow-hidden bg-t-bg">
 
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <div
-        className="flex items-center gap-6 px-5 py-3 border-b flex-shrink-0"
-        style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
-      >
+      <div className="flex items-center gap-6 px-5 py-3 border-b border-t-border flex-shrink-0 bg-t-surface">
         <div className="flex flex-col gap-0.5">
           <span className="text-[9px] tracking-widest uppercase text-t-muted">Open Positions</span>
           <span className="font-condensed text-[22px] font-700 tracking-tight text-t-accent leading-none">
@@ -314,7 +311,7 @@ export default function PortfolioTab({ onTickerClick }) {
 
       {/* ── Closed Trades History ────────────────────────────────────────── */}
       {closedTrades.length > 0 && (
-        <div className="flex-shrink-0 border-t" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+        <div className="flex-shrink-0 border-t border-t-border bg-t-surface">
           <div className="px-5 py-2 flex items-center gap-4" style={{ borderBottom: '1px solid var(--border)' }}>
             <span style={{
               fontFamily: 'Barlow Condensed, sans-serif',

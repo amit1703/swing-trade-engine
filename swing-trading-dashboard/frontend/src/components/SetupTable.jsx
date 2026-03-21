@@ -29,7 +29,7 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
     : { badge: 'bg-t-accentDim text-t-accent border border-t-accent/30', dot: '#F5A623', sectionDot: 'bg-t-accent' }
 
   return (
-    <div className="flex flex-col border-b border-t-border" style={{ background: 'var(--panel)' }}>
+    <div className="flex flex-col border-b border-t-border bg-t-panel">
 
       {/* Section header */}
       <div className="section-label">

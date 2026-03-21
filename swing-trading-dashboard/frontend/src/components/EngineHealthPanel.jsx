@@ -44,7 +44,7 @@ export default function EngineHealthPanel({ stats }) {
   ]
 
   return (
-    <div style={{ borderTop: '1px solid var(--border)', padding: '8px 12px', background: 'var(--panel)' }}>
+    <div className="border-t border-t-border px-3 py-2 bg-t-panel">
       {/* Header row */}
       <div
         className="flex items-center justify-between cursor-pointer"

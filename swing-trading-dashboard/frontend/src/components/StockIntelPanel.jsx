@@ -138,16 +138,7 @@ function V5AnalysisSection({ analysis }) {
 export default function StockIntelPanel({ setup, livePrices, analysis, analysisLoading }) {
   if (!setup) {
     return (
-      <div style={{
-        width: 320, flexShrink: 0,
-        background: 'var(--card)',
-        border: '1px solid var(--card-border)',
-        borderRadius: 12,
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        gap: 8, color: 'var(--muted)',
-        padding: 20,
-      }}>
+      <div className="w-[320px] flex-shrink-0 bg-t-card border border-t-cardBorder rounded-xl flex flex-col items-center justify-center gap-2 text-t-muted p-5">
         <Target size={28} strokeWidth={1} color="var(--border-light)" />
         <span style={{ fontSize: 11, textAlign: 'center', lineHeight: 1.5 }}>
           Select a stock from the<br />scanner to view signals
@@ -169,15 +160,7 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
   const rr = setup.rr ? Number(setup.rr).toFixed(2) : null
 
   return (
-    <div style={{
-      width: 320, flexShrink: 0,
-      background: 'var(--card)',
-      border: '1px solid var(--card-border)',
-      borderRadius: 12,
-      display: 'flex', flexDirection: 'column',
-      overflowY: 'auto',
-      overflowX: 'hidden',
-    }}>
+    <div className="w-[320px] flex-shrink-0 bg-t-card border border-t-cardBorder rounded-xl flex flex-col overflow-y-auto overflow-x-hidden">
       {/* Header */}
       <div style={{
         padding: '14px 16px',

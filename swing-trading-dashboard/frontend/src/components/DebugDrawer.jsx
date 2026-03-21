@@ -78,10 +78,8 @@ export default function DebugDrawer({ ticker, data, loading, onClose }) {
       />
 
       {/* Drawer */}
-      <div style={{
+      <div className="bg-t-surface border-l border-t-border flex flex-col overflow-hidden" style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 340, zIndex: 50,
-        background: 'var(--surface)', borderLeft: '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
         boxShadow: '-8px 0 32px rgba(0,0,0,0.6)',
       }}>
         {/* Header */}

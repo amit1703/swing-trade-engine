@@ -175,19 +175,10 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
   const totalCount = brkItems.length + pbItems.length
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column',
-      height: '100%', overflow: 'hidden',
-      background: 'var(--panel)',
-    }}>
+    <div className="flex flex-col h-full overflow-hidden bg-t-panel">
 
       {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 12px',
-        borderBottom: '1px solid var(--border)',
-        flexShrink: 0,
-      }}>
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-t-border flex-shrink-0">
         <span style={{
           fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
           textTransform: 'uppercase', color: 'var(--muted)',
@@ -205,7 +196,7 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12 }}>
             {[...Array(4)].map((_, i) => (
@@ -217,12 +208,7 @@ export default function WatchlistPanel({ items, selectedTicker, onSelectTicker, 
             ))}
           </div>
         ) : totalCount === 0 ? (
-          <div style={{
-            padding: '32px 16px', textAlign: 'center',
-            color: 'var(--muted)', fontSize: 10,
-            fontFamily: '"IBM Plex Mono", monospace',
-            letterSpacing: '0.1em', textTransform: 'uppercase',
-          }}>
+          <div className="py-8 px-4 text-center text-[10px] font-mono tracking-widest uppercase text-t-muted">
             No items — run a scan
           </div>
         ) : (

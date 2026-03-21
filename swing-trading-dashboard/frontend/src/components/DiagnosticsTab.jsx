@@ -312,7 +312,7 @@ export default function DiagnosticsTab() {
   const hasData = (s.total_trades ?? 0) > 0
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+    <div className="px-6 py-5 max-w-[1100px] mx-auto">
       {/* Page header */}
       <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 22, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text)', marginBottom: 4 }}>
         Strategy Diagnostics

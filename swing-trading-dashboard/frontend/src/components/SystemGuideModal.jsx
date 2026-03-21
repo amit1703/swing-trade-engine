@@ -37,13 +37,8 @@ export default function SystemGuideModal({ isOpen, onClose }) {
       {/* Panel — stop clicks propagating to backdrop */}
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%', maxWidth: 820,
-          maxHeight: '85vh',
-          background: 'var(--surface)',
-          border: '1px solid var(--border-light)',
-          display: 'flex', flexDirection: 'column',
-        }}
+        className="bg-t-surface border border-t-border flex flex-col"
+        style={{ width: '100%', maxWidth: 820, maxHeight: '85vh' }}
       >
         {/* Amber accent bar */}
         <div style={{ height: 3, background: 'var(--accent)', flexShrink: 0 }} />
