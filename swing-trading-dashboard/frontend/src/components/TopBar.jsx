@@ -9,6 +9,7 @@ const PAGE_TITLES = {
   analytics:   'Analytics',
   diagnostics: 'Diagnostics',
   settings:    'Settings',
+  more:        'More',
 }
 
 export default function TopBar({

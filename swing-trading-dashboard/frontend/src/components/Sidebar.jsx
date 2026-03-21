@@ -20,7 +20,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar({ activePage, onNavigate }) {
   return (
-    <nav className="w-56 flex-shrink-0 bg-t-panel border-r border-t-border flex flex-col h-full">
+    <nav className="hidden sm:flex w-56 flex-shrink-0 bg-t-panel border-r border-t-border flex-col h-full">
 
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-4 py-4 border-b border-t-border flex-shrink-0">
