@@ -38,7 +38,8 @@ No backend changes needed — all required fields (`entry`, `stop_loss`, `rr`, `
 - Each section (BRK, PB) has **independent** sort state: `{ col, dir }`.
 - Default: `col = 'dist'`, `dir = 'asc'` (closest to entry first).
 - Clicking the active column header toggles `asc` ↔ `desc`.
-- Clicking an inactive column sets it as active with `desc` (except `dist` which starts `asc`).
+- Clicking `dist` when inactive → sets `col = 'dist'`, `dir = 'asc'` (closest first).
+- Clicking `scr` when inactive → sets `col = 'scr'`, `dir = 'desc'` (highest score first).
 - Sortable columns: `dist` and `scr`. Other columns are display-only.
 - Active sort column header shown in `var(--accent)` with ▲/▼ arrow. Inactive headers in `var(--muted)`.
 
@@ -53,6 +54,10 @@ const atrDist = (item.atr > 0 && item.entry > 0)
 ```
 
 Used for both display in DIST column and for sorting when `col === 'dist'`.
+
+**Semantics differ per section:** BRK `atrDist` = ATRs below resistance; PB `atrDist` = ATRs above support. The DIST cell appends a directional suffix to preserve this context: BRK shows e.g. `0.3atr↓`, PB shows `0.3atr↑`.
+
+**Zero/null guards:** Engine2-sourced WATCHLIST items have `rr = 0` and `stop_loss = 0`. Treat `=== 0` the same as `null` — display `—` in SCR (if 0), ENTRY (if 0), SL (if 0), and R:R (if 0) cells.
 
 ---
 
@@ -102,6 +107,12 @@ Helper `sortItems(items, sort)` — pure sort function, returns sorted copy.
 - Selected ticker row: `background: rgba(245,166,35,0.06)`, `border-left: 3px solid var(--accent)`.
 - BRK left border: `3px solid rgba(0,200,122,0.4)`. PB: `3px solid rgba(100,180,255,0.4)`.
 - Font sizes: header labels 8px, data rows 10–11px mono.
+
+---
+
+## Intentional removals
+
+- **Source badge** (`zone_source` / `support_source` labels like "KDE", "TDL") — removed. The section grouping (BRK vs PB) and the left-border color already communicate the setup type. The DIST cell direction suffix (↓/↑) provides the remaining context.
 
 ---
 
