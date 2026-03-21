@@ -136,28 +136,55 @@ function V5AnalysisSection({ analysis }) {
 }
 
 export default function StockIntelPanel({ setup, livePrices, analysis, analysisLoading }) {
-  if (!setup) {
+  // Synthesize a display object from analysis when setup (scan result) is not available.
+  // The `setup` prop parameter is NOT renamed — it stays as-is so the ?? expression can read it.
+  const displaySetup = setup ?? (analysis ? {
+    ticker:       analysis.ticker,
+    setup_score:  analysis.score,
+    setup_type:   analysis.setup_type ?? analysis.detected_setup ?? null,
+    entry:        analysis.entry        ?? 0,
+    stop_loss:    analysis.stop_loss    ?? 0,
+    take_profit:  analysis.take_profit  ?? 0,
+    rr:           analysis.rr           ?? 0,
+    rs_score:     analysis.signals?.rs_score  ?? null,
+    vol_ratio:    analysis.signals?.vol_ratio ?? null,
+    is_vol_surge: (analysis.signals?.vol_ratio ?? 0) > 1.5,
+    rs_blue_dot:  false,
+  } : null)
+
+  // Replace the old `if (!setup)` block entirely with this:
+  if (!displaySetup) {
+    if (analysisLoading) {
+      return (
+        <div className="w-[320px] flex-shrink-0 bg-t-card border border-t-cardBorder rounded-xl flex flex-col p-4 gap-3">
+          <div className="shimmer-row" style={{ height: 64 }} />
+          <div className="shimmer-row" style={{ height: 40 }} />
+          <div className="shimmer-row" style={{ height: 80 }} />
+        </div>
+      )
+    }
     return (
       <div className="w-[320px] flex-shrink-0 bg-t-card border border-t-cardBorder rounded-xl flex flex-col items-center justify-center gap-2 text-t-muted p-5">
         <Target size={28} strokeWidth={1} color="var(--border-light)" />
         <span style={{ fontSize: 11, textAlign: 'center', lineHeight: 1.5 }}>
-          Select a stock from the<br />scanner to view signals
+          Select a stock to view signals
         </span>
       </div>
     )
   }
 
-  const livePrice    = livePrices?.[setup.ticker]
-  const dist         = (livePrice && setup.entry > 0)
-    ? ((livePrice - setup.entry) / setup.entry) * 100
+  // All references below use `displaySetup` (not `setup`)
+  const livePrice    = livePrices?.[displaySetup.ticker]
+  const dist         = (livePrice && displaySetup.entry > 0)
+    ? ((livePrice - displaySetup.entry) / displaySetup.entry) * 100
     : null
   const isAboveEntry = dist !== null && dist >= 0
 
-  const risk = setup.entry > 0 && setup.stop_loss > 0
-    ? ((setup.entry - setup.stop_loss) / setup.entry * 100).toFixed(1)
+  const risk = displaySetup.entry > 0 && displaySetup.stop_loss > 0
+    ? ((displaySetup.entry - displaySetup.stop_loss) / displaySetup.entry * 100).toFixed(1)
     : null
 
-  const rr = setup.rr ? Number(setup.rr).toFixed(2) : null
+  const rr = displaySetup.rr ? Number(displaySetup.rr).toFixed(2) : null
 
   return (
     <div className="w-[320px] flex-shrink-0 bg-t-card border border-t-cardBorder rounded-xl flex flex-col overflow-y-auto overflow-x-hidden">
@@ -174,13 +201,13 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
               fontSize: 24, fontWeight: 700, lineHeight: 1,
               color: 'var(--text)', letterSpacing: '-0.01em',
             }}>
-              {setup.ticker}
+              {displaySetup.ticker}
             </div>
             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, fontFamily: '"IBM Plex Mono", monospace' }}>
-              {setup.setup_type ?? '—'}
+              {displaySetup.setup_type ?? '—'}
             </div>
           </div>
-          <ScoreBadge score={setup.setup_score} />
+          <ScoreBadge score={displaySetup.setup_score} />
         </div>
 
         {livePrice && (
@@ -208,18 +235,18 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
         <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 6 }}>SIGNALS</div>
         <SignalRow
           label="Relative Strength"
-          value={setup.rs_score != null ? `RS${setup.rs_score >= 0 ? '+' : ''}${Math.round(setup.rs_score * 100)}` : '—'}
-          color={setup.rs_score > 0.05 ? 'var(--go)' : 'var(--muted)'}
+          value={displaySetup.rs_score != null ? `RS${displaySetup.rs_score >= 0 ? '+' : ''}${Math.round(displaySetup.rs_score * 100)}` : '—'}
+          color={displaySetup.rs_score > 0.05 ? 'var(--go)' : 'var(--muted)'}
         />
         <SignalRow
           label="Volume Surge"
-          value={setup.is_vol_surge ? 'YES' : setup.vol_ratio ? `×${Number(setup.vol_ratio).toFixed(1)}` : '—'}
-          color={setup.is_vol_surge ? 'var(--go)' : undefined}
+          value={displaySetup.is_vol_surge ? 'YES' : displaySetup.vol_ratio ? `×${Number(displaySetup.vol_ratio).toFixed(1)}` : '—'}
+          color={displaySetup.is_vol_surge ? 'var(--go)' : undefined}
         />
         <SignalRow
           label="RS Blue Dot"
-          value={setup.rs_blue_dot ? 'YES — 52W HIGH' : 'NO'}
-          color={setup.rs_blue_dot ? 'var(--blue)' : 'var(--muted)'}
+          value={displaySetup.rs_blue_dot ? 'YES — 52W HIGH' : 'NO'}
+          color={displaySetup.rs_blue_dot ? 'var(--blue)' : 'var(--muted)'}
         />
         <SignalRow
           label="Distance to Entry"
@@ -232,10 +259,10 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
       <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--card-border)' }}>
         <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 6 }}>TRADE PLAN</div>
         {[
-          { label: 'Entry',  value: setup.entry       ? `$${setup.entry.toFixed(2)}`       : '—', color: 'var(--text)'   },
-          { label: 'Stop',   value: setup.stop_loss   ? `$${setup.stop_loss.toFixed(2)}`   : '—', color: 'var(--halt)'   },
-          { label: 'Target', value: setup.take_profit ? `$${setup.take_profit.toFixed(2)}` : '—', color: 'var(--go)'     },
-          { label: 'Risk',   value: risk ? `${risk}%` : '—',                                       color: 'var(--accent)' },
+          { label: 'Entry',  value: displaySetup.entry       ? `$${displaySetup.entry.toFixed(2)}`       : '—', color: 'var(--text)'   },
+          { label: 'Stop',   value: displaySetup.stop_loss   ? `$${displaySetup.stop_loss.toFixed(2)}`   : '—', color: 'var(--halt)'   },
+          { label: 'Target', value: displaySetup.take_profit ? `$${displaySetup.take_profit.toFixed(2)}` : '—', color: 'var(--go)'     },
+          { label: 'Risk',   value: risk ? `${risk}%` : '—',                                                     color: 'var(--accent)' },
           { label: 'R:R',    value: rr ?? '—',
             color: rr && Number(rr) >= 2 ? 'var(--go)' : 'var(--text)' },
         ].map(({ label, value, color }) => (
@@ -251,7 +278,7 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
         ))}
       </div>
 
-      {/* Analysis section */}
+      {/* AI Verdict — amber values updated to cyan */}
       {analysis && (
         <div style={{ padding: '10px 16px', borderTop: '1px solid var(--card-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -261,14 +288,14 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
               fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
               fontFamily: '"IBM Plex Mono", monospace',
               background: analysis.verdict_color === 'go'     ? 'rgba(0,200,122,0.15)'
-                        : analysis.verdict_color === 'accent' ? 'rgba(245,166,35,0.15)'
+                        : analysis.verdict_color === 'accent' ? 'rgba(80,216,240,0.15)'
                         : 'rgba(255,45,85,0.12)',
               color: analysis.verdict_color === 'go'     ? 'var(--go)'
                    : analysis.verdict_color === 'accent' ? 'var(--accent)'
                    : 'var(--halt)',
               border: `1px solid ${
                 analysis.verdict_color === 'go'     ? 'rgba(0,200,122,0.35)'
-              : analysis.verdict_color === 'accent' ? 'rgba(245,166,35,0.35)'
+              : analysis.verdict_color === 'accent' ? 'rgba(80,216,240,0.35)'
               : 'rgba(255,45,85,0.3)'}`,
             }}>
               {analysis.verdict}
@@ -292,16 +319,16 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
       {/* V5 Analysis section — hidden while loading to prevent stale-data bleed */}
       {!analysisLoading && analysis && <V5AnalysisSection analysis={analysis} />}
 
-      {/* TradingView link */}
+      {/* TradingView link — amber values updated to cyan */}
       <div style={{ padding: '10px 16px', borderTop: '1px solid var(--card-border)' }}>
         <a
-          href={`https://www.tradingview.com/chart/?symbol=${setup.ticker}&interval=D`}
+          href={`https://www.tradingview.com/chart/?symbol=${displaySetup.ticker}&interval=D`}
           target="_blank"
           rel="noopener noreferrer"
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             padding: '7px', borderRadius: 8,
-            background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)',
+            background: 'rgba(80,216,240,0.08)', border: '1px solid rgba(80,216,240,0.2)',
             color: 'var(--accent)', fontSize: 10, fontWeight: 700,
             fontFamily: '"IBM Plex Mono", monospace', textDecoration: 'none',
             letterSpacing: '0.06em',
