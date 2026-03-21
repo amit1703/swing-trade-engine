@@ -65,7 +65,7 @@ EMA_LONG = 20  # Long-term EMA period
 SMA_LONG = 50  # Long-term SMA period
 CCI_PERIOD = 20  # Commodity Channel Index period
 CCI_STRICT_FLOOR = -39.10  # Optuna v4 best (trial #951); was -50.0 (v3)
-CCI_RLX_FLOOR = -1.95   # Optuna v4 best (trial #951); was -20.0 (v3)
+CCI_RLX_FLOOR = -20.0   # restored from v4 overfit (-1.95 came from 43 OOS trades)
 
 # ──────────────────────────────────────────────────────────────────────────
 # Risk Management & Stop Loss
@@ -75,22 +75,23 @@ ATR_STOP_MULTIPLIER = 1.278  # Optuna v4 best (trial #951); was 1.360 (v3)
 ENTRY_PRICE_MULTIPLIER = 1.001  # 0.1% above current price for entry orders
 MIN_RISK_REWARD_RATIO = 1.0  # Minimum acceptable R:R ratio for setups
 TARGET_RR             = 4.346   # Optuna trial #433 tp_multiple (converged, CV=0.017)
-TRAIL_ATR_MULT        = 4.162   # Optuna v4 best (trial #951) — fallback/BASE default
+TRAIL_ATR_MULT        = 4.25   # frozen: V5 trial-0=4.43, V4=4.162, Phase2 range [3.46,5.41]
 
 # V5: Setup-specific trailing ATR multipliers.
-# Each setup type trails differently based on observed behavior:
-#   VCP breakouts move fast → tight trail locks in gains quickly
-#   Pullbacks trend smoothly → moderate trail avoids premature exits
-#   ResBreakouts need room to develop → wide trail prevents shakeouts
-#   BASE patterns use the shared fallback until more data is collected
-VCP_TRAIL_ATR_MULT          = 2.0    # tight — VCP breakouts give profits early
-PULLBACK_TRAIL_ATR_MULT     = 3.0    # moderate — pullbacks trend but less explosive
-RES_BREAKOUT_TRAIL_ATR_MULT = 4.25   # wide — breakouts need room to trend
-BASE_TRAIL_ATR_MULT         = 4.162  # same as TRAIL_ATR_MULT — unchanged until more data
+# All frozen to 4.25 pending full V5 optimization (300 trials).
+# V5 optimizer tests a single uniform trail_mult across all setup types;
+# trial 0 (n=361 OOS) found 4.43 optimal. 4.25 is a conservative anchor
+# within the Phase 2 suggested range [3.46, 5.41].
+# Previous per-setup values: VCP=2.0, PULLBACK=3.0, RES=4.25, BASE=4.162
+# Most impactful change: PULLBACK 3.0 → 4.25 (holds winners longer on dominant setup).
+VCP_TRAIL_ATR_MULT          = 4.25   # frozen (was 2.0; V5 trial-0 uniform = 4.43)
+PULLBACK_TRAIL_ATR_MULT     = 4.25   # frozen (was 3.0; most impactful — 90% of backtest trades)
+RES_BREAKOUT_TRAIL_ATR_MULT = 4.25   # unchanged
+BASE_TRAIL_ATR_MULT         = 4.25   # frozen (was 4.162; rounded to match uniform)
 
 # ── Position Sizing (risk model) ───────────────────────────────────────────────
-RISK_PER_TRADE_PCT    = 1.0   # % of equity to risk per trade (1R = 1% of equity)
-MAX_POSITION_SIZE_PCT = 20.0  # max % of equity in one position (prevents oversizing on tight stops)
+RISK_PER_TRADE_PCT    = 1.25  # frozen: V5 trial-0=1.45, Phase2 range [1.30,1.50]; was 1.0
+MAX_POSITION_SIZE_PCT = 25.0  # frozen: V5 trial-0=24.6, Phase2 range [21.6,27.6]; was 20.0
 MAX_OPEN_POSITIONS    = 5     # max concurrent open positions per ticker
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -326,5 +327,10 @@ SELECTIVE_HARD_FILTER: bool = False
 #   < EARLY_THRESHOLD  → EARLY  (hasn't reached entry yet or barely touched)
 #   < EXTENDED_THRESHOLD → OPTIMAL (within range — good R:R)
 #   >= EXTENDED_THRESHOLD → EXTENDED (chasing — hide by default)
-ATR_ENTRY_EARLY_THRESHOLD:    float = 0.1   # < 0.1 ATR above entry = still early
-ATR_ENTRY_EXTENDED_THRESHOLD: float = 0.5   # >= 0.5 ATR above entry = extended
+ATR_ENTRY_EARLY_THRESHOLD:    float = 0.13  # frozen: V5 trial-0=0.132, Phase2 range [0.106,0.157]; was 0.1
+ATR_ENTRY_EXTENDED_THRESHOLD: float = 0.40  # frozen: V5 trial-0=0.394, Phase2 range [0.304,0.484]; was 0.5
+
+# ── Trade management mode ─────────────────────────────────────────────────────
+# "ema20" = dynamic EMA20-based trail (Phase 1 initial stop → Phase 2 EMA20 trail)
+# "atr"   = legacy fixed ATR multiplier trail (A/B fallback)
+TRAIL_MODE: str = "ema20"
