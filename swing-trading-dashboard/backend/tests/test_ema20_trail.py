@@ -217,3 +217,20 @@ def test_trade_record_has_trail_fields():
     d = tr.to_dict()
     assert "trail_mode" in d
     assert "trail_phase" in d
+
+
+def test_trail_config_has_required_keys():
+    from config.trailing_config import TRAIL_CONFIG
+    assert TRAIL_CONFIG["mode"] == "ema20"
+    ema = TRAIL_CONFIG["ema"]
+    assert ema["period"] == 20
+    assert ema["trigger_atr_mult"] == 1.5
+    assert ema["extension_threshold_atr"] == 2.5
+    assert ema["extension_offset_atr"] == 1.5
+    assert ema["use_previous_bar"] is True
+    assert ema["allow_same_bar_trigger"] is False
+
+
+def test_trail_config_validate_passes():
+    from config.trailing_config import validate_trail_config
+    validate_trail_config()  # must not raise
