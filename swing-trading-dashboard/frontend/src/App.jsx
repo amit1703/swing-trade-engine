@@ -313,7 +313,6 @@ export default function App() {
         {/* Top bar */}
         <TopBar
           activePage={activePage}
-          regime={regime}
           scanStatus={scanStatus}
           onRunScan={handleRunScan}
           onSearchTicker={(t) => handleTickerClick(t, false)}
