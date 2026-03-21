@@ -6,6 +6,7 @@ import {
   BarChart2,
   Activity,
   Settings,
+  TrendingUp,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -19,63 +20,55 @@ const NAV_ITEMS = [
 
 export default function Sidebar({ activePage, onNavigate }) {
   return (
-    <nav
-      style={{
-        width: 60,
-        flexShrink: 0,
-        background: 'var(--surface)',
-        borderRight: '1px solid var(--border)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        paddingTop: 12,
-        paddingBottom: 12,
-        gap: 4,
-      }}
-    >
-      {/* Logo mark */}
-      <div style={{
-        width: 36,
-        height: 36,
-        borderRadius: 8,
-        background: 'var(--go)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 12,
-        flexShrink: 0,
-      }}>
-        <span style={{
-          fontFamily: '"Barlow Condensed", sans-serif',
-          fontWeight: 700,
-          fontSize: 14,
-          color: '#000',
-          letterSpacing: '-0.03em',
-        }}>SC</span>
+    <nav className="w-56 flex-shrink-0 bg-t-panel border-r border-t-border flex flex-col h-full">
+
+      {/* Logo */}
+      <div className="flex items-center gap-2.5 px-4 py-4 border-b border-t-border flex-shrink-0">
+        <div className="size-8 rounded-lg bg-gradient-to-br from-t-accent to-t-go flex items-center justify-center flex-shrink-0">
+          <TrendingUp size={16} className="text-black" strokeWidth={2.5} />
+        </div>
+        <span className="font-mono font-bold text-base text-t-accent tracking-wider">SCANR</span>
       </div>
 
       {/* Main nav */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, width: '100%', alignItems: 'center' }}>
-        {NAV_ITEMS.map(({ id, icon: Icon, label }) => (
-          <button
-            key={id}
-            className={`nav-btn ${activePage === id ? 'active' : ''}`}
-            onClick={() => onNavigate(id)}
-            title={label}
-          >
-            <Icon size={18} strokeWidth={1.75} />
-          </button>
-        ))}
+      <div className="flex-1 flex flex-col gap-1 px-2 py-3">
+        {NAV_ITEMS.map(({ id, icon: Icon, label }) => {
+          const isActive = activePage === id
+          return (
+            <button
+              key={id}
+              onClick={() => onNavigate(id)}
+              title={label}
+              className={[
+                'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-mono font-medium transition-colors duration-150 border',
+                isActive
+                  ? 'bg-t-accent/10 text-t-accent border-t-accent/20'
+                  : 'text-t-muted hover:bg-white/5 hover:text-t-text border-transparent',
+              ].join(' ')}
+            >
+              <Icon size={17} strokeWidth={1.75} />
+              {label}
+            </button>
+          )
+        })}
       </div>
 
-      {/* Settings at bottom */}
-      <button
-        className={`nav-btn ${activePage === 'settings' ? 'active' : ''}`}
-        onClick={() => onNavigate('settings')}
-        title="Settings"
-      >
-        <Settings size={18} strokeWidth={1.75} />
-      </button>
+      {/* Bottom: Settings */}
+      <div className="px-2 py-3 border-t border-t-border flex-shrink-0">
+        <button
+          onClick={() => onNavigate('settings')}
+          title="Settings"
+          className={[
+            'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-mono font-medium transition-colors duration-150 border',
+            activePage === 'settings'
+              ? 'bg-t-accent/10 text-t-accent border-t-accent/20'
+              : 'text-t-muted hover:bg-white/5 hover:text-t-text border-transparent',
+          ].join(' ')}
+        >
+          <Settings size={17} strokeWidth={1.75} />
+          Settings
+        </button>
+      </div>
     </nav>
   )
 }

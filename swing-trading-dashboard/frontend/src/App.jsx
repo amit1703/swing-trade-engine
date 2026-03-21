@@ -302,13 +302,13 @@ export default function App() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
+    <div className="flex h-screen overflow-hidden bg-t-bg">
 
       {/* ── Sidebar ──────────────────────────────────────────── */}
       <Sidebar activePage={activePage} onNavigate={setActivePage} />
 
       {/* ── Main content ─────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
         {/* Top bar */}
         <TopBar
