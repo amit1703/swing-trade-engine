@@ -276,7 +276,7 @@ _CSV_FIELDNAMES = [
     "trail_mult", "risk_per_trade", "max_position_pct",
     "atr_entry_early", "atr_entry_extended",
     "expectancy", "profit_factor", "avg_r", "max_dd", "dd_volatility", "n_trades",
-] + [f"{s}_{m}" for s in _SETUP_TYPES for m in ("n", "expectancy", "pf", "winrate")]
+] + [f"{s}_{m}" for s in _SETUP_TYPES for m in ("expectancy", "pf", "winrate", "n")]
 
 
 def _log_trial(trial, metrics: dict, setup_stats: dict, log_path: str = _CSV_LOG) -> None:
