@@ -213,6 +213,10 @@ class TradeRecord:
     rs_score:   float = 0.0
     setup_meta: Dict  = field(default_factory=dict)
 
+    # Trail mode diagnostics
+    trail_mode:  str = "atr"     # "ema20" or "atr" — mode active for this trade
+    trail_phase: str = "initial" # "initial" or "ema20" — phase reached at exit
+
     def __post_init__(self):
         risk = self.entry_price - self.initial_stop
         if risk > 0:
@@ -254,6 +258,8 @@ class TradeRecord:
             "regime":            self.regime,
             "rs_score":          self.rs_score,
             "setup_meta":        self.setup_meta,
+            "trail_mode":        self.trail_mode,
+            "trail_phase":       self.trail_phase,
         }
 
 
@@ -847,6 +853,9 @@ class BacktestEngine:
                             regime=trade_state.get("_regime", "UNKNOWN"),
                             rs_score=trade_state.get("_rs_score", 0.0),
                             setup_meta=trade_state.get("_setup_meta", {}),
+                            trail_mode=trade_state.get("_trail_mode", "atr"),
+                            trail_phase=("ema20" if trade_state.get("_trail_triggered")
+                                         else "initial"),
                         ))
                         self._last_close_date = T_date.date()
                     else:
@@ -1101,6 +1110,9 @@ class BacktestEngine:
                     regime=trade_state.get("_regime", "UNKNOWN"),
                     rs_score=trade_state.get("_rs_score", 0.0),
                     setup_meta=trade_state.get("_setup_meta", {}),
+                    trail_mode=trade_state.get("_trail_mode", "atr"),
+                    trail_phase=("ema20" if trade_state.get("_trail_triggered")
+                                 else "initial"),
                 ))
                 self._last_close_date = last_date.date()
 

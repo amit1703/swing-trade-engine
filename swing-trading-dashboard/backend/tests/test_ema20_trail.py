@@ -200,3 +200,20 @@ def test_atr_fallback_mode_unchanged():
     _manage_open_trade(state, bar)
     # ATR trail: 108 - 4.25*1.0 = 103.75; ema20=95 -> max=103.75
     assert abs(state["trailing_stop"] - 103.75) < 0.01
+
+
+def test_trade_record_has_trail_fields():
+    """TradeRecord must have trail_mode and trail_phase fields."""
+    from backtest_engine import TradeRecord
+    tr = TradeRecord(
+        ticker="AAPL", setup_type="PULLBACK",
+        signal_date="2024-01-01", entry_date="2024-01-02",
+        entry_price=100.0, initial_stop=90.0, take_profit=150.0,
+        exit_date="2024-01-10", exit_price=95.0, exit_reason="STOP",
+        holding_days=8,
+    )
+    assert hasattr(tr, "trail_mode")
+    assert hasattr(tr, "trail_phase")
+    d = tr.to_dict()
+    assert "trail_mode" in d
+    assert "trail_phase" in d
