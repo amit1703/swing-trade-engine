@@ -28,7 +28,7 @@
 | `frontend/src/components/Header.jsx` | Modify — Tailwind card wrapper | 2 |
 | `frontend/src/components/MarketOverview.jsx` | Modify — shadcn Card | 2 |
 | `frontend/src/components/StatCards.jsx` | Modify — shadcn Card | 2 |
-| `frontend/src/components/ScannerFilters.jsx` | Modify — Tailwind + shadcn Button | 2 |
+| `frontend/src/components/ScannerFilters.jsx` | Modify — Tailwind (plain `<button>`, no shadcn) | 2 |
 | `frontend/src/components/ScannerTable.jsx` | Modify — Tailwind + terminal-table update | 3 |
 | `frontend/src/components/WatchlistPanel.jsx` | Modify — Tailwind | 4 |
 | `frontend/src/components/FavoritesPage.jsx` | Modify — Tailwind | 4 |
@@ -347,11 +347,13 @@ import { Search, Play, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
 const PAGE_TITLES = {
-  scanner:   'Scanner',
-  watchlist: 'Watchlist',
-  portfolio: 'Portfolio',
-  analytics: 'Analytics',
-  settings:  'Settings',
+  scanner:     'Scanner',
+  watchlist:   'Watchlist',
+  favorites:   'Favorites',
+  portfolio:   'Portfolio',
+  analytics:   'Analytics',
+  diagnostics: 'Diagnostics',
+  settings:    'Settings',
 }
 
 export default function TopBar({
@@ -863,7 +865,7 @@ Body scroll area:
 <div
   onClick={() => onSelectTicker(item.ticker)}
   className={`flex items-center justify-between px-3 py-2 border-b border-t-border cursor-pointer transition-colors duration-100 gap-2 ${
-    isSelected ? 'bg-t-accent/6' : 'hover:bg-white/[0.04]'
+    isSelected ? 'bg-t-accent/[0.06]' : 'hover:bg-white/[0.04]'
   }`}
   style={{ borderLeft: isSelected ? '3px solid var(--accent)' : isBrk ? '3px solid rgba(0,200,122,0.4)' : '3px solid rgba(100,180,255,0.4)' }}
 >
