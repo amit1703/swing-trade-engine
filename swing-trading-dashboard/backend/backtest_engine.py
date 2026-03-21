@@ -95,6 +95,7 @@ def _extract_ref_level(setup_meta: Dict, setup_type: str) -> Optional[float]:
 from filters import compute_regime_series, compute_regime_label_series, passes_liquidity, in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 from analytics import print_backtest_diagnostics as _print_backtest_diagnostics
+from execution.trailing_engine import advance_ema20_trail as _advance_ema20_trail
 
 logger = logging.getLogger(__name__)
 
@@ -454,35 +455,7 @@ def _manage_open_trade(
     trail_mode = state.get("_trail_mode", "atr")
 
     if trail_mode == "ema20":
-        # Track bar count (1-bar delay before Phase 2 can trigger)
-        bars = state.get("_bars_since_entry", 0) + 1
-        state["_bars_since_entry"] = bars
-
-        # Initialise prev_ema20 on first bar
-        prev_ema20 = ema20 if state.get("_prev_ema20") is None else state["_prev_ema20"]
-
-        if not state.get("_trail_triggered", False) and bars >= 2:
-            ref_level = state.get("_ref_level")
-            if ref_level is None:
-                # HTF / LCE: no reference level -> EMA20 trail active from bar 2
-                state["_trail_triggered"] = True
-            elif atr14 > 0 and close > ref_level + 1.5 * atr14:
-                state["_trail_triggered"] = True
-
-        if state.get("_trail_triggered", False):
-            # Extended: price is far above EMA20 -> use EMA20 + buffer (current bar)
-            if atr14 > 0 and close > ema20 + 2.5 * atr14:
-                new_trail = ema20 + 1.5 * atr14
-            else:
-                # Normal: trail to previous bar's EMA20 (no lookahead)
-                new_trail = prev_ema20
-
-            # Stop can only move UP
-            if new_trail > stop:
-                state["trailing_stop"] = new_trail
-
-        # Always advance prev_ema20 for next bar
-        state["_prev_ema20"] = ema20
+        _advance_ema20_trail(state, bar)
 
     else:
         # Legacy ATR trail (unchanged from original implementation)
