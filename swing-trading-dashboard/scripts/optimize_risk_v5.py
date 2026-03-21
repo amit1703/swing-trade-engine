@@ -22,6 +22,7 @@ import json
 import math
 import os
 import sys
+import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
