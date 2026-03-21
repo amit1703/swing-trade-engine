@@ -416,6 +416,10 @@ def _compute_phase2_ranges(top_trials: list, bounds_p1: dict) -> dict:
         if ranges["atr_entry_early"][0] >= ranges["atr_entry_early"][1]:
             ranges["atr_entry_early"] = list(bounds_p1["atr_entry_early"])
 
+    # Also validate atr_entry_extended didn't narrow to zero-width
+    if ranges["atr_entry_extended"][0] >= ranges["atr_entry_extended"][1]:
+        ranges["atr_entry_extended"] = list(bounds_p1["atr_entry_extended"])
+
     return ranges
 
 
@@ -476,7 +480,17 @@ def _export_phase1(study, suppress_output: bool = False,
     }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(output, indent=2))
+    fd, tmp_path = tempfile.mkstemp(dir=output_path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(output, indent=2))
+        os.replace(tmp_path, output_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
     if not suppress_output:
         print(f"\n{'='*60}")
@@ -549,7 +563,17 @@ def _export_phase2(study, suppress_output: bool = False,
     }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(output, indent=2))
+    fd, tmp_path = tempfile.mkstemp(dir=output_path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(output, indent=2))
+        os.replace(tmp_path, output_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
     if not suppress_output:
         print(f"\n{'='*60}")
@@ -628,6 +652,7 @@ def main(phase: int, n_trials: int, suppress_output: bool = False,
                         f"n={metrics.get('n_trades', 0)}"
                     )
 
+        # n_jobs=1 required: _patch_constants() mutates sys.modules globals and is not thread-safe
         study.optimize(
             lambda trial: objective(trial, bounds,
                                     is_months=is_months,
@@ -637,6 +662,7 @@ def main(phase: int, n_trials: int, suppress_output: bool = False,
                                     setup_types=setup_types),
             n_trials=remaining,
             callbacks=[_cb],
+            n_jobs=1,
         )
 
     if phase == 1:
