@@ -69,6 +69,29 @@ _BACKTEST_META_KEYS = (
     "atr", "entry",
 )
 
+
+def _extract_ref_level(setup_meta: Dict, setup_type: str) -> Optional[float]:
+    """
+    Return the Phase 2 trail-trigger reference level from a trade's setup_meta.
+
+    - VCP / RES_BREAKOUT : resistance_level (the zone the stock broke through)
+    - PULLBACK           : support_level    (the structural support it bounced from)
+    - BASE               : geometry["base_high"] (ceiling of the base pattern)
+    - HTF / LCE / others : None → EMA20 trail activates from bar 2 with no gate
+
+    Returns None if the key is absent so callers fall back gracefully.
+    """
+    if setup_type in ("VCP", "RES_BREAKOUT"):
+        return setup_meta.get("resistance_level")
+    if setup_type == "PULLBACK":
+        return setup_meta.get("support_level")
+    if setup_type == "BASE":
+        geom = setup_meta.get("geometry")
+        if isinstance(geom, dict):
+            return geom.get("base_high")
+    return None  # HTF, LCE, WATCHLIST — no reference level
+
+
 from filters import compute_regime_series, compute_regime_label_series, passes_liquidity, in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 from analytics import print_backtest_diagnostics as _print_backtest_diagnostics
