@@ -1,8 +1,10 @@
 """
 Risk Optimizer V5 — Optuna optimization of risk/execution parameters only.
 
-Optimizes: trail_mult, risk_per_trade, max_position_pct,
+Optimizes: risk_per_trade, max_position_pct,
            atr_entry_early, atr_entry_extended
+
+Trail mode: LOCKED to EMA20 (not in search space).
 
 Entry logic, setup detection, regime logic, and core filters are FROZEN.
 
@@ -70,7 +72,7 @@ _DEFAULT_TRIALS_P1 = 300
 _DEFAULT_TRIALS_P2 = 200
 
 BOUNDS_P1: dict[str, tuple] = {
-    "trail_mult":         (2.0,  8.5),
+    # trail_mult removed — EMA20 trail is locked; not part of search space
     "risk_per_trade":     (0.5,  1.5),
     "max_position_pct":   (10.0, 30.0),
     "atr_entry_early":    (0.03, 0.20),
@@ -78,13 +80,7 @@ BOUNDS_P1: dict[str, tuple] = {
 }
 
 _MODULE_PATCHES: dict[str, list[tuple[str, str]]] = {
-    "trail_mult": [
-        ("constants", "TRAIL_ATR_MULT"),
-        ("constants", "VCP_TRAIL_ATR_MULT"),
-        ("constants", "PULLBACK_TRAIL_ATR_MULT"),
-        ("constants", "RES_BREAKOUT_TRAIL_ATR_MULT"),
-        ("constants", "BASE_TRAIL_ATR_MULT"),
-    ],
+    # "trail_mult" removed — EMA20 trail is locked, no ATR const patching needed
     "risk_per_trade": [
         ("constants",       "RISK_PER_TRADE_PCT"),
         ("backtest_engine", "RISK_PER_TRADE_PCT"),
@@ -304,7 +300,8 @@ def objective(trial, bounds: dict, is_months: int = WFO_IS_MONTHS,
               setup_types: list = None) -> float:
     import optuna
 
-    trail_mult         = trial.suggest_float("trail_mult",         *bounds["trail_mult"])
+    # Trail mode is locked to EMA20 — not part of the search space.
+    # BacktestEngine reads TRAIL_MODE from constants, which is set to "ema20".
     risk_per_trade     = trial.suggest_float("risk_per_trade",     *bounds["risk_per_trade"])
     max_position_pct   = trial.suggest_float("max_position_pct",   *bounds["max_position_pct"])
     atr_entry_early    = trial.suggest_float("atr_entry_early",    *bounds["atr_entry_early"])
@@ -314,7 +311,6 @@ def objective(trial, bounds: dict, is_months: int = WFO_IS_MONTHS,
         raise optuna.TrialPruned()
 
     params = {
-        "trail_mult":       trail_mult,
         "risk_per_trade":   risk_per_trade,
         "max_position_pct": max_position_pct,
     }
@@ -382,23 +378,6 @@ def _compute_stability(dist: dict, bounds: dict) -> dict:
     return stability
 
 
-def _compute_sensitivity(completed_trials: list) -> dict:
-    buckets = [
-        ("[2.0-3.5]", 2.0, 3.5),
-        ("[3.5-5.0]", 3.5, 5.0),
-        ("[5.0-6.5]", 5.0, 6.5),
-        ("[6.5-8.5]", 6.5, 8.5),
-    ]
-    result = {}
-    for label, lo, hi in buckets:
-        bt = [t for t in completed_trials if lo <= t.params.get("trail_mult", -1) < hi]
-        result[label] = {
-            "n_trials":  len(bt),
-            "avg_score": round(float(np.mean([t.value for t in bt])), 4) if bt else 0.0,
-        }
-    return result
-
-
 def _compute_phase2_ranges(top_trials: list, bounds_p1: dict) -> dict:
     best   = top_trials[0]
     ranges = {}
@@ -456,7 +435,6 @@ def _export_phase1(study, suppress_output: bool = False,
 
     dist        = _compute_distribution(top_30, BOUNDS_P1)
     stability   = _compute_stability(dist, BOUNDS_P1)
-    sensitivity = _compute_sensitivity(completed)
     p2_ranges   = _compute_phase2_ranges(top_30, BOUNDS_P1)
 
     output = {
@@ -476,7 +454,6 @@ def _export_phase1(study, suppress_output: bool = False,
         ],
         "distribution":           dist,
         "stability":              stability,
-        "sensitivity":            {"trail_mult_buckets": sensitivity},
         "phase2_suggested_ranges": p2_ranges,
     }
 
@@ -503,9 +480,6 @@ def _export_phase1(study, suppress_output: bool = False,
             narrow = stability.get(k, {}).get("narrow", False)
             flag   = " stable" if narrow else "  spread"
             print(f"  {k:<25} {round(v, 4) if isinstance(v, float) else v}{flag}")
-        print(f"\n  Trail mult sensitivity:")
-        for bucket, info in sensitivity.items():
-            print(f"    {bucket:<12} avg={info['avg_score']:+.4f}  n={info['n_trials']}")
         print(f"\n  Phase 2 suggested ranges: {p2_ranges}")
         print(f"  Exported to: {output_path}")
 
@@ -526,10 +500,9 @@ def _export_phase2(study, suppress_output: bool = False,
 
     dist      = _compute_distribution(top_30, bounds_p2)
     stability = _compute_stability(dist, bounds_p2)
-    sensitivity = _compute_sensitivity(completed)
 
     recommended = {
-        "trail_mult":         round(best.params.get("trail_mult", 0), 4),
+        "trail_mode":         "ema20",
         "risk_per_trade":     round(best.params.get("risk_per_trade", 0), 4),
         "max_position_pct":   round(best.params.get("max_position_pct", 0), 4),
         "atr_entry_early":    round(best.params.get("atr_entry_early", 0), 4),
@@ -559,7 +532,6 @@ def _export_phase2(study, suppress_output: bool = False,
         ],
         "distribution":  dist,
         "stability":     stability,
-        "sensitivity":   {"trail_mult_buckets": sensitivity},
         "recommended":   recommended,
     }
 
