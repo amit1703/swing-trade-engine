@@ -1,0 +1,205 @@
+{
+  "generated_at": "2026-03-21T09:53:32.266695+00:00",
+  "study": "trading_risk_v5_phase1",
+  "total_completed_trials": 2,
+  "top_30_trials": [
+    {
+      "trial": 1,
+      "score": 0.535293,
+      "params": {
+        "trail_mult": 3.014,
+        "risk_per_trade": 0.5581,
+        "max_position_pct": 27.3235,
+        "atr_entry_early": 0.1322,
+        "atr_entry_extended": 0.7248
+      },
+      "metrics": {
+        "n_trades": 297,
+        "expectancy": 0.317,
+        "profit_factor": 2.1194,
+        "avg_r": 0.317,
+        "max_dd": 8.18,
+        "dd_volatility": 1.04
+      },
+      "setup_stats": {
+        "VCP": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "PULLBACK": {
+          "n": 210,
+          "win_rate": 46.19,
+          "expectancy": 0.0896,
+          "profit_factor": 1.4286
+        },
+        "BASE": {
+          "n": 7,
+          "win_rate": 14.29,
+          "expectancy": 0.4086,
+          "profit_factor": 3.1811
+        },
+        "RES_BREAKOUT": {
+          "n": 77,
+          "win_rate": 49.35,
+          "expectancy": 0.9364,
+          "profit_factor": 3.1507
+        },
+        "HTF": {
+          "n": 3,
+          "win_rate": 33.33,
+          "expectancy": 0.126,
+          "profit_factor": 1.2404
+        }
+      }
+    },
+    {
+      "trial": 0,
+      "score": 0.194425,
+      "params": {
+        "trail_mult": 4.4345,
+        "risk_per_trade": 1.4507,
+        "max_position_pct": 24.6399,
+        "atr_entry_early": 0.1318,
+        "atr_entry_extended": 0.3936
+      },
+      "metrics": {
+        "n_trades": 289,
+        "expectancy": 0.3182,
+        "profit_factor": 1.7659,
+        "avg_r": 0.3182,
+        "max_dd": 20.48,
+        "dd_volatility": 2.56
+      },
+      "setup_stats": {
+        "VCP": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "PULLBACK": {
+          "n": 203,
+          "win_rate": 45.32,
+          "expectancy": 0.0854,
+          "profit_factor": 1.4196
+        },
+        "BASE": {
+          "n": 7,
+          "win_rate": 14.29,
+          "expectancy": 0.4086,
+          "profit_factor": 2.882
+        },
+        "RES_BREAKOUT": {
+          "n": 76,
+          "win_rate": 50.0,
+          "expectancy": 0.9393,
+          "profit_factor": 2.4028
+        },
+        "HTF": {
+          "n": 3,
+          "win_rate": 33.33,
+          "expectancy": 0.126,
+          "profit_factor": 1.2404
+        }
+      }
+    }
+  ],
+  "distribution": {
+    "trail_mult": {
+      "mean": 3.7242,
+      "std": 0.7103,
+      "min": 3.014,
+      "max": 4.4345
+    },
+    "risk_per_trade": {
+      "mean": 1.0044,
+      "std": 0.4463,
+      "min": 0.5581,
+      "max": 1.4507
+    },
+    "max_position_pct": {
+      "mean": 25.9817,
+      "std": 1.3418,
+      "min": 24.6399,
+      "max": 27.3235
+    },
+    "atr_entry_early": {
+      "mean": 0.132,
+      "std": 0.0002,
+      "min": 0.1318,
+      "max": 0.1322
+    },
+    "atr_entry_extended": {
+      "mean": 0.5592,
+      "std": 0.1656,
+      "min": 0.3936,
+      "max": 0.7248
+    }
+  },
+  "stability": {
+    "trail_mult": {
+      "narrow": true,
+      "std_pct_of_range": 10.9
+    },
+    "risk_per_trade": {
+      "narrow": false,
+      "std_pct_of_range": 44.6
+    },
+    "max_position_pct": {
+      "narrow": true,
+      "std_pct_of_range": 6.7
+    },
+    "atr_entry_early": {
+      "narrow": true,
+      "std_pct_of_range": 0.1
+    },
+    "atr_entry_extended": {
+      "narrow": false,
+      "std_pct_of_range": 27.6
+    }
+  },
+  "sensitivity": {
+    "trail_mult_buckets": {
+      "[2.0-3.5]": {
+        "n_trials": 1,
+        "avg_score": 0.5353
+      },
+      "[3.5-5.0]": {
+        "n_trials": 1,
+        "avg_score": 0.1944
+      },
+      "[5.0-6.5]": {
+        "n_trials": 0,
+        "avg_score": 0.0
+      },
+      "[6.5-8.5]": {
+        "n_trials": 0,
+        "avg_score": 0.0
+      }
+    }
+  },
+  "phase2_suggested_ranges": {
+    "trail_mult": [
+      2.0,
+      4.0794
+    ],
+    "risk_per_trade": [
+      0.5,
+      1.2276
+    ],
+    "max_position_pct": [
+      25.3108,
+      29.3363
+    ],
+    "atr_entry_early": [
+      0.1319,
+      0.1325
+    ],
+    "atr_entry_extended": [
+      0.4764,
+      0.9
+    ]
+  }
+}
