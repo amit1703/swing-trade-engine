@@ -234,3 +234,86 @@ def test_trail_config_has_required_keys():
 def test_trail_config_validate_passes():
     from config.trailing_config import validate_trail_config
     validate_trail_config()  # must not raise
+
+
+# ── trailing_engine tests ────────────────────────────────────────────────────
+
+def _ema20_state_v2(ref_level=None, trail_triggered=False,
+                    bars_since_entry=0, prev_ema20=None,
+                    initial_stop=90.0) -> dict:
+    return {
+        "entry_price":       100.0,
+        "trailing_stop":     initial_stop,
+        "_trail_triggered":  trail_triggered,
+        "_bars_since_entry": bars_since_entry,
+        "_ref_level":        ref_level,
+        "_prev_ema20":       prev_ema20,
+    }
+
+def _bar_v2(close=105.0, low=103.0, high=107.0, ema20=98.0, atr14=2.0):
+    return {"open": 104.0, "high": high, "low": low,
+            "close": close, "ema20": ema20, "atr14": atr14}
+
+
+def test_advance_ema20_trail_reads_config_trigger_mult():
+    """trigger uses TRAIL_CONFIG['ema']['trigger_atr_mult'], not a hardcoded 1.5."""
+    from execution.trailing_engine import advance_ema20_trail
+    from config.trailing_config import TRAIL_CONFIG
+    mult = TRAIL_CONFIG["ema"]["trigger_atr_mult"]  # 1.5
+    # ref=100, atr=2 → threshold = 100 + mult*2 = 103; close=104 → trigger
+    state = _ema20_state_v2(ref_level=100.0, bars_since_entry=1)
+    advance_ema20_trail(state, _bar_v2(close=104.0, ema20=98.0, atr14=2.0))
+    assert state["_trail_triggered"] is True
+
+
+def test_advance_ema20_trail_phase1_no_move():
+    """Phase 1: stop must not move before trigger fires."""
+    from execution.trailing_engine import advance_ema20_trail
+    state = _ema20_state_v2(ref_level=120.0, bars_since_entry=1, initial_stop=90.0)
+    advance_ema20_trail(state, _bar_v2(close=105.0, ema20=98.0, atr14=2.0))
+    assert state["trailing_stop"] == 90.0
+
+
+def test_advance_ema20_trail_phase2_uses_prev_ema20():
+    """Phase 2 normal: stop trails to prev_ema20."""
+    from execution.trailing_engine import advance_ema20_trail
+    state = _ema20_state_v2(trail_triggered=True, bars_since_entry=2,
+                             prev_ema20=99.0, initial_stop=90.0)
+    advance_ema20_trail(state, _bar_v2(close=105.0, ema20=100.0, atr14=2.0))
+    assert state["trailing_stop"] == 99.0
+
+
+def test_advance_ema20_trail_stop_never_decreases():
+    """Stop must never move down."""
+    from execution.trailing_engine import advance_ema20_trail
+    state = _ema20_state_v2(trail_triggered=True, bars_since_entry=2,
+                             prev_ema20=85.0, initial_stop=90.0)
+    advance_ema20_trail(state, _bar_v2(close=105.0, ema20=86.0, atr14=2.0))
+    assert state["trailing_stop"] == 90.0  # prev_ema20=85 < stop=90 → no change
+
+
+def test_compute_live_trail_in_profit():
+    """In profit: live trail raises stop to prev_ema20 floor."""
+    from execution.trailing_engine import compute_live_trail
+    result = compute_live_trail(
+        current_stop=90.0, entry_price=100.0, current_price=108.0,
+        prev_ema20=97.0, current_ema20=98.0)
+    assert result == 97.0
+
+
+def test_compute_live_trail_stop_never_below_initial():
+    """Live trail never lowers stop below current_stop."""
+    from execution.trailing_engine import compute_live_trail
+    result = compute_live_trail(
+        current_stop=92.0, entry_price=100.0, current_price=108.0,
+        prev_ema20=85.0, current_ema20=86.0)
+    assert result == 92.0
+
+
+def test_compute_live_trail_not_in_profit():
+    """Not in profit: stop is unchanged regardless of EMA20."""
+    from execution.trailing_engine import compute_live_trail
+    result = compute_live_trail(
+        current_stop=90.0, entry_price=100.0, current_price=98.0,
+        prev_ema20=101.0, current_ema20=100.0)
+    assert result == 90.0
