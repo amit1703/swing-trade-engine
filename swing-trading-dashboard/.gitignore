@@ -27,3 +27,4 @@ Thumbs.db
 
 # WFO price cache (large Parquet files)
 swing-trading-dashboard/backend/data/price_cache/*.parquet
+.worktrees/
