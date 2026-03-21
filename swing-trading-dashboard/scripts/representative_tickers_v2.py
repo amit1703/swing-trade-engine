@@ -11,7 +11,7 @@ _RAW = [
     # Large-cap tech / mega-cap
     "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL",
     # Momentum / high-growth
-    "TSLA", "META", "CRWD", "PANW", "SNOW",
+    "TSLA", "META", "PANW",  # CRWD/SNOW removed: IPO 2019/2020, too new for IS=36m WFO
     # Mid-cap growth
     "CELH", "ENPH", "MELI", "SQ", "DXCM",
     # Industrials / cyclicals
@@ -28,12 +28,12 @@ _RAW = [
     # ── v2 additions ──────────────────────────────────────────────────────────
     # Mid-cap growth / momentum
     "SMCI", "DUOL", "APP", "AXON", "MNDY",
-    # Small/mid momentum
-    "CAVA", "HIMS", "RKT", "NTRA",
+    # Small/mid momentum (HIMS/RKT removed: IPO 2019/2020, too new)
+    "CAVA", "NTRA",
     # Cyclicals / energy
     "SLB", "MPC", "FANG", "NUE",
-    # Healthcare
-    "PODD", "RVMD", "ALNY",
+    # Healthcare (RVMD removed: IPO Feb 2020, too new)
+    "PODD", "ALNY",
     # Financials
     "COIN", "HOOD", "IBKR",
     # Additional large-cap diversification
