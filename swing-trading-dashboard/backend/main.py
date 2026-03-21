@@ -3172,10 +3172,6 @@ async def _enrich_trade(trade: Dict) -> Dict:
         pl_d = round((lc - ep) * qty, 2)
         pl_p = round((lc / ep - 1) * 100, 2) if ep > 0 else 0.0
 
-        raw_close = df["Close"] if "Close" in df.columns else close
-        atr14_s = _atr(high, low, raw_close, 14)
-        current_atr = float(atr14_s.iloc[-1]) if pd.notna(atr14_s.iloc[-1]) else 0.0
-
         # EMA20 trailing stop: floor is previous bar's EMA20 (no lookahead).
         prev_ema20_live = (float(ema20_s.iloc[-2])
                            if len(ema20_s.dropna()) >= 2 else None)
