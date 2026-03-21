@@ -17,8 +17,12 @@ TRAIL_CONFIG: dict = {
         "allow_same_bar_trigger":    False, # Phase 2 cannot fire on entry bar
     },
 
+    # NOTE: ATR fallback parameters are NOT read from here.
+    # When trail_mode="atr" is used (A/B testing only), _manage_open_trade reads
+    # constants.TRAIL_ATR_MULT and _TRAIL_ATR_BY_SETUP from backtest_engine.py.
+    # This section is documentation only — do not add code that reads TRAIL_CONFIG["atr"].
     "atr": {
-        "multiplier": 4.25,   # legacy fallback only — not used in ema20 mode
+        "multiplier": 4.25,   # for reference only — active ATR fallback reads constants.py
     },
 }
 

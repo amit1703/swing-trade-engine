@@ -52,8 +52,8 @@ from constants import (
 )
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
 
-# V5: per-setup ATR trail multipliers.
-# Task 3 will apply the same logic to _enrich_trade() in main.py (live portfolio).
+# V5: per-setup ATR trail multipliers. Used only when trail_mode="atr" (A/B testing).
+# Live portfolio enrichment uses compute_live_trail() from execution/trailing_engine.py.
 _TRAIL_ATR_BY_SETUP = {
     "VCP":          lambda: _constants.VCP_TRAIL_ATR_MULT,
     "PULLBACK":     lambda: _constants.PULLBACK_TRAIL_ATR_MULT,
