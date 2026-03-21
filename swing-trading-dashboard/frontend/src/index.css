@@ -117,42 +117,37 @@ html, body, #root {
   animation: shimmer 1.8s linear infinite;
 }
 
-/* ── Terminal table ──────────────────────────────────── */
-.terminal-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
-}
-.terminal-table th {
-  padding: 4px 8px;
-  text-align: left;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  background: var(--card);
-  z-index: 1;
-}
-.terminal-table td {
-  padding: 5px 8px;
-  border-bottom: 1px solid rgba(26,37,53,0.5);
-  vertical-align: middle;
-}
-.terminal-table tr { cursor: pointer; transition: background 0.1s; }
-.terminal-table tr:hover td { background: rgba(255,255,255,0.025); }
-.terminal-table tr.selected td { background: rgba(245,166,35,0.06); }
-.terminal-table tr.selected td:first-child { border-left: 2px solid var(--accent); }
-
-/* ── Near-entry row glow ─────────────────────────────── */
-.row-near-entry td { background: rgba(245,166,35,0.035) !important; }
-.row-near-entry td:first-child {
-  border-left: 3px solid rgba(245,166,35,0.65) !important;
-  padding-left: 5px;
+/* ── Terminal table (Tailwind layer) ─────────────────── */
+@layer components {
+  .terminal-table {
+    @apply w-full border-collapse font-mono text-xs;
+  }
+  .terminal-table th {
+    @apply px-2 py-1.5 text-left text-[8px] font-bold uppercase tracking-widest
+           text-t-muted border-b border-t-border bg-t-card sticky top-0 z-10;
+  }
+  .terminal-table td {
+    @apply px-2 py-[5px] border-b border-t-border/50 align-middle;
+  }
+  .terminal-table tr {
+    @apply cursor-pointer transition-colors duration-100;
+  }
+  .terminal-table tr:hover td {
+    @apply bg-white/[0.025];
+  }
+  .terminal-table tr.selected td {
+    @apply bg-t-accent/[0.06];
+  }
+  .terminal-table tr.selected td:first-child {
+    @apply border-l-2 border-t-accent;
+  }
+  .row-near-entry td {
+    background: rgba(245,166,35,0.035) !important;
+  }
+  .row-near-entry td:first-child {
+    border-left: 3px solid rgba(245,166,35,0.65) !important;
+    padding-left: 5px !important;
+  }
 }
 
 /* ── Sidebar nav button ──────────────────────────────── */
