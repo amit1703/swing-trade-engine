@@ -150,7 +150,7 @@ export default function App() {
 
   // ── Ticker click → load chart data + analysis; optionally switch to scanner
   const handleTickerClick = useCallback(async (ticker, switchTab = true) => {
-    const isMobile = window.innerWidth <= 640
+    const isMobile = window.innerWidth < 640
     if (switchTab && !isMobile) setActivePage('scanner')
     if (isMobile) setMobileSheetOpen(true)
     setSelectedTicker(ticker)
@@ -293,7 +293,7 @@ export default function App() {
       if (document.activeElement.tagName === 'INPUT') return
       if (e.key === '?') setShowGuide(v => !v)
       if (e.key === 'f' || e.key === 'F') setChartFocus(v => !v)
-      if (e.key === 'Escape') setDebugTicker(null)
+      if (e.key === 'Escape') { setDebugTicker(null); setMobileSheetOpen(false) }
       if (e.key === 'd' || e.key === 'D') {
         setDevMode(v => {
           const next = !v
