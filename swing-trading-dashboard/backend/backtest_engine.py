@@ -416,55 +416,82 @@ def _manage_open_trade(
     """
     Advance one trading day for an open position.
 
-    Stop is checked FIRST (conservative — protects against gap-downs).
-    Then target. Then trailing stop is updated if we're still open.
+    Supports two trail modes, selected by state["_trail_mode"]:
+      "ema20" -- Phase 1: fixed initial stop; Phase 2: EMA20-based trail
+                activated once close > ref_level + 1.5xATR (min 1-bar delay).
+      "atr"   -- legacy fixed ATR multiplier (backward-compatible).
 
-    Modifies `state` in-place: trailing_stop may ratchet upward.
+    Stop is always checked FIRST. Target second. Trail update last.
+    Gap-realistic fill: exit_price = min(open, stop) on stop-outs.
 
-    Parameters
-    ----------
-    state : dict with keys:
-        entry_price, trailing_stop, take_profit, entry_date,
-        setup_type (optional) — used to select the ATR trail multiplier;
-        defaults to TRAIL_ATR_MULT fallback if absent or unrecognised
-    bar : dict with keys:
-        date, open, high, low, close, ema20, atr14
-
-    Returns
-    -------
-    (closed: bool, exit_price: float | None, exit_reason: str | None)
+    state keys (EMA20 mode):
+        _trail_mode, _trail_triggered, _bars_since_entry, _ref_level, _prev_ema20
     """
     low    = bar["low"]
     high   = bar["high"]
     close  = bar["close"]
     ema20  = bar["ema20"]
+    atr14  = bar.get("atr14", 0.0)
     stop   = state["trailing_stop"]
     target = state["take_profit"]
     entry  = state["entry_price"]
 
-    # 1. Stop hit first (low ≤ stop → filled at worst of open vs stop — gap-realistic)
+    # 1. Stop hit (gap-realistic: fill at min(open, stop))
     if low <= stop:
-        exit_price = min(bar["open"], stop)
-        return True, exit_price, "STOP"
+        return True, min(bar["open"], stop), "STOP"
 
-    # 2. Target hit (high ≥ target → filled at target)
+    # 2. Target hit
     if high >= target:
         return True, target, "TARGET"
 
-    # 3. Update trailing stop: ratchet to max(EMA20, ATR-based trail) when in profit
-    if close > entry:
-        atr14 = bar.get("atr14", 0.0)
-        override = state.get("trail_mult_override")
-        if override is not None:
-            mult = override
-        else:
-            setup_type = state.get("setup_type", "")
-            mult_fn = _TRAIL_ATR_BY_SETUP.get(setup_type)
-            mult = mult_fn() if mult_fn else _constants.TRAIL_ATR_MULT
-        atr_trail = (close - mult * atr14) if atr14 > 0 else ema20
-        new_trail = max(ema20, atr_trail)
-        if new_trail > stop:
-            state["trailing_stop"] = new_trail
+    # 3. Update trailing stop
+    trail_mode = state.get("_trail_mode", "atr")
+
+    if trail_mode == "ema20":
+        # Track bar count (1-bar delay before Phase 2 can trigger)
+        bars = state.get("_bars_since_entry", 0) + 1
+        state["_bars_since_entry"] = bars
+
+        # Initialise prev_ema20 on first bar
+        prev_ema20 = state.get("_prev_ema20") or ema20
+
+        if not state.get("_trail_triggered", False) and bars >= 2:
+            ref_level = state.get("_ref_level")
+            if ref_level is None:
+                # HTF / LCE: no reference level -> EMA20 trail active from bar 2
+                state["_trail_triggered"] = True
+            elif atr14 > 0 and close > ref_level + 1.5 * atr14:
+                state["_trail_triggered"] = True
+
+        if state.get("_trail_triggered", False):
+            # Extended: price is far above EMA20 -> use EMA20 + buffer (current bar)
+            if atr14 > 0 and close > ema20 + 2.5 * atr14:
+                new_trail = ema20 + 1.5 * atr14
+            else:
+                # Normal: trail to previous bar's EMA20 (no lookahead)
+                new_trail = prev_ema20
+
+            # Stop can only move UP
+            if new_trail > stop:
+                state["trailing_stop"] = new_trail
+
+        # Always advance prev_ema20 for next bar
+        state["_prev_ema20"] = ema20
+
+    else:
+        # Legacy ATR trail (unchanged from original implementation)
+        if close > entry:
+            override = state.get("trail_mult_override")
+            if override is not None:
+                mult = override
+            else:
+                setup_type = state.get("setup_type", "")
+                mult_fn = _TRAIL_ATR_BY_SETUP.get(setup_type)
+                mult = mult_fn() if mult_fn else _constants.TRAIL_ATR_MULT
+            atr_trail = (close - mult * atr14) if atr14 > 0 else ema20
+            new_trail = max(ema20, atr_trail)
+            if new_trail > stop:
+                state["trailing_stop"] = new_trail
 
     return False, None, None
 
