@@ -7,16 +7,18 @@ def test_backtest_diag_constants_exist():
         BACKTEST_DIAG_END_DATE,
         BACKTEST_V4_TRAIL_MULT,
     )
-    assert BACKTEST_DIAG_START_DATE == "2023-01-01"
+    assert BACKTEST_DIAG_START_DATE == "2020-01-01"
     assert BACKTEST_DIAG_END_DATE   == "2024-12-31"
     assert BACKTEST_V4_TRAIL_MULT   == 4.162
 
 def test_backtest_v4_trail_mult_is_distinct_from_trail_atr_mult():
-    """BACKTEST_V4_TRAIL_MULT is a separately declared constant with the same
-    numeric value as TRAIL_ATR_MULT (4.162) — not assigned as an alias."""
+    """BACKTEST_V4_TRAIL_MULT is the strict V4 single trail multiplier (4.162) used
+    as a baseline audit override. TRAIL_ATR_MULT is the live ATR fallback (currently
+    4.25 per V5 uniform freeze). They are intentionally different values."""
     from constants import BACKTEST_V4_TRAIL_MULT, TRAIL_ATR_MULT
     assert BACKTEST_V4_TRAIL_MULT == 4.162
-    assert TRAIL_ATR_MULT == 4.162   # same value; non-aliasing documented in docstring only
+    assert TRAIL_ATR_MULT == 4.25
+    assert BACKTEST_V4_TRAIL_MULT != TRAIL_ATR_MULT
 
 def test_backtest_cache_file_constant_exists():
     from constants import BACKTEST_DIAG_CACHE_FILE
