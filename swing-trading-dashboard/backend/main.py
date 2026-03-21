@@ -107,12 +107,6 @@ from constants import (
     DISCOVERY_52WK_HIGH_PCT,
     DISCOVERY_VOL_RATIO,
     DISCOVERY_MAX_PCT,
-    # V5: per-setup ATR trail multipliers
-    VCP_TRAIL_ATR_MULT,
-    PULLBACK_TRAIL_ATR_MULT,
-    RES_BREAKOUT_TRAIL_ATR_MULT,
-    BASE_TRAIL_ATR_MULT,
-    TRAIL_ATR_MULT,
     # Backtest diagnostics
     BACKTEST_DIAG_START_DATE,
     BACKTEST_DIAG_END_DATE,
@@ -173,6 +167,9 @@ from email_digest import send_digest
 from services.macro_service import get_market_overview
 from services.narrative import generate_narrative
 from backtest_engine import BacktestEngine, BacktestParams, run_backtest_universe
+from execution.trailing_engine import compute_live_trail as _compute_live_trail
+from config.trailing_config import validate_trail_config
+from execution.trailing_engine import log_trail_config as _log_trail_config
 
 # Shared optimized params instance used by live scanner engines (engine6, etc.)
 _LIVE_PARAMS = BacktestParams()
@@ -469,15 +466,6 @@ _digest_cache_lock = threading.Lock()
 # ── APScheduler instance ──────────────────────────────────────────────────────
 _scheduler: Optional[BackgroundScheduler] = None
 
-# V5: per-setup ATR trail multipliers for live trade enrichment (matches backtest_engine.py)
-_LIVE_TRAIL_ATR_BY_TYPE = {
-    "VCP":          VCP_TRAIL_ATR_MULT,
-    "PULLBACK":     PULLBACK_TRAIL_ATR_MULT,
-    "RES_BREAKOUT": RES_BREAKOUT_TRAIL_ATR_MULT,
-    "BASE":         BASE_TRAIL_ATR_MULT,
-}
-
-
 # ────────────────────────────────────────────────────────────────────────────
 # Earnings blackout helpers (Task 1)
 # ────────────────────────────────────────────────────────────────────────────
@@ -670,6 +658,11 @@ def send_morning_email() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _semaphore, _scheduler
+
+    # Validate and log trailing stop configuration
+    validate_trail_config()   # raises AssertionError if mode != "ema20"
+    _log_trail_config()
+
     _semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     await init_db(DB_PATH)
     log.info("SQLite DB initialised at %s", DB_PATH)
@@ -3186,21 +3179,16 @@ async def _enrich_trade(trade: Dict) -> Dict:
         pl_d = round((lc - ep) * qty, 2)
         pl_p = round((lc / ep - 1) * 100, 2) if ep > 0 else 0.0
 
-        raw_close = df["Close"] if "Close" in df.columns else close
-        atr14_s = _atr(high, low, raw_close, 14)
-        current_atr = float(atr14_s.iloc[-1]) if pd.notna(atr14_s.iloc[-1]) else 0.0
-
-        # V5 setup-specific trailing stop: max(ATR_trail, EMA20), never loosens.
-        setup_type_key = str(trade.get("setup_type", "")).upper()
-        atr_mult = _LIVE_TRAIL_ATR_BY_TYPE.get(setup_type_key, TRAIL_ATR_MULT)
-
-        if lc > trade["entry_price"] and current_atr > 0:
-            ema20_floor = l20
-            atr_trail   = lc - (atr_mult * current_atr)
-            raw_trail   = max(atr_trail, ema20_floor)
-            trailing_stop = max(float(trade["stop_loss"]), raw_trail)
-        else:
-            trailing_stop = float(trade["stop_loss"])
+        # EMA20 trailing stop: floor is previous bar's EMA20 (no lookahead).
+        prev_ema20_live = (float(ema20_s.iloc[-2])
+                           if len(ema20_s.dropna()) >= 2 else None)
+        trailing_stop = _compute_live_trail(
+            current_stop  = float(trade["stop_loss"]),
+            entry_price   = float(trade["entry_price"]),
+            current_price = lc,
+            prev_ema20    = prev_ema20_live,
+            current_ema20 = l20,
+        )
 
         is_risk_free = trailing_stop > trade["entry_price"]
 

@@ -52,8 +52,8 @@ from constants import (
 )
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
 
-# V5: per-setup ATR trail multipliers.
-# Task 3 will apply the same logic to _enrich_trade() in main.py (live portfolio).
+# V5: per-setup ATR trail multipliers. Used only when trail_mode="atr" (A/B testing).
+# Live portfolio enrichment uses compute_live_trail() from execution/trailing_engine.py.
 _TRAIL_ATR_BY_SETUP = {
     "VCP":          lambda: _constants.VCP_TRAIL_ATR_MULT,
     "PULLBACK":     lambda: _constants.PULLBACK_TRAIL_ATR_MULT,
@@ -61,9 +61,41 @@ _TRAIL_ATR_BY_SETUP = {
     "BASE":         lambda: _constants.BASE_TRAIL_ATR_MULT,
 }
 
+# Keys captured from signal into trade state _setup_meta (exposed for tests)
+_BACKTEST_META_KEYS = (
+    "volume_ratio", "breakout_pct", "resistance_level",
+    "zone_upper", "support_level", "support_source", "zone_source",
+    "pullback_score", "days_since_breakout", "geometry",
+    "atr", "entry",
+)
+
+
+def _extract_ref_level(setup_meta: Dict, setup_type: str) -> Optional[float]:
+    """
+    Return the Phase 2 trail-trigger reference level from a trade's setup_meta.
+
+    - VCP / RES_BREAKOUT : resistance_level (the zone the stock broke through)
+    - PULLBACK           : support_level    (the structural support it bounced from)
+    - BASE               : geometry["base_high"] (ceiling of the base pattern)
+    - HTF / LCE / others : None → EMA20 trail activates from bar 2 with no gate
+
+    Returns None if the key is absent so callers fall back gracefully.
+    """
+    if setup_type in ("VCP", "RES_BREAKOUT"):
+        return setup_meta.get("resistance_level")
+    if setup_type == "PULLBACK":
+        return setup_meta.get("support_level")
+    if setup_type == "BASE":
+        geom = setup_meta.get("geometry")
+        if isinstance(geom, dict):
+            return geom.get("base_high")
+    return None  # HTF, LCE, WATCHLIST — no reference level
+
+
 from filters import compute_regime_series, compute_regime_label_series, passes_liquidity, in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
 from analytics import print_backtest_diagnostics as _print_backtest_diagnostics
+from execution.trailing_engine import advance_ema20_trail as _advance_ema20_trail
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +162,11 @@ class BacktestParams:
     # ── Take-profit multiplier ───────────── WFO mean across 4 windows (5.80) ─
     tp_multiple:   float = 5.80
 
+    # ── Trail mode ───────────────────────────────────────────────────────────
+    # "ema20" = dynamic EMA20-based trail (Phase 1 initial → Phase 2 EMA20)
+    # "atr"   = legacy fixed ATR multiplier (backward-compatible fallback)
+    trail_mode: str = "ema20"
+
 
 # Base scores for non-pullback signals (used in scored mode post-signal gate)
 _SIGNAL_BASE_SCORES: dict = {
@@ -177,6 +214,10 @@ class TradeRecord:
     rs_score:   float = 0.0
     setup_meta: Dict  = field(default_factory=dict)
 
+    # Trail mode diagnostics
+    trail_mode:  str = "atr"     # "ema20" or "atr" — mode active for this trade
+    trail_phase: str = "initial" # "initial" or "ema20" — phase reached at exit
+
     def __post_init__(self):
         risk = self.entry_price - self.initial_stop
         if risk > 0:
@@ -218,6 +259,8 @@ class TradeRecord:
             "regime":            self.regime,
             "rs_score":          self.rs_score,
             "setup_meta":        self.setup_meta,
+            "trail_mode":        self.trail_mode,
+            "trail_phase":       self.trail_phase,
         }
 
 
@@ -380,54 +423,54 @@ def _manage_open_trade(
     """
     Advance one trading day for an open position.
 
-    Stop is checked FIRST (conservative — protects against gap-downs).
-    Then target. Then trailing stop is updated if we're still open.
+    Supports two trail modes, selected by state["_trail_mode"]:
+      "ema20" -- Phase 1: fixed initial stop; Phase 2: EMA20-based trail
+                activated once close > ref_level + 1.5xATR (min 1-bar delay).
+      "atr"   -- legacy fixed ATR multiplier (backward-compatible).
 
-    Modifies `state` in-place: trailing_stop may ratchet upward.
+    Stop is always checked FIRST. Target second. Trail update last.
+    Gap-realistic fill: exit_price = min(open, stop) on stop-outs.
 
-    Parameters
-    ----------
-    state : dict with keys:
-        entry_price, trailing_stop, take_profit, entry_date,
-        setup_type (optional) — used to select the ATR trail multiplier;
-        defaults to TRAIL_ATR_MULT fallback if absent or unrecognised
-    bar : dict with keys:
-        date, open, high, low, close, ema20, atr14
-
-    Returns
-    -------
-    (closed: bool, exit_price: float | None, exit_reason: str | None)
+    state keys (EMA20 mode):
+        _trail_mode, _trail_triggered, _bars_since_entry, _ref_level, _prev_ema20
     """
     low    = bar["low"]
     high   = bar["high"]
     close  = bar["close"]
     ema20  = bar["ema20"]
+    atr14  = bar.get("atr14", 0.0)
     stop   = state["trailing_stop"]
     target = state["take_profit"]
     entry  = state["entry_price"]
 
-    # 1. Stop hit first (low ≤ stop → filled at stop price)
+    # 1. Stop hit (gap-realistic: fill at min(open, stop))
     if low <= stop:
-        return True, stop, "STOP"
+        return True, min(bar["open"], stop), "STOP"
 
-    # 2. Target hit (high ≥ target → filled at target)
+    # 2. Target hit
     if high >= target:
         return True, target, "TARGET"
 
-    # 3. Update trailing stop: ratchet to max(EMA20, ATR-based trail) when in profit
-    if close > entry:
-        atr14 = bar.get("atr14", 0.0)
-        override = state.get("trail_mult_override")
-        if override is not None:
-            mult = override
-        else:
-            setup_type = state.get("setup_type", "")
-            mult_fn = _TRAIL_ATR_BY_SETUP.get(setup_type)
-            mult = mult_fn() if mult_fn else _constants.TRAIL_ATR_MULT
-        atr_trail = (close - mult * atr14) if atr14 > 0 else ema20
-        new_trail = max(ema20, atr_trail)
-        if new_trail > stop:
-            state["trailing_stop"] = new_trail
+    # 3. Update trailing stop
+    trail_mode = state.get("_trail_mode", "atr")
+
+    if trail_mode == "ema20":
+        _advance_ema20_trail(state, bar)
+
+    else:
+        # Legacy ATR trail (unchanged from original implementation)
+        if close > entry:
+            override = state.get("trail_mult_override")
+            if override is not None:
+                mult = override
+            else:
+                setup_type = state.get("setup_type", "")
+                mult_fn = _TRAIL_ATR_BY_SETUP.get(setup_type)
+                mult = mult_fn() if mult_fn else _constants.TRAIL_ATR_MULT
+            atr_trail = (close - mult * atr14) if atr14 > 0 else ema20
+            new_trail = max(ema20, atr_trail)
+            if new_trail > stop:
+                state["trailing_stop"] = new_trail
 
     return False, None, None
 
@@ -783,6 +826,9 @@ class BacktestEngine:
                             regime=trade_state.get("_regime", "UNKNOWN"),
                             rs_score=trade_state.get("_rs_score", 0.0),
                             setup_meta=trade_state.get("_setup_meta", {}),
+                            trail_mode=trade_state.get("_trail_mode", "atr"),
+                            trail_phase=("ema20" if trade_state.get("_trail_triggered")
+                                         else "initial"),
                         ))
                         self._last_close_date = T_date.date()
                     else:
@@ -977,11 +1023,7 @@ class BacktestEngine:
                 continue
 
             # Capture engine-specific metadata for diagnostics
-            _meta_keys = ("volume_ratio", "breakout_pct", "resistance_level",
-                          "zone_upper", "support_source", "zone_source",
-                          "pullback_score", "days_since_breakout",
-                          "atr", "entry")  # entry = signal-day close; atr = ATR14 at signal
-            _setup_meta = {k: signal[k] for k in _meta_keys if k in signal}
+            _setup_meta = {k: signal[k] for k in _BACKTEST_META_KEYS if k in signal}
 
             # For RES_BREAKOUT in V5 scored mode, use params.brk_trail_mult as the per-trade
             # trail override. This lets Optuna tune trail independently from other setups.
@@ -1007,6 +1049,14 @@ class BacktestEngine:
                 "_regime":            signal.get("_regime", "UNKNOWN"),
                 "_rs_score":          float(_rs_t.get("rs_score", 0.0)),
                 "_setup_meta":        _setup_meta,
+                # ── EMA20 trail state ─────────────────────────────────────────────
+                "_trail_mode":       (self.params.trail_mode
+                                      if self.params is not None
+                                      else _constants.TRAIL_MODE),
+                "_trail_triggered":  False,
+                "_bars_since_entry": 0,
+                "_ref_level":        _extract_ref_level(_setup_meta, _sig_type),
+                "_prev_ema20":       None,
             })
 
         # ── 5. Close any still-open trades at end of period ───────────────
@@ -1033,6 +1083,9 @@ class BacktestEngine:
                     regime=trade_state.get("_regime", "UNKNOWN"),
                     rs_score=trade_state.get("_rs_score", 0.0),
                     setup_meta=trade_state.get("_setup_meta", {}),
+                    trail_mode=trade_state.get("_trail_mode", "atr"),
+                    trail_phase=("ema20" if trade_state.get("_trail_triggered")
+                                 else "initial"),
                 ))
                 self._last_close_date = last_date.date()
 

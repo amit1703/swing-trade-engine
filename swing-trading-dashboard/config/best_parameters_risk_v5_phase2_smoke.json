@@ -1,0 +1,345 @@
+{
+  "generated_at": "2026-03-21T02:37:44.551701+00:00",
+  "study": "trading_risk_v5_phase2_smoke",
+  "total_completed_trials": 5,
+  "top_30_trials": [
+    {
+      "trial": 0,
+      "score": -10.0,
+      "params": {
+        "trail_mult": 4.1726,
+        "risk_per_trade": 1.4652,
+        "max_position_pct": 25.5549,
+        "atr_entry_early": 0.1319,
+        "atr_entry_extended": 0.3526
+      },
+      "metrics": {
+        "n_trades": 10,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_r": 0.0,
+        "max_dd": 0.0,
+        "dd_volatility": 0.0
+      },
+      "setup_stats": {
+        "VCP": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "PULLBACK": {
+          "n": 10,
+          "win_rate": 60.0,
+          "expectancy": 0.4767,
+          "profit_factor": 4.6099
+        },
+        "BASE": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "RES_BREAKOUT": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "HTF": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        }
+      }
+    },
+    {
+      "trial": 1,
+      "score": -10.0,
+      "params": {
+        "trail_mult": 3.7163,
+        "risk_per_trade": 0.8358,
+        "max_position_pct": 26.0841,
+        "atr_entry_early": 0.1319,
+        "atr_entry_extended": 0.5386
+      },
+      "metrics": {
+        "n_trades": 11,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_r": 0.0,
+        "max_dd": 0.0,
+        "dd_volatility": 0.0
+      },
+      "setup_stats": {
+        "VCP": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "PULLBACK": {
+          "n": 11,
+          "win_rate": 63.64,
+          "expectancy": 0.4945,
+          "profit_factor": 6.5132
+        },
+        "BASE": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "RES_BREAKOUT": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "HTF": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        }
+      }
+    },
+    {
+      "trial": 2,
+      "score": -10.0,
+      "params": {
+        "trail_mult": 3.4336,
+        "risk_per_trade": 1.4788,
+        "max_position_pct": 25.951,
+        "atr_entry_early": 0.1316,
+        "atr_entry_extended": 0.3613
+      },
+      "metrics": {
+        "n_trades": 10,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_r": 0.0,
+        "max_dd": 0.0,
+        "dd_volatility": 0.0
+      },
+      "setup_stats": {
+        "VCP": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "PULLBACK": {
+          "n": 10,
+          "win_rate": 60.0,
+          "expectancy": 0.4767,
+          "profit_factor": 4.6299
+        },
+        "BASE": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "RES_BREAKOUT": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "HTF": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        }
+      }
+    },
+    {
+      "trial": 3,
+      "score": -10.0,
+      "params": {
+        "trail_mult": 3.7735,
+        "risk_per_trade": 1.0094,
+        "max_position_pct": 24.7375,
+        "atr_entry_early": 0.1318,
+        "atr_entry_extended": 0.3981
+      },
+      "metrics": {
+        "n_trades": 10,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_r": 0.0,
+        "max_dd": 0.0,
+        "dd_volatility": 0.0
+      },
+      "setup_stats": {
+        "VCP": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "PULLBACK": {
+          "n": 10,
+          "win_rate": 60.0,
+          "expectancy": 0.4767,
+          "profit_factor": 5.5568
+        },
+        "BASE": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "RES_BREAKOUT": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "HTF": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        }
+      }
+    },
+    {
+      "trial": 4,
+      "score": -10.0,
+      "params": {
+        "trail_mult": 4.668,
+        "risk_per_trade": 0.8932,
+        "max_position_pct": 23.82,
+        "atr_entry_early": 0.1317,
+        "atr_entry_extended": 0.4537
+      },
+      "metrics": {
+        "n_trades": 10,
+        "expectancy": 0.0,
+        "profit_factor": 0.0,
+        "avg_r": 0.0,
+        "max_dd": 0.0,
+        "dd_volatility": 0.0
+      },
+      "setup_stats": {
+        "VCP": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "PULLBACK": {
+          "n": 10,
+          "win_rate": 60.0,
+          "expectancy": 0.4767,
+          "profit_factor": 5.7231
+        },
+        "BASE": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "RES_BREAKOUT": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        },
+        "HTF": {
+          "n": 0,
+          "win_rate": 0.0,
+          "expectancy": 0.0,
+          "profit_factor": 0.0
+        }
+      }
+    }
+  ],
+  "distribution": {
+    "trail_mult": {
+      "mean": 3.9528,
+      "std": 0.4284,
+      "min": 3.4336,
+      "max": 4.668
+    },
+    "risk_per_trade": {
+      "mean": 1.1365,
+      "std": 0.2797,
+      "min": 0.8358,
+      "max": 1.4788
+    },
+    "max_position_pct": {
+      "mean": 25.2295,
+      "std": 0.8468,
+      "min": 23.82,
+      "max": 26.0841
+    },
+    "atr_entry_early": {
+      "mean": 0.1318,
+      "std": 0.0001,
+      "min": 0.1316,
+      "max": 0.1319
+    },
+    "atr_entry_extended": {
+      "mean": 0.4209,
+      "std": 0.0688,
+      "min": 0.3526,
+      "max": 0.5386
+    }
+  },
+  "stability": {
+    "trail_mult": {
+      "narrow": true,
+      "std_pct_of_range": 6.6
+    },
+    "risk_per_trade": {
+      "narrow": false,
+      "std_pct_of_range": 28.0
+    },
+    "max_position_pct": {
+      "narrow": true,
+      "std_pct_of_range": 4.2
+    },
+    "atr_entry_early": {
+      "narrow": true,
+      "std_pct_of_range": 0.1
+    },
+    "atr_entry_extended": {
+      "narrow": true,
+      "std_pct_of_range": 11.5
+    }
+  },
+  "sensitivity": {
+    "trail_mult_buckets": {
+      "[2.0-3.5]": {
+        "n_trials": 1,
+        "avg_score": -10.0
+      },
+      "[3.5-5.0]": {
+        "n_trials": 4,
+        "avg_score": -10.0
+      },
+      "[5.0-6.5]": {
+        "n_trials": 0,
+        "avg_score": 0.0
+      },
+      "[6.5-8.5]": {
+        "n_trials": 0,
+        "avg_score": 0.0
+      }
+    }
+  },
+  "recommended": {
+    "trail_mult": 4.1726,
+    "risk_per_trade": 1.4652,
+    "max_position_pct": 25.5549,
+    "atr_entry_early": 0.1319,
+    "atr_entry_extended": 0.3526,
+    "score": -10.0,
+    "rationale": "Top trial #0 by score; expectancy=0.0, max_dd=0.0%."
+  }
+}
