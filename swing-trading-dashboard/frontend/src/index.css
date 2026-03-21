@@ -1,3 +1,5 @@
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -20,6 +22,24 @@
   --purple:       #9B6EFF;
   --radius-card:  12px;
   --shadow-card:  0 4px 24px rgba(0,0,0,0.5);
+
+  /* shadcn/ui required variables — hex format, matching our palette */
+  --background:            #000000;
+  --foreground:            #c8cdd6;
+  --card-foreground:       #c8cdd6;
+  --primary:               #F5A623;
+  --primary-foreground:    #000000;
+  --secondary:             #1a2535;
+  --secondary-foreground:  #c8cdd6;
+  --muted-foreground:      #4a5a72;
+  --accent-foreground:     #c8cdd6;
+  --destructive:           #ff2d55;
+  --destructive-foreground:#ffffff;
+  --popover:               #0f1520;
+  --popover-foreground:    #c8cdd6;
+  --ring:                  #F5A623;
+  --input:                 #1a2535;
+  --radius:                0.5rem;
 }
 
 /* ── Base ────────────────────────────────────────────── */
