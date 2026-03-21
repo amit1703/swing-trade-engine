@@ -26,27 +26,38 @@ Two files:
 | File | Change |
 |------|--------|
 | `frontend/src/components/StockIntelPanel.jsx` | Use `analysis` as fallback when `setup` is null; fix amber values; update placeholder text |
-| `frontend/src/App.jsx` | Change search `switchTab` from `false` → `true` |
+| `frontend/src/App.jsx` | Stale-analysis guard on `analysis` prop; change search `switchTab` false → true |
 
-No backend changes. No new API endpoints. No changes to props interfaces.
+No backend changes. No new API endpoints. No new component props.
 
 ---
 
 ## StockIntelPanel.jsx Changes
 
+### Rename `setup` → `displaySetup` throughout
+
+The component currently references `setup.xxx` directly in the render body. The full replacement requires renaming every `setup.xxx` reference in the render body to `displaySetup.xxx`. This does **NOT** include the prop parameter in the function signature — `setup` must remain as the destructured prop name so the synthesis expression `setup ?? (analysis ? {...} : null)` can read the incoming prop. Only usages after the synthesis line are renamed. Fields to rename:
+
+- `setup.ticker` — in the header, TradingView `<a href>` link, and `livePrices` lookup
+- `setup.setup_type` — in the subtitle line
+- `setup.setup_score` — in `<ScoreBadge>`
+- `setup.entry`, `setup.stop_loss`, `setup.take_profit` — in `livePrice` dist computation, `risk` computation, and TRADE PLAN rows
+- `setup.rr` — in the `rr` computation
+- `setup.rs_score`, `setup.is_vol_surge`, `setup.vol_ratio`, `setup.rs_blue_dot` — in SIGNALS rows
+
 ### Fallback logic
 
-When `setup` is null, the component currently renders a placeholder immediately. Change to:
+At the top of the component (after the synthesis block), the early-return logic becomes:
 
-1. If `setup` is null AND `analysisLoading` is true → render loading shimmer (same shimmer used in the analysis section), not the placeholder
-2. If `setup` is null AND `analysis` is available → synthesize a `displaySetup` object from `analysis` fields and render the full panel using `displaySetup`
-3. If `setup` is null AND neither loading nor analysis → render placeholder (unchanged)
+1. If `displaySetup` is null AND `analysisLoading` is true → render loading shimmer
+2. If `displaySetup` is null AND neither loading nor analysis → render placeholder
+3. Otherwise → render full panel using `displaySetup`
 
-When `setup` is not null, use it as-is (existing behavior unchanged).
+When `setup` (the prop) is not null, `displaySetup = setup` and behavior is identical to today.
 
 ### Synthesis mapping
 
-Build `displaySetup` from `analysis` when `setup` is null:
+`rs_score` field: `analysis.signals.rs_score` is a decimal value (e.g., `0.12`), same unit as `setup.rs_score`. The component multiplies by 100 for display (`Math.round(rs_score * 100)`), so no normalization needed.
 
 ```js
 const displaySetup = setup ?? (analysis ? {
@@ -64,15 +75,15 @@ const displaySetup = setup ?? (analysis ? {
 } : null)
 ```
 
-All downstream rendering uses `displaySetup` instead of `setup` — no other logic changes.
+`rs_blue_dot: false` is intentional — the analysis endpoint does not return this field. The blue dot won't appear for analysis-only selections, which is acceptable.
 
-`rs_blue_dot: false` is intentional: the analysis endpoint does not return this field. The blue dot simply won't appear for analysis-only selections, which is acceptable.
+### Loading shimmer when setup is null
 
-### Loading state when setup is null
-
-Replace the placeholder with a shimmer while `analysisLoading && !setup`:
+Place the synthesis expression and early-return block **immediately inside the `StockIntelPanel` function body, before the existing `if (!setup)` guard**. Replace the existing `if (!setup) { return ... }` block entirely with the following (do not leave both guards in place):
 
 ```jsx
+const displaySetup = setup ?? (analysis ? { ...synthFields } : null)
+
 if (!displaySetup) {
   if (analysisLoading) {
     return (
@@ -94,18 +105,35 @@ if (!displaySetup) {
 }
 ```
 
-### Amber color fixes
+### Amber color fixes — 4 locations
 
-Two hardcoded amber rgba values in the verdict badge must be updated:
+All hardcoded amber `rgba(245,166,35,...)` values in the file:
 
 | Location | Old | New |
 |----------|-----|-----|
-| `background` when `verdict_color === 'accent'` | `rgba(245,166,35,0.15)` | `rgba(80,216,240,0.15)` |
-| `border` when `verdict_color === 'accent'` | `rgba(245,166,35,0.35)` | `rgba(80,216,240,0.35)` |
+| AI VERDICT badge `background` when `verdict_color === 'accent'` | `rgba(245,166,35,0.15)` | `rgba(80,216,240,0.15)` |
+| AI VERDICT badge `border` when `verdict_color === 'accent'` | `rgba(245,166,35,0.35)` | `rgba(80,216,240,0.35)` |
+| TradingView button `background` | `rgba(245,166,35,0.08)` | `rgba(80,216,240,0.08)` |
+| TradingView button `border` | `rgba(245,166,35,0.2)` | `rgba(80,216,240,0.2)` |
 
 ---
 
 ## App.jsx Changes
+
+### Stale-analysis guard
+
+A race condition exists: if the user rapidly clicks two different tickers, a slow analysis fetch from the first click can resolve after the user has moved to the second ticker. To prevent a stale analysis from populating the synthesis, guard the `analysis` prop passed to `StockIntelPanel`:
+
+```jsx
+<StockIntelPanel
+  setup={selectedSetup}
+  livePrices={livePrices}
+  analysis={analysis?.ticker === selectedTicker ? analysis : null}
+  analysisLoading={analysisLoading}
+/>
+```
+
+`selectedTicker` is available in App.jsx scope. `analysis.ticker` is always present in the response from `/api/analyze/{ticker}`.
 
 ### Search always navigates to scanner
 
@@ -121,7 +149,7 @@ to:
 onSearchTicker={(t) => handleTickerClick(t, true)}
 ```
 
-`switchTab = true` causes `handleTickerClick` to call `setActivePage('scanner')`, so the user lands on the scanner page where `StockIntelPanel` is rendered.
+`switchTab = true` causes `handleTickerClick` to call `setActivePage('scanner')`, landing the user on the scanner page where `StockIntelPanel` is rendered.
 
 ---
 
@@ -135,12 +163,13 @@ onSearchTicker={(t) => handleTickerClick(t, true)}
 | Search ticker (any page) | ❌ Stays on current page; empty if not in scan | ✅ Navigates to scanner; full panel from analysis |
 | No ticker selected | ✅ Placeholder | ✅ Placeholder (unchanged) |
 | Analysis loading, no setup | ❌ Placeholder shown immediately | ✅ Loading shimmer shown |
+| Rapid ticker switching (race) | ⚠️ Stale analysis could appear | ✅ Stale analysis filtered in App.jsx |
 
 ---
 
 ## What Does NOT Change
 
-- Props interface of `StockIntelPanel`: `{ setup, livePrices, analysis, analysisLoading }` — unchanged
+- Props interface of `StockIntelPanel`: `{ setup, livePrices, analysis, analysisLoading }` — unchanged (stale guard is in App.jsx, not the component)
 - `handleTickerClick` function signature — unchanged
 - WL item click behavior (already navigates to scanner via `switchTab=true` default) — no change needed
 - Backend endpoints — no changes
