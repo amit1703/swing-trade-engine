@@ -206,7 +206,7 @@ html, body, #root {
 
 /* ── Bottom tab bar — mobile only ────────────────── */
 .bottom-tab-bar { display: flex; }
-@media (min-width: 641px) { .bottom-tab-bar { display: none !important; } }
+@media (min-width: 640px) { .bottom-tab-bar { display: none !important; } }
 
 /* ── Mobile responsive (≤ 640px) ────────────────── */
 @media (max-width: 640px) {
