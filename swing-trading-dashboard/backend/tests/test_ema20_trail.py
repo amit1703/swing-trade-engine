@@ -317,3 +317,43 @@ def test_compute_live_trail_not_in_profit():
         current_stop=90.0, entry_price=100.0, current_price=98.0,
         prev_ema20=101.0, current_ema20=100.0)
     assert result == 90.0
+
+
+def test_enrich_trade_live_trail_uses_prev_ema20(monkeypatch):
+    """
+    _enrich_trade must use compute_live_trail (not ATR logic),
+    raising the stop when in profit.
+    """
+    import asyncio
+    import pandas as pd
+
+    # Build a minimal 30-bar price DataFrame with steadily rising prices
+    n = 30
+    closes = [100.0 + i * 0.5 for i in range(n)]  # 100, 100.5, ..., 114.5
+    df = pd.DataFrame({
+        "Close":     closes,
+        "Adj Close": closes,
+        "High":      [c + 1 for c in closes],
+        "Low":       [c - 1 for c in closes],
+        "Volume":    [1_000_000] * n,
+    })
+
+    import main as _main
+    async def mock_fetch(ticker):
+        return df
+    monkeypatch.setattr(_main, "_fetch", mock_fetch)
+
+    trade = {
+        "ticker":       "TEST",
+        "entry_price":  100.0,
+        "stop_loss":    90.0,
+        "quantity":     10,
+        "setup_type":   "PULLBACK",
+    }
+
+    result = asyncio.run(_main._enrich_trade(trade))
+
+    # Current price ~114.5 >> entry 100 → in profit → stop must rise
+    assert result["trailing_stop"] > 90.0
+    assert result["trailing_stop"] >= trade["stop_loss"]
+    assert result["is_risk_free"] is True  # stop above entry price
