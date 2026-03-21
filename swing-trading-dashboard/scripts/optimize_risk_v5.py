@@ -46,9 +46,22 @@ WFO_STEP_MONTHS = 6
 # Note: run_wfo derives its date range from the price cache contents directly.
 # There is no start/end_date argument. Do NOT define dead WFO_START/END_DATE constants.
 
-_STUDY_DB          = str(_PROJECT_DIR / "optuna_study.db")
-_STUDY_NAME_P1     = "trading_risk_v5_phase1"
-_STUDY_NAME_P2     = "trading_risk_v5_phase2"
+# Smoke-test overrides (activated by --smoke flag).
+# Uses minimal tickers + short windows so each trial completes in <30s.
+# Correctness check only — not representative of production volumes.
+_SMOKE_IS_MONTHS    = 12
+_SMOKE_OOS_MONTHS   = 3
+_SMOKE_STEP_MONTHS  = 6
+_SMOKE_SETUP_TYPES  = ["VCP", "PULLBACK"]  # reduced set to keep trial time under 30s
+# 3 large-cap tickers with guaranteed WFO cache.
+_SMOKE_TICKERS = ["SPY", "AAPL", "MSFT"]
+
+_STUDY_DB               = str(_PROJECT_DIR / "optuna_study.db")
+_STUDY_NAME_P1          = "trading_risk_v5_phase1"
+_STUDY_NAME_P2          = "trading_risk_v5_phase2"
+# Smoke mode uses separate study names so smoke trials don't pollute production studies.
+_STUDY_NAME_P1_SMOKE    = "trading_risk_v5_phase1_smoke"
+_STUDY_NAME_P2_SMOKE    = "trading_risk_v5_phase2_smoke"
 _OUTPUT_P1         = _PROJECT_DIR / "config" / "best_parameters_risk_v5_phase1.json"
 _OUTPUT_P2         = _PROJECT_DIR / "config" / "best_parameters_risk_v5_phase2.json"
 _CSV_LOG           = "optuna_trial_log_risk_v5.csv"
@@ -283,7 +296,11 @@ def _log_trial(trial, metrics: dict, setup_stats: dict, log_path: str = _CSV_LOG
         writer.writerow(row)
 
 
-def objective(trial, bounds: dict) -> float:
+def objective(trial, bounds: dict, is_months: int = WFO_IS_MONTHS,
+              oos_months: int = WFO_OOS_MONTHS,
+              step_months: int = WFO_STEP_MONTHS,
+              tickers: list = None,
+              setup_types: list = None) -> float:
     import optuna
 
     trail_mult         = trial.suggest_float("trail_mult",         *bounds["trail_mult"])
@@ -301,13 +318,15 @@ def objective(trial, bounds: dict) -> float:
         "max_position_pct": max_position_pct,
     }
 
+    _tickers     = tickers     if tickers     is not None else (["SPY"] + REPRESENTATIVE_TICKERS_V2)
+    _setup_types = setup_types if setup_types is not None else WFO_SETUP_TYPES
     with _patch_constants(params):
         result = asyncio.run(run_wfo(
-            tickers=["SPY"] + REPRESENTATIVE_TICKERS_V2,
-            setup_types=WFO_SETUP_TYPES,
-            is_months=WFO_IS_MONTHS,
-            oos_months=WFO_OOS_MONTHS,
-            step_months=WFO_STEP_MONTHS,
+            tickers=_tickers,
+            setup_types=_setup_types,
+            is_months=is_months,
+            oos_months=oos_months,
+            step_months=step_months,
             run_id=f"v5_trial_{trial.number}",
         ))
 
@@ -400,11 +419,15 @@ def _compute_phase2_ranges(top_trials: list, bounds_p1: dict) -> dict:
     return ranges
 
 
-def _load_phase2_bounds() -> dict:
-    if not _OUTPUT_P1.exists():
-        print(f"  Warning: Phase 1 output not found at {_OUTPUT_P1}. Using P1 bounds.")
+def _load_phase2_bounds(smoke: bool = False) -> dict:
+    p1_path = (
+        _PROJECT_DIR / "config" / "best_parameters_risk_v5_phase1_smoke.json"
+        if smoke else _OUTPUT_P1
+    )
+    if not p1_path.exists():
+        print(f"  Warning: Phase 1 output not found at {p1_path}. Using P1 bounds.")
         return BOUNDS_P1
-    data   = json.loads(_OUTPUT_P1.read_text())
+    data   = json.loads(p1_path.read_text())
     ranges = data.get("phase2_suggested_ranges", {})
     bounds = {}
     for param, (lo_orig, hi_orig) in BOUNDS_P1.items():
@@ -415,7 +438,10 @@ def _load_phase2_bounds() -> dict:
     return bounds
 
 
-def _export_phase1(study, suppress_output: bool = False) -> None:
+def _export_phase1(study, suppress_output: bool = False,
+                   output_path: Path = None) -> None:
+    if output_path is None:
+        output_path = _OUTPUT_P1
     completed = [t for t in study.trials if t.state.name == "COMPLETE" and t.value is not None]
     if not completed:
         print("No completed trials to export.")
@@ -449,8 +475,8 @@ def _export_phase1(study, suppress_output: bool = False) -> None:
         "phase2_suggested_ranges": p2_ranges,
     }
 
-    _OUTPUT_P1.parent.mkdir(parents=True, exist_ok=True)
-    _OUTPUT_P1.write_text(json.dumps(output, indent=2))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(output, indent=2))
 
     if not suppress_output:
         print(f"\n{'='*60}")
@@ -466,10 +492,13 @@ def _export_phase1(study, suppress_output: bool = False) -> None:
         for bucket, info in sensitivity.items():
             print(f"    {bucket:<12} avg={info['avg_score']:+.4f}  n={info['n_trials']}")
         print(f"\n  Phase 2 suggested ranges: {p2_ranges}")
-        print(f"  Exported to: {_OUTPUT_P1}")
+        print(f"  Exported to: {output_path}")
 
 
-def _export_phase2(study, suppress_output: bool = False) -> None:
+def _export_phase2(study, suppress_output: bool = False,
+                   output_path: Path = None, bounds_p2: dict = None) -> None:
+    if output_path is None:
+        output_path = _OUTPUT_P2
     completed = [t for t in study.trials if t.state.name == "COMPLETE" and t.value is not None]
     if not completed:
         print("No completed trials to export.")
@@ -477,7 +506,8 @@ def _export_phase2(study, suppress_output: bool = False) -> None:
 
     top_30 = sorted(completed, key=lambda t: t.value, reverse=True)[:30]
     best   = top_30[0]
-    bounds_p2 = _load_phase2_bounds()
+    if bounds_p2 is None:
+        bounds_p2 = _load_phase2_bounds()
 
     dist      = _compute_distribution(top_30, bounds_p2)
     stability = _compute_stability(dist, bounds_p2)
@@ -518,8 +548,8 @@ def _export_phase2(study, suppress_output: bool = False) -> None:
         "recommended":   recommended,
     }
 
-    _OUTPUT_P2.parent.mkdir(parents=True, exist_ok=True)
-    _OUTPUT_P2.write_text(json.dumps(output, indent=2))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(output, indent=2))
 
     if not suppress_output:
         print(f"\n{'='*60}")
@@ -530,14 +560,15 @@ def _export_phase2(study, suppress_output: bool = False) -> None:
                 continue
             print(f"  {k:<25} {v}")
         print(f"\n  Rationale: {recommended['rationale']}")
-        print(f"  Exported to: {_OUTPUT_P2}")
+        print(f"  Exported to: {output_path}")
 
 
 # ---------------------------------------------------------------------------
 # Section 7: main() and CLI
 # ---------------------------------------------------------------------------
 
-def main(phase: int, n_trials: int, suppress_output: bool = False) -> None:
+def main(phase: int, n_trials: int, suppress_output: bool = False,
+         smoke: bool = False) -> None:
     import optuna
     from optuna.samplers import TPESampler
     from optuna.pruners import MedianPruner
@@ -545,14 +576,27 @@ def main(phase: int, n_trials: int, suppress_output: bool = False) -> None:
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     _preload_modules()
 
+    is_months   = _SMOKE_IS_MONTHS    if smoke else WFO_IS_MONTHS
+    oos_months  = _SMOKE_OOS_MONTHS   if smoke else WFO_OOS_MONTHS
+    step_months = _SMOKE_STEP_MONTHS  if smoke else WFO_STEP_MONTHS
+    tickers     = _SMOKE_TICKERS      if smoke else None   # None → full representative list
+    setup_types = _SMOKE_SETUP_TYPES  if smoke else None   # None → WFO_SETUP_TYPES
+
     if phase == 1:
-        study_name = _STUDY_NAME_P1
+        study_name = _STUDY_NAME_P1_SMOKE if smoke else _STUDY_NAME_P1
+        output_p1  = _PROJECT_DIR / "config" / "best_parameters_risk_v5_phase1_smoke.json" if smoke else _OUTPUT_P1
         bounds     = BOUNDS_P1
     else:
-        study_name = _STUDY_NAME_P2
-        bounds     = _load_phase2_bounds()
+        study_name = _STUDY_NAME_P2_SMOKE if smoke else _STUDY_NAME_P2
+        output_p2  = _PROJECT_DIR / "config" / "best_parameters_risk_v5_phase2_smoke.json" if smoke else _OUTPUT_P2
+        bounds     = _load_phase2_bounds(smoke=smoke)
         if not suppress_output:
             print(f"  Phase 2 bounds loaded: {bounds}")
+
+    if smoke and not suppress_output:
+        _ntickers = len(tickers) if tickers else len(REPRESENTATIVE_TICKERS_V2) + 1
+        print(f"  [SMOKE MODE] IS={is_months}m  OOS={oos_months}m  step={step_months}m  "
+              f"tickers={_ntickers}  setup_types={setup_types}")
 
     study = optuna.create_study(
         study_name=study_name,
@@ -585,21 +629,36 @@ def main(phase: int, n_trials: int, suppress_output: bool = False) -> None:
                     )
 
         study.optimize(
-            lambda trial: objective(trial, bounds),
+            lambda trial: objective(trial, bounds,
+                                    is_months=is_months,
+                                    oos_months=oos_months,
+                                    step_months=step_months,
+                                    tickers=tickers,
+                                    setup_types=setup_types),
             n_trials=remaining,
             callbacks=[_cb],
         )
 
     if phase == 1:
-        _export_phase1(study, suppress_output=suppress_output)
+        _export_phase1(study, suppress_output=suppress_output,
+                       output_path=output_p1)
     else:
-        _export_phase2(study, suppress_output=suppress_output)
+        _export_phase2(study, suppress_output=suppress_output,
+                       output_path=output_p2, bounds_p2=bounds)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Risk Optimizer V5")
     parser.add_argument("--phase",  type=int, default=1, choices=[1, 2])
     parser.add_argument("--trials", type=int, default=None)
+    parser.add_argument(
+        "--smoke", action="store_true",
+        help=(
+            f"Smoke-test mode: shorten WFO windows to IS={_SMOKE_IS_MONTHS}m "
+            f"OOS={_SMOKE_OOS_MONTHS}m step={_SMOKE_STEP_MONTHS}m for fast iteration. "
+            "Does NOT affect production runs."
+        ),
+    )
     args = parser.parse_args()
     n    = args.trials or (_DEFAULT_TRIALS_P1 if args.phase == 1 else _DEFAULT_TRIALS_P2)
-    main(phase=args.phase, n_trials=n)
+    main(phase=args.phase, n_trials=n, smoke=args.smoke)
