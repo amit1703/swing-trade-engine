@@ -237,7 +237,7 @@ function FavRow({ row, isSelected, onSelect, onToggleFavorite }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function FavoritesPage({ favorites, onToggleFavorite, allSetups, watchlistItems, selectedTicker, onSelectTicker, livePrices = {} }) {
+export default function FavoritesPage({ favorites = [], onToggleFavorite, allSetups = [], watchlistItems = [], selectedTicker, onSelectTicker, livePrices = {} }) {
   const [sort, setSort] = useState({ col: 'dist', dir: 'asc' })
 
   const handleSort = (col) => {
@@ -291,7 +291,7 @@ export default function FavoritesPage({ favorites, onToggleFavorite, allSetups, 
                 key={row.key}
                 row={row}
                 isSelected={selectedTicker === row.ticker}
-                onSelect={() => onSelectTicker(row.ticker)}
+                onSelect={() => onSelectTicker?.(row.ticker)}
                 onToggleFavorite={onToggleFavorite}
               />
             ))}
