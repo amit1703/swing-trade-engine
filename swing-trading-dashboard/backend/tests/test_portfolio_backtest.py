@@ -45,3 +45,10 @@ def test_run_portfolio_backtest_universe_empty():
     from portfolio_backtest import run_portfolio_backtest_universe, BacktestConfig
     result = asyncio.run(run_portfolio_backtest_universe([], BacktestConfig()))
     assert result == []
+
+
+def test_backtest_engine_has_prepare_method():
+    from backtest_engine import BacktestEngine
+    engine = BacktestEngine("AAPL", "2023-01-01", "2023-03-01")
+    assert hasattr(engine, "prepare")
+    assert callable(engine.prepare)

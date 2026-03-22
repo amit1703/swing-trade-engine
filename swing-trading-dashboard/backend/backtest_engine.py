@@ -685,6 +685,95 @@ class BacktestEngine:
         self.params              = params
         self._last_close_date: Optional[date] = None   # for per-ticker cooldown
 
+    async def prepare(self, shared_spy_df=None):
+        """
+        Fetch and pre-compute all data for this ticker.
+
+        Returns a TickerSimState ready for use by run_portfolio_backtest_universe().
+        Returns None if data fetch fails or the ticker has insufficient history.
+
+        WFO compatibility: if self.ticker_df and self.spy_df are already set
+        (pre-loaded by wfo_engine.py), uses them directly without re-fetching.
+
+        shared_spy_df: pass the already-fetched SPY df to avoid re-downloading
+                       SPY once per ticker (used by the portfolio coordinator).
+        """
+        # ── 1. Fetch or use preloaded data ────────────────────────────────────
+        if self.ticker_df is not None and self.spy_df is not None:
+            ticker_df = self.ticker_df
+            spy_df    = self.spy_df
+        else:
+            ticker_df, spy_df_fetched = await _fetch_data(self.ticker, self.start_date)
+            spy_df = shared_spy_df if shared_spy_df is not None else spy_df_fetched
+            if ticker_df is None or spy_df is None:
+                logger.warning("BacktestEngine.prepare: data fetch failed for %s", self.ticker)
+                return None
+
+        # ── 2. Price column identification ────────────────────────────────────
+        adj_col = "Adj Close" if "Adj Close" in ticker_df.columns else "Close"
+
+        # ── 3. SR zones (full window — same intentional trade-off as run()) ───
+        from engines.engine1 import calculate_sr_zones as _calc_sr_zones
+        sr_zones_cache = _calc_sr_zones(self.ticker, ticker_df)
+
+        # ── 4. Indicator columns ──────────────────────────────────────────────
+        if "_EMA8" not in ticker_df.columns:
+            ticker_df = ticker_df.copy()
+            _c = ticker_df[adj_col]
+            _h = ticker_df["High"]
+            _l = ticker_df["Low"]
+            ticker_df["_EMA8"]    = _ema(_c, 8)
+            ticker_df["_EMA20"]   = _ema(_c, 20)
+            ticker_df["_SMA50"]   = _sma(_c, 50)
+            ticker_df["_SMA200"]  = _sma(_c, 200)
+            ticker_df["_ATR14"]   = _atr(_h, _l, _c, 14)
+            ticker_df["_CCI20"]   = _cci(_h, _l, _c, 20)
+            if "Volume" in ticker_df.columns:
+                ticker_df["_VOLSMA50"] = ticker_df["Volume"].rolling(50, min_periods=10).mean()
+
+        ema20_full = ticker_df["_EMA20"]
+        atr14_full = ticker_df["_ATR14"] if "_ATR14" in ticker_df.columns else None
+
+        # ── 5. RS series (O(1) per-bar lookup in the coordinator loop) ────────
+        _close_s     = ticker_df[adj_col]
+        _spy_adj     = "Adj Close" if "Adj Close" in spy_df.columns else "Close"
+        _spy_aligned = spy_df[_spy_adj].reindex(ticker_df.index, method="ffill").fillna(0.0)
+        _mask        = _spy_aligned > 0
+        _rs_ratio_s  = pd.Series(0.0, index=ticker_df.index)
+        _rs_ratio_s[_mask] = _close_s[_mask] / _spy_aligned[_mask]
+        _rs_52wh_s   = _rs_ratio_s.rolling(252, min_periods=1).max()
+
+        _PERIODS = [63, 126, 189, 252]
+        _WEIGHTS = [0.40, 0.20, 0.20, 0.20]
+        _rs_score_s = pd.Series(0.0, index=ticker_df.index)
+        _rs_wt_s    = pd.Series(0.0, index=ticker_df.index)
+        for _p, _w in zip(_PERIODS, _WEIGHTS):
+            _tk_ret  = _close_s / _close_s.shift(_p) - 1.0
+            _spy_ret = _spy_aligned / _spy_aligned.shift(_p) - 1.0
+            _valid   = ~(_tk_ret.isna() | _spy_ret.isna() | ~_mask)
+            _rs_score_s = _rs_score_s + _w * (_tk_ret.where(_valid, 0.0) - _spy_ret.where(_valid, 0.0))
+            _rs_wt_s    = _rs_wt_s    + _w * _valid.astype(float)
+        _rs_score_s = (_rs_score_s / _rs_wt_s.replace(0.0, np.nan)).fillna(0.0)
+        _spy_3m_s   = (_spy_aligned / _spy_aligned.shift(63) - 1.0).fillna(0.0)
+
+        # Lazy import to avoid circular import (portfolio_backtest imports backtest_engine)
+        from portfolio_backtest import TickerSimState
+        return TickerSimState(
+            ticker         = self.ticker,
+            ticker_df      = ticker_df,
+            spy_df         = spy_df,
+            adj_col        = adj_col,
+            ticker_dates   = ticker_df.index,
+            ema20_full     = ema20_full,
+            atr14_full     = atr14_full,
+            sr_zones_cache = sr_zones_cache,
+            rs_ratio_s     = _rs_ratio_s,
+            rs_52wh_s      = _rs_52wh_s,
+            rs_score_s     = _rs_score_s,
+            spy_3m_s       = _spy_3m_s,
+            params         = self.params,
+        )
+
     async def run(self) -> BacktestSummary:
         """Execute the backtest. Returns a BacktestSummary with all closed trades."""
         run_id = self.run_id
