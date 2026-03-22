@@ -3488,13 +3488,6 @@ async def run_isoos_diagnostics(
         global _isoos_running, _isoos_status
         try:
             # ── Phase IS ──────────────────────────────────────────────────
-            _isoos_status.update({
-                "status":  "running_is",
-                "phase":   "is",
-                "current": 0,
-                "total":   len(tickers),
-            })
-
             async def _progress_is(done: int, total: int):
                 _isoos_status["current"] = done
                 _isoos_status["total"]   = total
@@ -3588,6 +3581,8 @@ async def run_isoos_diagnostics(
             log.error("IS/OOS backtest failed: %s", exc)
         finally:
             _isoos_running = False
+            if _isoos_status["status"] in ("running_is", "running_oos"):
+                _isoos_status["status"] = "failed"
 
     background_tasks.add_task(_do_isoos)
     return {"status": "started", "tickers": len(tickers)}

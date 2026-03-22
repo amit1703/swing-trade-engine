@@ -17,13 +17,15 @@ def test_isoos_run_request_defaults():
     assert "VCP" not in req.setup_types
 
 
-def test_isoos_status_initial_state():
-    """_isoos_status global starts idle."""
+def test_isoos_status_starts_idle():
+    """_isoos_status global is idle at module import — not in a running state."""
+    import importlib
+    import sys
+    # Remove cached module to get a fresh import
+    for k in list(sys.modules.keys()):
+        if k == "main":
+            del sys.modules[k]
     import main as m
-    m._isoos_status.update({
-        "status": "idle", "is_done": False,
-        "current": 0, "total": 0, "phase": None, "error": None,
-    })
     assert m._isoos_status["status"] == "idle"
     assert m._isoos_status["is_done"] is False
     assert m._isoos_status["phase"] is None
