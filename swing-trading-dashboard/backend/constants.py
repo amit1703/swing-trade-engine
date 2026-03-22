@@ -19,6 +19,9 @@ KDE_BREAKOUT_UPPER_PCT = 0.025  # 2.5% above resistance for KDE breakouts
 KDE_BREAKOUT_LOWER_PCT = 0.001  # 0.1% below resistance for near-breakout detection
 DRY_RESISTANCE_PROXIMITY_PCT = 0.05  # 5% proximity for dry setups
 WATCHLIST_PROXIMITY_PCT = 0.015  # 1.5% below resistance for watchlist items
+WL_COIL_WINDOW    = 10           # bars to look back for coiling check
+WL_MIN_COIL_BARS  = 3            # min bars with close within 3% of resistance (coiling gate)
+WL_COIL_BAND_PCT  = 0.03         # 3% band below resistance upper for coiling check
 TRENDLINE_TOUCH_TOLERANCE_PCT = 0.015  # 1.5% tolerance for ascending trendline touch check
 VCP_TIGHT_RANGE_5D_PCT = 0.03594       # Optuna v4 best (trial #951); was 0.04259 (v3)
 

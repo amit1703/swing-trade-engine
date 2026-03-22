@@ -39,6 +39,7 @@ from indicators import ema as _ema, sma as _sma, atr as _atr, true_range as _tr
 from constants import (
     TARGET_RR, ATR_STOP_MULTIPLIER, VCP_ATR_CONTRACTION_THRESHOLD,
     VCP_TIGHT_RANGE_5D_PCT, VCP_MIN_CONTRACTIONS_STRICT,
+    WL_COIL_WINDOW, WL_MIN_COIL_BARS, WL_COIL_BAND_PCT,
 )
 from zone_utils import nearest_resistance_target
 
@@ -450,6 +451,7 @@ def scan_near_breakout(
 
         best_dist: Optional[float] = None
         best_level: Optional[float] = None
+        best_upper: Optional[float] = None
         best_type: Optional[str] = None
 
         # Check KDE resistance zones
@@ -462,6 +464,7 @@ def scan_near_breakout(
                     if best_dist is None or dist < best_dist:
                         best_dist = dist
                         best_level = z["level"]
+                        best_upper = upper
                         best_type = "KDE"
 
         # Check descending trendline (takes priority if closer)
@@ -473,6 +476,7 @@ def scan_near_breakout(
                     if best_dist is None or dist < best_dist:
                         best_dist = dist
                         best_level = tl_today
+                        best_upper = tl_today
                         best_type = "TDL"
 
         # ── Check confirmed KDE breakout (price 0.1-3% ABOVE resistance upper) ──
@@ -489,12 +493,25 @@ def scan_near_breakout(
                     if best_dist is None or pct_above < best_dist:
                         best_dist = pct_above
                         best_level = z["level"]
+                        best_upper = upper
                         best_type = "KDE-BRK"
 
         if best_dist is None:
             return None
 
         is_confirmed_break = best_type in ("KDE-BRK",)
+
+        # ── Coiling gate: stock must have been consolidating near resistance ──
+        # Require WL_MIN_COIL_BARS of the last WL_COIL_WINDOW bars to have their
+        # close within WL_COIL_BAND_PCT (3%) below resistance upper.
+        # This rejects stocks that just trended up to resistance without a base.
+        # Skipped for confirmed breakouts (KDE-BRK) — those already broke through.
+        if not is_confirmed_break and best_upper is not None:
+            _adj_col_name = "Adj Close" if "Adj Close" in data.columns else "Close"
+            _close_hist = data[_adj_col_name].iloc[-WL_COIL_WINDOW:]
+            _bars_near = int((_close_hist >= best_upper * (1 - WL_COIL_BAND_PCT)).sum())
+            if _bars_near < WL_MIN_COIL_BARS:
+                return None
 
         # ATR for entry quality classification
         from indicators import atr as _atr_fn
