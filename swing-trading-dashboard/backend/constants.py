@@ -19,9 +19,6 @@ KDE_BREAKOUT_UPPER_PCT = 0.025  # 2.5% above resistance for KDE breakouts
 KDE_BREAKOUT_LOWER_PCT = 0.001  # 0.1% below resistance for near-breakout detection
 DRY_RESISTANCE_PROXIMITY_PCT = 0.05  # 5% proximity for dry setups
 WATCHLIST_PROXIMITY_PCT = 0.015  # 1.5% below resistance for watchlist items
-WL_COIL_WINDOW    = 10           # bars to look back for coiling check
-WL_MIN_COIL_BARS  = 3            # min bars with close within 3% of resistance (coiling gate)
-WL_COIL_BAND_PCT  = 0.03         # 3% band below resistance upper for coiling check
 TRENDLINE_TOUCH_TOLERANCE_PCT = 0.015  # 1.5% tolerance for ascending trendline touch check
 VCP_TIGHT_RANGE_5D_PCT = 0.03594       # Optuna v4 best (trial #951); was 0.04259 (v3)
 
@@ -69,7 +66,7 @@ SMA_LONG = 50  # Long-term SMA period
 CCI_PERIOD = 20  # Commodity Channel Index period
 CCI_STRICT_FLOOR = -39.10  # Optuna v4 best (trial #951); was -50.0 (v3)
 CCI_RLX_FLOOR = -20.0   # restored from v4 overfit (-1.95 came from 43 OOS trades)
-PB_MIN_TREND_BARS = 20   # min consecutive bars EMA8>EMA20 AND Close>SMA50 before pullback signal
+PB_MIN_TREND_BARS = 10   # hard floor only — scoring handles quality above this
 
 # ──────────────────────────────────────────────────────────────────────────
 # Risk Management & Stop Loss
@@ -108,7 +105,9 @@ VCP_ATR_CONTRACTION_THRESHOLD = 0.6  # ATR today < ATR20_avg × 0.6 confirms com
 # Phase 3 — RS Ranking & Unified Scoring (Tasks 8, 9, 10)
 # ──────────────────────────────────────────────────────────────────────────
 
-RS_RANK_MIN_PERCENTILE  = 70    # gate: skip tickers with RS rank < 70
+RS_RANK_MIN_PERCENTILE_AGGRESSIVE = 65   # AGGRESSIVE regime RS hard floor
+RS_RANK_MIN_PERCENTILE_SELECTIVE  = 70   # SELECTIVE regime RS hard floor (unchanged)
+RS_RANK_MIN_PERCENTILE  = 70    # legacy alias — kept for backtest/WFO compatibility
 TOP_SECTORS_N           = 8     # top N sectors by avg RS (raised from 5; scoring uses SECTOR_TIER1_N=5 for tier 1)
 # V5 note: Optuna diagnostics show a quality inflection near regime_score ≈ 59.
 # This is NOT enforced as a hard gate. Instead, SELECTIVE regime earns only
@@ -120,15 +119,31 @@ TOP_SECTORS_N           = 8     # top N sectors by avg RS (raised from 5; scorin
 MIN_SETUP_SCORE         = 70    # gate: discard setups with unified score < 70
 LOW_SAMPLE_THRESHOLD    = 20    # min trades per setup type for reliable diagnostics
 
-# Score component weights (upper bounds; raw sum = 120, capped to 100 in compute_setup_score)
-SCORE_WEIGHT_RS_RANK    = 30    # RS percentile rank
-SCORE_WEIGHT_RR         = 20    # Reward-to-Risk ratio
-SCORE_WEIGHT_VOL        = 20    # Volume surge / momentum
-SCORE_WEIGHT_REGIME     = 15    # Market regime alignment
-SCORE_WEIGHT_SECTOR     = 10    # Full pts for top-SECTOR_TIER1_N sectors; see SECTOR_TIER2_FACTOR/SECTOR_OUT_OF_TOP_FACTOR
-SCORE_WEIGHT_QUALITY    = 5     # Pattern quality / confirmation signals
-SCORE_WEIGHT_RS_QUALITY = 20    # RS momentum signals (improving, near-high, acceleration, tight range)
+# Score component weights — sum of primary weights = 100
+# RS_QUALITY is an additive bonus (can push score above 100, capped at 100)
+SCORE_WEIGHT_RS_RANK        = 25    # RS percentile rank (reduced from 30)
+SCORE_WEIGHT_RR             = 17    # Reward-to-Risk ratio (reduced from 20)
+SCORE_WEIGHT_VOL            = 16    # Volume surge / momentum (reduced from 20)
+SCORE_WEIGHT_REGIME         = 15    # Market regime alignment (unchanged)
+SCORE_WEIGHT_TREND_DUR      = 10    # Trend duration graduated score (new)
+SCORE_WEIGHT_COILING        = 7     # Coiling quality for WATCHLIST setups (new)
+SCORE_WEIGHT_SECTOR         = 5     # Full pts for top-SECTOR_TIER1_N sectors (reduced from 10)
+SCORE_WEIGHT_SUPPORT_TIER   = 5     # Structural support tier quality (new)
+SCORE_WEIGHT_QUALITY        = 5     # Pattern quality / confirmation signals (unchanged)
+SCORE_WEIGHT_RS_QUALITY     = 20    # RS momentum signals — additive bonus (unchanged)
 SCORE_SELECTIVE_REGIME_FACTOR = 0.53   # SELECTIVE regime earns 53% of AGGRESSIVE pts (~8/15)
+
+# Support tier quality scores (used in scoring.py _score_support_tier)
+SUPPORT_TIER_SCORES = {
+    "KDE":               5,
+    "CONSOLIDATION_LOW": 4,
+    "SMA200":            3,
+    "EMA50":             3,
+    "EMA20":             2,
+}
+
+# Extension-from-support gate (ATR-normalized)
+SUPPORT_MAX_EXTENSION_ATR = 2.5   # hard reject if close > support_level + 2.5 × ATR
 
 # ──────────────────────────────────────────────────────────────────────────
 # Data Processing
