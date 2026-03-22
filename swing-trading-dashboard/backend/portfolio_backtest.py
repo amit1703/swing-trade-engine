@@ -119,6 +119,7 @@ def _detect_signals_for_date(
     T_date: pd.Timestamp,
     full_idx: int,
     setup_types: List[str],
+    regime: str = "",
 ) -> Optional[dict]:
     """
     Detect one setup signal for ticker ts on date T_date (bar at full_idx).
@@ -161,6 +162,7 @@ def _detect_signals_for_date(
             pb_setup, pb_score = _sps(
                 ts.ticker, df_slice, ts.sr_zones_cache, ts.params,
                 rs_score=rs_t["rs_score"],
+                regime=regime,
             )
             if pb_setup is not None:
                 # VCP co-signal boost (best-effort, never blocks pullback)
@@ -769,7 +771,7 @@ async def run_portfolio_backtest_universe(
                 continue
 
             # Signal detection
-            signal = _detect_signals_for_date(ts, T_date, full_idx, config.setup_types)
+            signal = _detect_signals_for_date(ts, T_date, full_idx, config.setup_types, regime=current_regime)
             if signal is None:
                 continue
 

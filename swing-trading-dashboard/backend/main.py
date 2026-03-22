@@ -1448,8 +1448,9 @@ async def _run_scan(
 
                 # ── Engine 3: Pullback (SELECTIVE/AGGRESSIVE only) ────────────────────
                 if regime["is_bullish"] or force:
+                    _regime_str = regime.get("regime", "SELECTIVE")
                     pb, pb_score = await loop.run_in_executor(
-                        None, scan_pullback_scored, ticker, df, zones, _LIVE_PARAMS, tl, rs_score
+                        None, scan_pullback_scored, ticker, df, zones, _LIVE_PARAMS, tl, rs_score, _regime_str
                     )
                     _pb_final = pb_score * _LIVE_PARAMS.pullback_weight
                     if pb and _pb_final >= _LIVE_PARAMS.score_threshold:
@@ -1475,8 +1476,9 @@ async def _run_scan(
                     else:
                         # Only check relaxed if no strict pullback found
                         try:
+                            _regime_str = regime.get("regime", "SELECTIVE")
                             pb_relaxed = await loop.run_in_executor(
-                                None, lambda: scan_relaxed_pullback(ticker, df, zones, tl, rs_score, params=_LIVE_PARAMS)
+                                None, lambda: scan_relaxed_pullback(ticker, df, zones, tl, rs_score, params=_LIVE_PARAMS, regime=_regime_str)
                             )
                             if pb_relaxed:
                                 # Sanitize relaxed pullback output
@@ -2686,15 +2688,17 @@ async def debug_ticker(ticker: str):
     e3_relaxed       = False
 
     if is_bullish and rs_threshold_gate:
+        _regime_str = regime_row.get("regime", "SELECTIVE")
         e3_scored_result, e3_score = await loop.run_in_executor(
-            None, scan_pullback_scored, sym, df, zones, _LIVE_PARAMS, tl, rs_score
+            None, scan_pullback_scored, sym, df, zones, _LIVE_PARAMS, tl, rs_score, _regime_str
         )
         e3_final_score = e3_score * _LIVE_PARAMS.pullback_weight
         e3_passes_gate = e3_final_score >= _LIVE_PARAMS.score_threshold
 
     e3 = e3_scored_result if e3_passes_gate else None
     if e3 is None and is_bullish:
-        e3 = await loop.run_in_executor(None, lambda: scan_relaxed_pullback(sym, df, zones, tl, rs_score, params=_LIVE_PARAMS))
+        _regime_str = regime_row.get("regime", "SELECTIVE")
+        e3 = await loop.run_in_executor(None, lambda: scan_relaxed_pullback(sym, df, zones, tl, rs_score, params=_LIVE_PARAMS, regime=_regime_str))
         if e3 is not None:
             e3_relaxed = True
 
