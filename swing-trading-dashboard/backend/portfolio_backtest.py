@@ -28,6 +28,7 @@ from constants import (
     SELECTIVE_SETUP_WEIGHTS,
     SELECTIVE_HARD_FILTER,
 )
+import filters as _filters
 from filters import compute_regime_label_series, passes_liquidity
 
 logger = logging.getLogger(__name__)
@@ -292,7 +293,7 @@ def _build_trade_record(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stub for portfolio runner (implemented in Task 4)
+# Portfolio runner — full implementation
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def run_portfolio_backtest_universe(
@@ -302,8 +303,258 @@ async def run_portfolio_backtest_universe(
     progress_cb=None,
 ) -> List[dict]:
     """
-    Portfolio-coordinated backtest. Stub — full implementation in Task 4.
+    Portfolio-coordinated backtest over all tickers.
+
+    Phase 1: Prepare all tickers concurrently (fetch + indicator compute).
+    Phase 2: Single day-by-day replay with global position cap.
+
+    Returns flat list of TradeRecord.to_dict() dicts.
     """
+    from backtest_engine import (
+        BacktestEngine, _manage_open_trade,
+        _SIGNAL_BASE_SCORES, _SIGNAL_BASE_SCORE_DEFAULT,
+        _fetch_data,
+    )
+
     if not tickers:
         return []
-    raise NotImplementedError("Implement in Task 4")
+
+    # ── Phase 1a: Fetch SPY once (shared across all tickers) ─────────────
+    # Soft failure: if SPY is unavailable, pass None to prepare() and build
+    # regime series from whichever spy_df is embedded in the first TickerSimState.
+    try:
+        _, spy_df = await _fetch_data("SPY", config.start_date)
+    except Exception as exc:
+        logger.warning("run_portfolio_backtest_universe: SPY fetch error: %s", exc)
+        spy_df = None
+
+    # ── Phase 1b: Prepare all tickers concurrently ────────────────────────
+    sem          = asyncio.Semaphore(CONCURRENCY_LIMIT)
+    ticker_states: List[TickerSimState] = []
+    total        = len(tickers)
+    done_count   = 0
+    lock         = asyncio.Lock()
+
+    async def _prepare_one(ticker: str) -> None:
+        nonlocal done_count
+        async with sem:
+            try:
+                engine = BacktestEngine(
+                    ticker=ticker,
+                    start_date=config.start_date,
+                    end_date=config.end_date,
+                    setup_types=config.setup_types,
+                    params=params,
+                )
+                state = await engine.prepare(shared_spy_df=spy_df)
+                if state is not None:
+                    async with lock:
+                        ticker_states.append(state)
+            except Exception as exc:
+                logger.warning("prepare failed for %s: %s", ticker, exc)
+            finally:
+                async with lock:
+                    done_count += 1
+                    if progress_cb is not None:
+                        await progress_cb(done_count, total)
+
+    await asyncio.gather(*[_prepare_one(t) for t in tickers])
+
+    if not ticker_states:
+        return []
+
+    # ── Phase 1c: Regime label series from SPY ────────────────────────────
+    # If the direct SPY fetch succeeded, use it. Otherwise fall back to the
+    # spy_df embedded in the first TickerSimState (always present after prepare()).
+    # Use _filters module reference so tests can monkeypatch filters.compute_regime_label_series.
+    _spy_for_regime = spy_df if spy_df is not None else ticker_states[0].spy_df
+    regime_label_s: pd.Series = (
+        _filters.compute_regime_label_series(_spy_for_regime)
+        if _spy_for_regime is not None and len(_spy_for_regime) > 0
+        else pd.Series(dtype=object)
+    )
+
+    # ── Phase 2: Reset mutable state ──────────────────────────────────────
+    for ts in ticker_states:
+        ts.is_in_trade     = False
+        ts.last_close_date = None
+
+    # ── Phase 2: Build union trading calendar ─────────────────────────────
+    start_ts = pd.Timestamp(config.start_date)
+    end_ts   = pd.Timestamp(config.end_date)
+    all_union = sorted(set().union(*[set(ts.ticker_dates) for ts in ticker_states]))
+    replay_dates = [d for d in all_union if start_ts <= d <= end_ts]
+
+    open_positions: List[dict]   = []
+    completed_trades: List[dict] = []
+
+    for T_date in replay_dates:
+
+        # ── Step 1: Advance all open positions ────────────────────────────
+        still_open = []
+        for pos in open_positions:
+            ts = pos["ticker_state"]
+            if T_date not in ts.ticker_dates:
+                still_open.append(pos)
+                continue
+            full_idx = ts.ticker_dates.get_loc(T_date)
+            ema20_T  = float(ts.ema20_full.iloc[full_idx])
+            atr14_T  = (float(ts.atr14_full.iloc[full_idx])
+                        if ts.atr14_full is not None and not np.isnan(ts.atr14_full.iloc[full_idx])
+                        else 0.0)
+            bar = {
+                "date":  T_date.strftime("%Y-%m-%d"),
+                "open":  float(ts.ticker_df["Open"].iloc[full_idx]),
+                "high":  float(ts.ticker_df["High"].iloc[full_idx]),
+                "low":   float(ts.ticker_df["Low"].iloc[full_idx]),
+                "close": float(ts.ticker_df[ts.adj_col].iloc[full_idx]),
+                "ema20": ema20_T if not np.isnan(ema20_T) else 0.0,
+                "atr14": atr14_T,
+            }
+            closed, exit_price, exit_reason = _manage_open_trade(pos["trade_state"], bar)
+            if closed:
+                completed_trades.append(
+                    _build_trade_record(pos, T_date, exit_price, exit_reason)
+                )
+                ts.is_in_trade     = False
+                ts.last_close_date = T_date.date()
+            else:
+                still_open.append(pos)
+        open_positions = still_open
+
+        # ── Step 2: Check available slots ─────────────────────────────────
+        available = config.max_positions - len(open_positions)
+        if available <= 0:
+            continue
+
+        # ── Step 3: Resolve regime ─────────────────────────────────────────
+        spy_before = regime_label_s.index[regime_label_s.index <= T_date]
+        current_regime = (
+            str(regime_label_s.loc[spy_before[-1]])
+            if len(spy_before) > 0
+            else "UNKNOWN"
+        )
+        if current_regime == "DEFENSIVE":
+            continue
+
+        # ── Step 4: Collect signals from all free tickers ─────────────────
+        candidates = []
+        for ts in ticker_states:
+            if ts.is_in_trade:
+                continue
+            if T_date not in ts.ticker_dates:
+                continue
+            full_idx = ts.ticker_dates.get_loc(T_date)
+            if full_idx + 1 >= len(ts.ticker_dates):
+                continue   # no T+1 bar available for entry
+
+            # Cooldown gate
+            if ts.last_close_date is not None and ts.params is not None:
+                days_since = (T_date.date() - ts.last_close_date).days
+                if days_since < ts.params.cooldown_days:
+                    continue
+
+            # Liquidity gate
+            if not passes_liquidity(ts.ticker_df.iloc[:full_idx + 1]):
+                continue
+
+            # Signal detection
+            signal = _detect_signals_for_date(ts, T_date, full_idx, config.setup_types)
+            if signal is None:
+                continue
+
+            # ── Scored mode: apply weights, regime, threshold ─────────────
+            if ts.params is not None:
+                signal["_regime"] = current_regime
+                setup_type_sig    = signal.get("setup_type", "")
+                raw_score         = signal.get(
+                    "_raw_score",
+                    _SIGNAL_BASE_SCORES.get(setup_type_sig, _SIGNAL_BASE_SCORE_DEFAULT),
+                )
+                is_breakout = setup_type_sig in ("VCP", "RES_BREAKOUT", "HTF", "LCE")
+                is_base     = setup_type_sig == "BASE"
+                weight      = (
+                    ts.params.breakout_weight if is_breakout
+                    else ts.params.base_weight if is_base
+                    else ts.params.pullback_weight
+                )
+                final_score = raw_score * weight
+
+                # RES_BREAKOUT regime gate
+                if setup_type_sig == "RES_BREAKOUT" and current_regime == "SELECTIVE":
+                    if ts.params.brk_aggressive_only:
+                        continue
+                    final_score *= ts.params.brk_regime_factor
+
+                # SELECTIVE setup weights
+                if current_regime == "SELECTIVE" and SELECTIVE_SETUP_WEIGHTS:
+                    sel_w = SELECTIVE_SETUP_WEIGHTS.get(setup_type_sig, 1.0)
+                    if SELECTIVE_HARD_FILTER and sel_w == 0.0:
+                        continue
+                    final_score *= sel_w
+
+                if final_score < ts.params.score_threshold:
+                    continue
+
+                signal["_final_score"] = final_score
+
+                # Gap gate for RES_BREAKOUT
+                if setup_type_sig == "RES_BREAKOUT":
+                    zone_upper = signal.get("zone_upper", 0.0)
+                    next_open  = float(ts.ticker_df["Open"].iloc[full_idx + 1])
+                    if zone_upper > 0 and next_open > zone_upper * (1 + ts.params.brk_gap_pct):
+                        continue
+
+            else:
+                signal["_regime"] = current_regime
+
+            score = signal.get("_final_score") or 0.0
+            if score < config.min_score:
+                continue
+
+            candidates.append((score, signal, ts, full_idx))
+
+        # ── Step 5: Fill slots — best score first ──────────────────────────
+        candidates.sort(key=lambda x: -x[0])
+        for score, signal, ts, full_idx in candidates[:available]:
+            next_idx    = full_idx + 1
+            entry_date  = ts.ticker_dates[next_idx]
+            entry_price = float(ts.ticker_df["Open"].iloc[next_idx])
+            stop_loss   = signal.get("stop_loss", 0.0)
+
+            # Take-profit override in scored mode
+            if ts.params is not None:
+                risk        = entry_price - stop_loss
+                take_profit = round(entry_price + ts.params.tp_multiple * risk, 2) if risk > 0 else 0.0
+            else:
+                take_profit = signal.get("take_profit", 0.0)
+
+            # Guard: valid entry
+            if stop_loss <= 0 or stop_loss >= entry_price or take_profit <= entry_price:
+                continue
+
+            pos = _build_open_position(
+                signal, ts, T_date, entry_date, entry_price, stop_loss, take_profit, full_idx
+            )
+            open_positions.append(pos)
+            ts.is_in_trade = True
+
+    # ── Step 6: Force-close any positions still open at end_date ──────────
+    for pos in open_positions:
+        ts = pos["ticker_state"]
+        valid = ts.ticker_dates[ts.ticker_dates <= end_ts]
+        if len(valid) == 0:
+            continue
+        last_date  = valid[-1]
+        last_idx   = ts.ticker_dates.get_loc(last_date)
+        exit_price = float(ts.ticker_df[ts.adj_col].iloc[last_idx])
+        completed_trades.append(
+            _build_trade_record(pos, last_date, exit_price, "EOD")
+        )
+        ts.is_in_trade = False
+
+    logger.info(
+        "run_portfolio_backtest_universe: %d trades from %d tickers",
+        len(completed_trades), len(ticker_states),
+    )
+    return completed_trades
