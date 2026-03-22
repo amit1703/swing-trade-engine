@@ -388,7 +388,10 @@ async def run_portfolio_backtest_universe(
     open_positions: List[dict]   = []
     completed_trades: List[dict] = []
 
-    for T_date in replay_dates:
+    for _day_idx, T_date in enumerate(replay_dates):
+        # Yield to event loop every 50 dates so the server stays responsive
+        if _day_idx % 50 == 0:
+            await asyncio.sleep(0)
 
         # ── Step 1: Advance all open positions ────────────────────────────
         still_open = []
