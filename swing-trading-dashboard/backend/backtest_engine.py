@@ -141,7 +141,7 @@ class BacktestParams:
     # ── RES_BREAKOUT engine parameters ──────────── v5 Optuna #433 (tuned) ──
     brk_vol_mult:        float = 3.0161  # volume floor (×50d avg)
     brk_stop_atr:        float = 1.6675  # stop = resistance − stop_atr×ATR
-    brk_min_pct:         float = 0.04333 # min close above resistance
+    brk_min_pct:         float = 0.02    # min close above resistance (must be < brk_gap_pct=0.036)
     brk_gap_pct:         float = 0.036   # skip T+1 if open > res×(1+gap_pct)  [WFO v1: 4/4 windows consensus 0.037–0.053; was 0.010]
     brk_trail_mult:      float = 6.9060  # ATR trail multiplier
     brk_regime_factor:   float = 0.861  # score penalty in SELECTIVE (unused when aggressive_only=True)
