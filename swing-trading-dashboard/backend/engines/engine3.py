@@ -29,7 +29,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
-from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT, ATR_STOP_MULTIPLIER, PB_MIN_TREND_BARS
+from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT, ATR_STOP_MULTIPLIER, PB_MIN_TREND_BARS, SUPPORT_MAX_EXTENSION_ATR
 from zone_utils import nearest_resistance_target
 
 # RS gate: reject stocks that persistently underperform SPY.
@@ -84,14 +84,21 @@ def _find_structural_support(
     avg_vol: float,
     latr: float = 0.0,
     sma200: float = 0.0,
+    ema20: float = 0.0,
+    ema50: float = 0.0,
+    regime: str = "",
+    rs_rank: float = 0.0,
+    trend_bars: int = 0,
 ) -> Optional[Dict]:
     """
     Find the nearest structural support for a pullback.
 
-    Checks three institutional layers in priority order:
+    Checks up to five layers in priority order:
       1. KDE SUPPORT zone   (Engine 1 horizontal density zone)
       2. Prior pivot low    (swing low where price bounced ≥3 bars)
       3. SMA200 touch       (200-day SMA acting as dynamic support)
+      4. EMA50 dynamic support (Tier 2 — AGGRESSIVE + RS rank ≥ 85)
+      5. EMA20 dynamic support (Tier 3 — AGGRESSIVE + RS rank ≥ 90 + trend ≥ 15 bars)
 
     Ascending trendlines and demand zones are intentionally excluded —
     they are subjective and produce too many false positives on choppy charts.
@@ -154,6 +161,22 @@ def _find_structural_support(
                 "source": "SMA200",
             }
 
+    # ── 4. EMA50 dynamic support (Tier 2 — conditional) ─────────────────────
+    # Requires AGGRESSIVE regime + RS rank ≥ 85.
+    # In a confirmed strong trend, the 50-period SMA acts as dynamic support.
+    if regime == "AGGRESSIVE" and rs_rank >= 85 and ema50 > 0:
+        if ll <= ema50 * 1.005 and lc >= ema50 * 0.985:
+            return {"level": round(ema50, 4), "lower": round(ema50 * 0.985, 4),
+                    "upper": round(ema50 * 1.005, 4), "source": "EMA50"}
+
+    # ── 5. EMA20 dynamic support (Tier 3 — strict conditional) ───────────────
+    # Requires AGGRESSIVE regime + RS rank ≥ 90 + trend ≥ 15 bars.
+    # Close must fully recover to EMA20 (strict pin bar).
+    if regime == "AGGRESSIVE" and rs_rank >= 90 and trend_bars >= 15 and ema20 > 0:
+        if ll <= ema20 * 1.005 and lc >= ema20:
+            return {"level": round(ema20, 4), "lower": round(ema20 * 0.99, 4),
+                    "upper": round(ema20 * 1.005, 4), "source": "EMA20"}
+
     return None
 
 
@@ -164,6 +187,7 @@ def scan_pullback(
     trendline: Optional[Dict] = None,
     rs_score: float = 0.0,
     debug: bool = False,
+    regime: str = "",
 ) -> Optional[Dict]:
     """
     Returns a setup dict if a valid tactical pullback is found, else None.
@@ -239,7 +263,18 @@ def scan_pullback(
             ll, lc, sr_zones, trendline,
             ind.high, ind.low, ind.close, ind.volume, avg_vol_sup, latr,
             sma200=ind.l200,
+            ema20=float(ind.ema20.iloc[-1]),
+            ema50=float(ind.sma50.iloc[-1]),
+            regime=regime,
+            rs_rank=rs_score,
+            trend_bars=_trend_bars,
         )
+        if nearest_sup is not None and latr > 0:
+            _ext_atr = (lc - nearest_sup["level"]) / latr
+            if _ext_atr > SUPPORT_MAX_EXTENSION_ATR:
+                nearest_sup = None   # too far from support — treat as no support found
+            else:
+                nearest_sup["extension_atr"] = round(_ext_atr, 2)
         if nearest_sup is None:
             if debug:
                 print(
@@ -300,6 +335,8 @@ def scan_pullback(
             "ema20": round(l20, 2),
             "is_ascending_tdl": is_ascending_tdl,
             "atr": round(latr, 4),
+            "trend_bars":    _trend_bars,
+            "extension_atr": nearest_sup.get("extension_atr", 0.0) if nearest_sup else 0.0,
         }
 
     except Exception as exc:  # noqa: BLE001
@@ -315,6 +352,7 @@ def scan_relaxed_pullback(
     rs_score: float = 0.0,
     debug: bool = False,
     params=None,
+    regime: str = "",
 ) -> Optional[Dict]:
     """
     Relaxed tactical pullback: triggers when no strict pullback found.
@@ -428,7 +466,18 @@ def scan_relaxed_pullback(
             ll, lc, sr_zones, trendline,
             ind.high, ind.low, ind.close, ind.volume, avg_vol, latr,
             sma200=ind.l200,
+            ema20=float(ind.ema20.iloc[-1]),
+            ema50=float(ind.sma50.iloc[-1]),
+            regime=regime,
+            rs_rank=rs_score,
+            trend_bars=_trend_bars,
         )
+        if nearest_sup is not None and latr > 0:
+            _ext_atr = (lc - nearest_sup["level"]) / latr
+            if _ext_atr > SUPPORT_MAX_EXTENSION_ATR:
+                nearest_sup = None   # too far from support — treat as no support found
+            else:
+                nearest_sup["extension_atr"] = round(_ext_atr, 2)
         if nearest_sup is None:
             if debug:
                 print(
@@ -473,6 +522,8 @@ def scan_relaxed_pullback(
             "is_relaxed":       True,
             "is_ascending_tdl": is_ascending_tdl,
             "atr":              round(latr, 4),
+            "trend_bars":       _trend_bars,
+            "extension_atr":    nearest_sup.get("extension_atr", 0.0) if nearest_sup else 0.0,
         }
 
     except Exception as exc:  # noqa: BLE001
@@ -779,6 +830,7 @@ def scan_pullback_scored(
     params,                         # BacktestParams (duck-typed — no circular import)
     trendline: Optional[Dict] = None,
     rs_score: float = 0.0,
+    regime: str = "",
 ) -> tuple:
     """
     Score-based pullback detector for use in BacktestEngine scored mode.
@@ -879,7 +931,18 @@ def scan_pullback_scored(
             ll, lc, sr_zones, trendline,
             ind.high, ind.low, ind.close, ind.volume, avg_vol_sup, latr,
             sma200=ind.l200,
+            ema20=float(ind.ema20.iloc[-1]),
+            ema50=float(ind.sma50.iloc[-1]),
+            regime=regime,
+            rs_rank=rs_score,
+            trend_bars=_trend_bars,
         )
+        if nearest_sup is not None and latr > 0:
+            _ext_atr = (lc - nearest_sup["level"]) / latr
+            if _ext_atr > SUPPORT_MAX_EXTENSION_ATR:
+                nearest_sup = None   # too far from support — treat as no support found
+            else:
+                nearest_sup["extension_atr"] = round(_ext_atr, 2)
         if nearest_sup is None:
             return None, 0.0   # hard gate: no structural support
 
@@ -920,6 +983,8 @@ def scan_pullback_scored(
             "is_ascending_tdl": nearest_sup["source"] == "ASCENDING_TDL",
             "pullback_score":   score,
             "is_scored_mode":   True,
+            "trend_bars":       _trend_bars,
+            "extension_atr":    nearest_sup.get("extension_atr", 0.0) if nearest_sup else 0.0,
         }
         return setup, score
 
