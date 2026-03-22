@@ -610,17 +610,30 @@ async def _fetch_data(ticker: str, start_date: str) -> tuple:
     """
     Fetch full ticker + SPY history needed for the backtest.
 
-    Fetches from (start_date - WARMUP_BARS trading days) back in calendar time.
+    Checks the local parquet cache (data/price_cache/) first — no network call
+    when the cache covers the required date range. Falls back to yfinance only
+    when the cache is missing or doesn't reach far enough back.
+
     Returns (ticker_df, spy_df). Either may be None on failure.
     """
+    import wfo_cache  # local import to avoid circular dependency at module level
+
     loop = asyncio.get_running_loop()
 
     start = date.fromisoformat(start_date)
     # 1.5x calendar days to ensure enough trading days (accounts for weekends/holidays)
     fetch_from = start - timedelta(days=int(WARMUP_BARS * 1.5))
     fetch_from_str = fetch_from.isoformat()
+    fetch_from_ts  = pd.Timestamp(fetch_from_str)
 
-    def _download(sym: str) -> Optional[pd.DataFrame]:
+    def _load_or_download(sym: str) -> Optional[pd.DataFrame]:
+        # Try local parquet cache first (no network call)
+        cached = wfo_cache.load_ticker(sym)
+        if cached is not None and not cached.empty:
+            cached.index = pd.to_datetime(cached.index).tz_localize(None)
+            if cached.index[0] <= fetch_from_ts:
+                return cached  # cache covers the required window — use it
+        # Cache miss or insufficient history — fall back to yfinance
         try:
             hist = yf.Ticker(sym).history(start=fetch_from_str, auto_adjust=False)
             if hist is None or hist.empty:
@@ -633,8 +646,8 @@ async def _fetch_data(ticker: str, start_date: str) -> tuple:
 
     try:
         ticker_df, spy_df = await asyncio.gather(
-            loop.run_in_executor(None, _download, ticker),
-            loop.run_in_executor(None, _download, "SPY"),
+            loop.run_in_executor(None, _load_or_download, ticker),
+            loop.run_in_executor(None, _load_or_download, "SPY"),
         )
         return ticker_df, spy_df
     except Exception as exc:
