@@ -685,7 +685,7 @@ class BacktestEngine:
         self.params              = params
         self._last_close_date: Optional[date] = None   # for per-ticker cooldown
 
-    async def prepare(self, shared_spy_df=None):
+    async def prepare(self, shared_spy_df: "Optional[pd.DataFrame]" = None):
         """
         Fetch and pre-compute all data for this ticker.
 
@@ -708,6 +708,11 @@ class BacktestEngine:
             if ticker_df is None or spy_df is None:
                 logger.warning("BacktestEngine.prepare: data fetch failed for %s", self.ticker)
                 return None
+
+        # Guard: insufficient history (< 60 bars) → cannot compute reliable indicators
+        if len(ticker_df) < 60:
+            logger.warning("BacktestEngine.prepare: insufficient history for %s (%d bars)", self.ticker, len(ticker_df))
+            return None
 
         # ── 2. Price column identification ────────────────────────────────────
         adj_col = "Adj Close" if "Adj Close" in ticker_df.columns else "Close"
