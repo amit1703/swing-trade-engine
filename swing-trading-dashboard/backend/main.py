@@ -435,10 +435,12 @@ class _NumpyEncoder(json.JSONEncoder):
 BACKTEST_DIAG_CACHE_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), BACKTEST_DIAG_CACHE_FILE))
 
 _backtest_diag_status: dict = {
-    "status":   "idle",   # "idle" | "running" | "completed" | "failed"
-    "done":     0,
-    "total":    0,
-    "last_run": None,     # ISO timestamp of last completed run
+    "status":      "idle",   # "idle" | "running" | "completed" | "failed"
+    "done":        0,
+    "total":       0,
+    "last_run":    None,     # ISO timestamp of last completed run
+    "phase":       None,     # 1 | 2 | None
+    "phase_label": None,     # human-readable phase description
 }
 
 # ── IS/OOS diagnostics state ──────────────────────────────────────────────────
@@ -448,12 +450,13 @@ ISOOS_DIAG_CACHE_PATH = os.path.normpath(
 
 _isoos_running: bool = False
 _isoos_status: dict = {
-    "status":  "idle",   # "idle" | "running_is" | "running_oos" | "completed" | "failed"
-    "is_done": False,
-    "current": 0,
-    "total":   0,
-    "phase":   None,     # "is" | "oos" | "done" | None
-    "error":   None,
+    "status":     "idle",   # "idle" | "running_is" | "running_oos" | "completed" | "failed"
+    "is_done":    False,
+    "current":    0,
+    "total":      0,
+    "phase":      None,     # "is" | "oos" | "done" | None
+    "step_label": None,     # human-readable current step within each period
+    "error":      None,
 }
 
 
@@ -3354,9 +3357,11 @@ async def run_backtest_diagnostics(
     tickers     = all_tickers[:req.ticker_count] if req.ticker_count else all_tickers
 
     _backtest_diag_status.update({
-        "status": "running",
-        "done":   0,
-        "total":  len(tickers),
+        "status":      "running",
+        "done":        0,
+        "total":       len(tickers),
+        "phase":       1,
+        "phase_label": "Loading tickers & computing signals",
     })
 
     config = BacktestConfig(
@@ -3372,6 +3377,10 @@ async def run_backtest_diagnostics(
         global _backtest_diag_status
         try:
             async def _progress(done: int, total: int):
+                # Detect Phase 2 start: progress resets to 0 after Phase 1 completed
+                if done == 0 and _backtest_diag_status["done"] > 0:
+                    _backtest_diag_status["phase"]       = 2
+                    _backtest_diag_status["phase_label"] = "Simulating portfolio day by day"
                 _backtest_diag_status["done"]  = done
                 _backtest_diag_status["total"] = total
 
@@ -3429,10 +3438,12 @@ async def run_backtest_diagnostics(
 async def backtest_diagnostics_status():
     """Poll progress of the background V4 backtest run."""
     return {
-        "status":   _backtest_diag_status["status"],
-        "done":     _backtest_diag_status["done"],
-        "total":    _backtest_diag_status["total"],
-        "last_run": _backtest_diag_status["last_run"],
+        "status":      _backtest_diag_status["status"],
+        "done":        _backtest_diag_status["done"],
+        "total":       _backtest_diag_status["total"],
+        "last_run":    _backtest_diag_status["last_run"],
+        "phase":       _backtest_diag_status["phase"],
+        "phase_label": _backtest_diag_status["phase_label"],
     }
 
 
@@ -3476,12 +3487,13 @@ async def run_isoos_diagnostics(
 
     _isoos_running = True
     _isoos_status.update({
-        "status":  "running_is",
-        "is_done": False,
-        "current": 0,
-        "total":   len(tickers),
-        "phase":   "is",
-        "error":   None,
+        "status":     "running_is",
+        "is_done":    False,
+        "current":    0,
+        "total":      len(tickers),
+        "phase":      "is",
+        "step_label": "Loading tickers & computing signals",
+        "error":      None,
     })
 
     async def _do_isoos():
@@ -3489,6 +3501,8 @@ async def run_isoos_diagnostics(
         try:
             # ── Phase IS ──────────────────────────────────────────────────
             async def _progress_is(done: int, total: int):
+                if done == 0 and _isoos_status["current"] > 0:
+                    _isoos_status["step_label"] = "Simulating portfolio day by day"
                 _isoos_status["current"] = done
                 _isoos_status["total"]   = total
 
@@ -3507,13 +3521,16 @@ async def run_isoos_diagnostics(
 
             # ── Phase OOS ─────────────────────────────────────────────────
             _isoos_status.update({
-                "status":  "running_oos",
-                "phase":   "oos",
-                "current": 0,
-                "total":   len(tickers),
+                "status":     "running_oos",
+                "phase":      "oos",
+                "current":    0,
+                "total":      len(tickers),
+                "step_label": "Loading tickers & computing signals",
             })
 
             async def _progress_oos(done: int, total: int):
+                if done == 0 and _isoos_status["current"] > 0:
+                    _isoos_status["step_label"] = "Simulating portfolio day by day"
                 _isoos_status["current"] = done
                 _isoos_status["total"]   = total
 
@@ -3592,12 +3609,13 @@ async def run_isoos_diagnostics(
 async def isoos_diagnostics_status():
     """Poll progress of the IS/OOS background backtest run."""
     return {
-        "status":  _isoos_status["status"],
-        "is_done": _isoos_status["is_done"],
-        "current": _isoos_status["current"],
-        "total":   _isoos_status["total"],
-        "phase":   _isoos_status["phase"],
-        "error":   _isoos_status["error"],
+        "status":     _isoos_status["status"],
+        "is_done":    _isoos_status["is_done"],
+        "current":    _isoos_status["current"],
+        "total":      _isoos_status["total"],
+        "phase":      _isoos_status["phase"],
+        "step_label": _isoos_status["step_label"],
+        "error":      _isoos_status["error"],
     }
 
 

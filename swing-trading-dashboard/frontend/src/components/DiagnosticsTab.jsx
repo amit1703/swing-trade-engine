@@ -775,8 +775,13 @@ export default function DiagnosticsTab() {
           {/* Backtest first-run loading state (no existing data) */}
           {source === 'backtest' && !data && btRunning && (
             <div style={{ padding: '24px 20px' }}>
-              <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
-                Running backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'}…
+              <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 3 }}>
+                {backtestStatus?.phase === 2 ? 'Phase 2/2' : 'Phase 1/2'} — {backtestStatus?.phase_label ?? 'Starting…'} — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'}
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 8 }}>
+                {backtestStatus?.phase === 2
+                  ? 'Sequential day-by-day simulation. Cannot be parallelized — this is the slow part.'
+                  : 'Parallel across all tickers. Usually fast.'}
               </div>
               <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
                 <div style={{
@@ -793,8 +798,13 @@ export default function DiagnosticsTab() {
           {source === 'backtest' && data && btRunning && (
             <div style={{ padding: '12px 20px', background: 'rgba(245,166,35,0.06)',
                           borderBottom: '1px solid rgba(245,166,35,0.2)' }}>
-              <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
-                Re-running backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'}…
+              <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 3 }}>
+                {backtestStatus?.phase === 2 ? 'Phase 2/2' : 'Phase 1/2'} — {backtestStatus?.phase_label ?? 'Starting…'} — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'}
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
+                {backtestStatus?.phase === 2
+                  ? 'Sequential day-by-day simulation. Cannot be parallelized — this is the slow part.'
+                  : 'Parallel across all tickers. Usually fast.'}
               </div>
               <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
                 <div style={{
@@ -856,8 +866,13 @@ export default function DiagnosticsTab() {
       {/* IS/OOS running progress */}
       {source === 'isoos' && ioRunning && (
         <div style={{ padding: '24px 20px' }}>
-          <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
-            {ioStatus?.phase === 'oos' ? 'Running OOS period' : 'Running IS period'} — {ioStatus?.current ?? 0} / {ioStatus?.total ?? '…'}…
+          <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 3 }}>
+            {ioStatus?.phase === 'oos' ? 'OOS period (2/2)' : 'IS period (1/2)'} — {ioStatus?.step_label ?? 'Starting…'} — {ioStatus?.current ?? 0} / {ioStatus?.total ?? '…'}
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 8 }}>
+            {ioStatus?.step_label === 'Simulating portfolio day by day'
+              ? 'Sequential day-by-day simulation. Cannot be parallelized — this is the slow part.'
+              : 'Parallel across all tickers. Usually fast.'}
           </div>
           <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
             <div style={{
