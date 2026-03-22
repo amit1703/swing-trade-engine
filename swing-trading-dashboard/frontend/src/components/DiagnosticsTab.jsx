@@ -424,7 +424,7 @@ export default function DiagnosticsTab() {
                   <span style={{ color: 'var(--muted)', fontSize: 10 }}>·</span>
                   <label style={{ fontSize: 10, color: 'var(--muted)' }}>Min Score</label>
                   <input
-                    type="number" min={0} max={20} step={0.5} value={btConfig.minScore}
+                    type="number" min={0} max={100} step={0.5} value={btConfig.minScore}
                     onChange={e => setBtConfig(c => ({ ...c, minScore: +e.target.value }))}
                     style={{ width: 44, background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', textAlign: 'center' }}
                   />
@@ -484,7 +484,7 @@ export default function DiagnosticsTab() {
         <div style={{ padding: '12px 20px', background: 'rgba(245,166,35,0.06)',
                       borderBottom: '1px solid rgba(245,166,35,0.2)' }}>
           <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
-            Re-running V4 backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'} tickers…
+            Re-running backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'} tickers…
           </div>
           <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
             <div style={{
@@ -505,7 +505,7 @@ export default function DiagnosticsTab() {
                       fontFamily: '"IBM Plex Mono", monospace',
                       borderBottom: '1px solid var(--card-border)' }}>
           <span>
-            V4 Baseline · {data.start_date} → {data.end_date} ·{' '}
+            Full System Backtest · {data.start_date} → {data.end_date} ·{' '}
             {data.tickers_run} tickers · generated {data.generated_at
             ? new Date(data.generated_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
             : '—'}
