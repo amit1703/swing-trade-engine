@@ -396,6 +396,159 @@ export default function DiagnosticsTab() {
     }
   }
 
+  let ioResultsBlock = null
+  if (source === 'isoos' && ioData && !ioRunning) {
+    const is  = ioData.is?.summary  ?? {}
+    const oos = ioData.oos?.summary ?? {}
+
+    const metrics = [
+      {
+        key: 'win_rate',
+        label: 'WIN RATE',
+        fmt: v => v != null ? `${(v * 100).toFixed(1)}%` : '—',
+        delta: v => v != null ? `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%` : '—',
+      },
+      {
+        key: 'profit_factor',
+        label: 'PROFIT F.',
+        fmt: v => v != null ? v.toFixed(2) : '—',
+        delta: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}` : '—',
+      },
+      {
+        key: 'avg_R',
+        label: 'AVG R',
+        fmt: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}R` : '—',
+        delta: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}R` : '—',
+      },
+      {
+        key: 'max_drawdown',
+        label: 'MAX DD',
+        fmt: v => v != null ? `${v.toFixed(2)}R` : '—',
+        delta: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}R` : '—',
+      },
+      {
+        key: 'total_trades',
+        label: 'TRADES',
+        fmt: v => v ?? '—',
+        delta: () => '—',
+        noColor: true,
+      },
+    ]
+
+    const colStyle = { padding: '6px 12px', textAlign: 'right', fontSize: 12,
+      fontFamily: '"IBM Plex Mono", monospace' }
+    const hStyle   = { ...colStyle, fontSize: 9, color: 'var(--muted)',
+      letterSpacing: '0.08em', fontWeight: 700 }
+
+    ioResultsBlock = (
+      <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Run metadata */}
+        {ioData.config && (
+          <div style={{ fontSize: 10, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace' }}>
+            IS: {ioData.config.is_start_date} → {ioData.config.is_end_date}
+            {' · '}OOS: {ioData.config.oos_start_date} → {ioData.config.oos_end_date}
+            {' · '}max {ioData.config.max_positions} pos
+            {' · '}generated {ioData.generated_at
+              ? new Date(ioData.generated_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+              : '—'}
+          </div>
+        )}
+
+        {/* Comparison table */}
+        <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)',
+          borderRadius: 10, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
+                <th style={{ ...hStyle, textAlign: 'left' }}></th>
+                {metrics.map(m => (
+                  <th key={m.key} style={hStyle}>{m.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
+                <td style={{ ...colStyle, textAlign: 'left', fontSize: 10,
+                  color: '#50d8f0', fontWeight: 700, letterSpacing: '0.06em' }}>
+                  IN-SAMPLE
+                </td>
+                {metrics.map(m => (
+                  <td key={m.key} style={{ ...colStyle, color: 'var(--text)' }}>
+                    {m.fmt(is[m.key])}
+                  </td>
+                ))}
+              </tr>
+              <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
+                <td style={{ ...colStyle, textAlign: 'left', fontSize: 10,
+                  color: '#f5a623', fontWeight: 700, letterSpacing: '0.06em' }}>
+                  OUT-OF-SAMPLE
+                </td>
+                {metrics.map(m => (
+                  <td key={m.key} style={{ ...colStyle, color: 'var(--text)' }}>
+                    {m.fmt(oos[m.key])}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td style={{ ...colStyle, textAlign: 'left', fontSize: 10,
+                  color: 'var(--muted)', letterSpacing: '0.06em' }}>
+                  DELTA
+                </td>
+                {metrics.map(m => {
+                  const d = (oos[m.key] != null && is[m.key] != null)
+                    ? oos[m.key] - is[m.key]
+                    : null
+                  const color = m.noColor || d == null
+                    ? 'var(--muted)'
+                    : d < 0 ? 'var(--halt)' : d > 0 ? 'var(--go)' : 'var(--muted)'
+                  return (
+                    <td key={m.key} style={{ ...colStyle, color, fontWeight: 700 }}>
+                      {m.delta(d)}
+                    </td>
+                  )
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* IS breakdown (collapsible) */}
+        <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10 }}>
+          <button onClick={() => setShowIsBreakdown(v => !v)}
+            style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none',
+              cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              color: 'var(--muted)', fontSize: 10, fontFamily: '"IBM Plex Mono", monospace',
+              letterSpacing: '0.08em', fontWeight: 700 }}>
+            <span style={{ color: '#50d8f0' }}>IN-SAMPLE BREAKDOWN</span>
+            <span>{showIsBreakdown ? '▲' : '▼'}</span>
+          </button>
+          {showIsBreakdown && (
+            <div style={{ padding: '0 16px 16px' }}>
+              <SetupBreakdownTable breakdown={ioData.is?.setup_breakdown} />
+            </div>
+          )}
+        </div>
+
+        {/* OOS breakdown (collapsible) */}
+        <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10 }}>
+          <button onClick={() => setShowOosBreakdown(v => !v)}
+            style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none',
+              cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              color: 'var(--muted)', fontSize: 10, fontFamily: '"IBM Plex Mono", monospace',
+              letterSpacing: '0.08em', fontWeight: 700 }}>
+            <span style={{ color: '#f5a623' }}>OUT-OF-SAMPLE BREAKDOWN</span>
+            <span>{showOosBreakdown ? '▲' : '▼'}</span>
+          </button>
+          {showOosBreakdown && (
+            <div style={{ padding: '0 16px 16px' }}>
+              <SetupBreakdownTable breakdown={ioData.oos?.setup_breakdown} />
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (loading) return (
     <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
       Loading diagnostics…
@@ -419,6 +572,8 @@ export default function DiagnosticsTab() {
       <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
         {source === 'backtest'
           ? 'Portfolio-coordinated simulation — best params, global position cap.'
+          : source === 'isoos'
+          ? 'Compare in-sample vs out-of-sample performance to detect overfitting.'
           : 'Live trading performance from closed portfolio trades.'}
         {source === 'live' && !hasData && ' Close trades in the Portfolio tab to populate this report.'}
       </div>
@@ -608,29 +763,94 @@ export default function DiagnosticsTab() {
         </div>
       )}
 
-      {/* Backtest empty state — no data yet */}
-      {source === 'backtest' && !data && !loading && !btRunning && (
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
-          No backtest data. Configure above and run to generate a strategy audit.
-        </div>
-      )}
+      {source !== 'isoos' && (
+        <>
+          {/* Backtest empty state — no data yet */}
+          {source === 'backtest' && !data && !loading && !btRunning && (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+              No backtest data. Configure above and run to generate a strategy audit.
+            </div>
+          )}
 
-      {/* Backtest first-run loading state (no existing data) */}
-      {source === 'backtest' && !data && btRunning && (
-        <div style={{ padding: '24px 20px' }}>
-          <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
-            Running backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'}…
+          {/* Backtest first-run loading state (no existing data) */}
+          {source === 'backtest' && !data && btRunning && (
+            <div style={{ padding: '24px 20px' }}>
+              <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
+                Running backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'}…
+              </div>
+              <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
+                <div style={{
+                  height: '100%', borderRadius: 2, background: 'var(--accent)',
+                  width: backtestStatus?.total > 0
+                    ? `${(backtestStatus.done / backtestStatus.total * 100)}%`
+                    : '0%',
+                  transition: 'width 0.5s ease',
+                }} />
+              </div>
+            </div>
+          )}
+          {/* Backtest running overlay (when re-running over existing data) */}
+          {source === 'backtest' && data && btRunning && (
+            <div style={{ padding: '12px 20px', background: 'rgba(245,166,35,0.06)',
+                          borderBottom: '1px solid rgba(245,166,35,0.2)' }}>
+              <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
+                Re-running backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'}…
+              </div>
+              <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
+                <div style={{
+                  height: '100%', borderRadius: 2, background: 'var(--accent)',
+                  width: backtestStatus?.total > 0
+                    ? `${(backtestStatus.done / backtestStatus.total * 100)}%`
+                    : '0%',
+                  transition: 'width 0.5s ease',
+                }} />
+              </div>
+            </div>
+          )}
+
+          {/* Backtest metadata badge */}
+          {source === 'backtest' && data && (
+            <div style={{ padding: '6px 20px', fontSize: 10, color: 'var(--muted)',
+                          fontFamily: '"IBM Plex Mono", monospace',
+                          borderBottom: '1px solid var(--card-border)' }}>
+              Last run: {data.start_date} → {data.end_date} · {data.tickers_run} tickers · max {data.max_positions ?? '—'} positions · generated {data.generated_at
+                ? new Date(data.generated_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+                : '—'}
+            </div>
+          )}
+
+          {/* Summary cards */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <MetricCard label="TOTAL TRADES"  value={s.total_trades ?? 0} />
+            <MetricCard label="PROFIT FACTOR" value={s.profit_factor != null ? s.profit_factor.toFixed(2) : '—'} />
+            <MetricCard label="WIN RATE"      value={s.win_rate != null ? `${(s.win_rate * 100).toFixed(1)}%` : '—'} />
+            <MetricCard label="AVG R"         value={s.avg_R != null ? `${s.avg_R >= 0 ? '+' : ''}${s.avg_R.toFixed(2)}R` : '—'} />
+            <MetricCard label="EXPECTANCY"    value={s.expectancy != null ? `${s.expectancy >= 0 ? '+' : ''}${s.expectancy.toFixed(2)}R` : '—'} />
+            <MetricCard label="MAX DRAWDOWN"  value={s.max_drawdown != null ? `${s.max_drawdown.toFixed(2)}R` : '—'} sub="peak-to-trough" />
           </div>
-          <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
-            <div style={{
-              height: '100%', borderRadius: 2, background: 'var(--accent)',
-              width: backtestStatus?.total > 0
-                ? `${(backtestStatus.done / backtestStatus.total * 100)}%`
-                : '0%',
-              transition: 'width 0.5s ease',
-            }} />
+
+          {/* Equity curve */}
+          <SectionHeader title="EQUITY CURVE (CUMULATIVE R)" />
+          <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+            <EquityCurve data={s.equity_curve_R} />
           </div>
-        </div>
+
+          {/* Setup breakdown */}
+          <SectionHeader title="PERFORMANCE BY SETUP TYPE" />
+          <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+            <SetupBreakdownTable breakdown={data?.setup_breakdown} />
+          </div>
+
+          {/* Ticker distribution */}
+          <SectionHeader title="TRADE CONCENTRATION BY TICKER" />
+          <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+            <TickerDistribution rows={data?.ticker_distribution} />
+          </div>
+
+          {/* Regime performance */}
+          <SectionHeader title="PERFORMANCE BY MARKET REGIME" />
+          <RegimePerformance perf={data?.regime_performance} />
+        </>
       )}
 
       {/* IS/OOS running progress */}
@@ -668,220 +888,8 @@ export default function DiagnosticsTab() {
         </div>
       )}
 
-      {/* Backtest running overlay (when re-running over existing data) */}
-      {source === 'backtest' && data && btRunning && (
-        <div style={{ padding: '12px 20px', background: 'rgba(245,166,35,0.06)',
-                      borderBottom: '1px solid rgba(245,166,35,0.2)' }}>
-          <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
-            Re-running backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'}…
-          </div>
-          <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
-            <div style={{
-              height: '100%', borderRadius: 2, background: 'var(--accent)',
-              width: backtestStatus?.total > 0
-                ? `${(backtestStatus.done / backtestStatus.total * 100)}%`
-                : '0%',
-              transition: 'width 0.5s ease',
-            }} />
-          </div>
-        </div>
-      )}
-
-      {/* Backtest metadata badge */}
-      {source === 'backtest' && data && (
-        <div style={{ padding: '6px 20px', fontSize: 10, color: 'var(--muted)',
-                      fontFamily: '"IBM Plex Mono", monospace',
-                      borderBottom: '1px solid var(--card-border)' }}>
-          Last run: {data.start_date} → {data.end_date} · {data.tickers_run} tickers · max {data.max_positions ?? '—'} positions · generated {data.generated_at
-            ? new Date(data.generated_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
-            : '—'}
-        </div>
-      )}
-
-      {/* Summary cards */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <MetricCard label="TOTAL TRADES"  value={s.total_trades ?? 0} />
-        <MetricCard label="PROFIT FACTOR" value={s.profit_factor != null ? s.profit_factor.toFixed(2) : '—'} />
-        <MetricCard label="WIN RATE"      value={s.win_rate != null ? `${(s.win_rate * 100).toFixed(1)}%` : '—'} />
-        <MetricCard label="AVG R"         value={s.avg_R != null ? `${s.avg_R >= 0 ? '+' : ''}${s.avg_R.toFixed(2)}R` : '—'} />
-        <MetricCard label="EXPECTANCY"    value={s.expectancy != null ? `${s.expectancy >= 0 ? '+' : ''}${s.expectancy.toFixed(2)}R` : '—'} />
-        <MetricCard label="MAX DRAWDOWN"  value={s.max_drawdown != null ? `${s.max_drawdown.toFixed(2)}R` : '—'} sub="peak-to-trough" />
-      </div>
-
-      {/* Equity curve */}
-      <SectionHeader title="EQUITY CURVE (CUMULATIVE R)" />
-      <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
-        <EquityCurve data={s.equity_curve_R} />
-      </div>
-
-      {/* Setup breakdown */}
-      <SectionHeader title="PERFORMANCE BY SETUP TYPE" />
-      <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
-        <SetupBreakdownTable breakdown={data?.setup_breakdown} />
-      </div>
-
-      {/* Ticker distribution */}
-      <SectionHeader title="TRADE CONCENTRATION BY TICKER" />
-      <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
-        <TickerDistribution rows={data?.ticker_distribution} />
-      </div>
-
-      {/* Regime performance */}
-      <SectionHeader title="PERFORMANCE BY MARKET REGIME" />
-      <RegimePerformance perf={data?.regime_performance} />
-
       {/* IS/OOS results */}
-      {source === 'isoos' && ioData && !ioRunning && (() => {
-        const is  = ioData.is?.summary  ?? {}
-        const oos = ioData.oos?.summary ?? {}
-
-        const metrics = [
-          {
-            key: 'win_rate',
-            label: 'WIN RATE',
-            fmt: v => v != null ? `${(v * 100).toFixed(1)}%` : '—',
-            delta: v => v != null ? `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%` : '—',
-          },
-          {
-            key: 'profit_factor',
-            label: 'PROFIT F.',
-            fmt: v => v != null ? v.toFixed(2) : '—',
-            delta: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}` : '—',
-          },
-          {
-            key: 'avg_R',
-            label: 'AVG R',
-            fmt: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}R` : '—',
-            delta: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}R` : '—',
-          },
-          {
-            key: 'max_drawdown',
-            label: 'MAX DD',
-            fmt: v => v != null ? `${v.toFixed(2)}R` : '—',
-            delta: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}R` : '—',
-          },
-          {
-            key: 'total_trades',
-            label: 'TRADES',
-            fmt: v => v ?? '—',
-            delta: () => '—',
-            noColor: true,
-          },
-        ]
-
-        const colStyle = { padding: '6px 12px', textAlign: 'right', fontSize: 12,
-          fontFamily: '"IBM Plex Mono", monospace' }
-        const hStyle   = { ...colStyle, fontSize: 9, color: 'var(--muted)',
-          letterSpacing: '0.08em', fontWeight: 700 }
-
-        return (
-          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Run metadata */}
-            {ioData.config && (
-              <div style={{ fontSize: 10, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace' }}>
-                IS: {ioData.config.is_start_date} → {ioData.config.is_end_date}
-                {' · '}OOS: {ioData.config.oos_start_date} → {ioData.config.oos_end_date}
-                {' · '}max {ioData.config.max_positions} pos
-                {' · '}generated {ioData.generated_at
-                  ? new Date(ioData.generated_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
-                  : '—'}
-              </div>
-            )}
-
-            {/* Comparison table */}
-            <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)',
-              borderRadius: 10, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
-                    <th style={{ ...hStyle, textAlign: 'left' }}></th>
-                    {metrics.map(m => (
-                      <th key={m.key} style={hStyle}>{m.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
-                    <td style={{ ...colStyle, textAlign: 'left', fontSize: 10,
-                      color: '#50d8f0', fontWeight: 700, letterSpacing: '0.06em' }}>
-                      IN-SAMPLE
-                    </td>
-                    {metrics.map(m => (
-                      <td key={m.key} style={{ ...colStyle, color: 'var(--text)' }}>
-                        {m.fmt(is[m.key])}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
-                    <td style={{ ...colStyle, textAlign: 'left', fontSize: 10,
-                      color: '#f5a623', fontWeight: 700, letterSpacing: '0.06em' }}>
-                      OUT-OF-SAMPLE
-                    </td>
-                    {metrics.map(m => (
-                      <td key={m.key} style={{ ...colStyle, color: 'var(--text)' }}>
-                        {m.fmt(oos[m.key])}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr>
-                    <td style={{ ...colStyle, textAlign: 'left', fontSize: 10,
-                      color: 'var(--muted)', letterSpacing: '0.06em' }}>
-                      DELTA
-                    </td>
-                    {metrics.map(m => {
-                      const d = (oos[m.key] != null && is[m.key] != null)
-                        ? oos[m.key] - is[m.key]
-                        : null
-                      const color = m.noColor || d == null
-                        ? 'var(--muted)'
-                        : d < 0 ? 'var(--halt)' : d > 0 ? 'var(--go)' : 'var(--muted)'
-                      return (
-                        <td key={m.key} style={{ ...colStyle, color, fontWeight: 700 }}>
-                          {m.delta(d)}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* IS breakdown (collapsible) */}
-            <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10 }}>
-              <button onClick={() => setShowIsBreakdown(v => !v)}
-                style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none',
-                  cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  color: 'var(--muted)', fontSize: 10, fontFamily: '"IBM Plex Mono", monospace',
-                  letterSpacing: '0.08em', fontWeight: 700 }}>
-                <span style={{ color: '#50d8f0' }}>IN-SAMPLE BREAKDOWN</span>
-                <span>{showIsBreakdown ? '▲' : '▼'}</span>
-              </button>
-              {showIsBreakdown && (
-                <div style={{ padding: '0 16px 16px' }}>
-                  <SetupBreakdownTable breakdown={ioData.is?.setup_breakdown} />
-                </div>
-              )}
-            </div>
-
-            {/* OOS breakdown (collapsible) */}
-            <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10 }}>
-              <button onClick={() => setShowOosBreakdown(v => !v)}
-                style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none',
-                  cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  color: 'var(--muted)', fontSize: 10, fontFamily: '"IBM Plex Mono", monospace',
-                  letterSpacing: '0.08em', fontWeight: 700 }}>
-                <span style={{ color: '#f5a623' }}>OUT-OF-SAMPLE BREAKDOWN</span>
-                <span>{showOosBreakdown ? '▲' : '▼'}</span>
-              </button>
-              {showOosBreakdown && (
-                <div style={{ padding: '0 16px 16px' }}>
-                  <SetupBreakdownTable breakdown={ioData.oos?.setup_breakdown} />
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      })()}
+      {ioResultsBlock}
     </div>
   )
 }
