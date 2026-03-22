@@ -231,6 +231,14 @@ export default function DiagnosticsTab() {
   const [backtestStatus, setBacktestStatus] = useState(null)
   const [btRunning, setBtRunning] = useState(false)
   const pollRef                   = useRef(null)
+  const [btConfig, setBtConfig] = useState({
+    startYear:    2017,
+    endYear:      2024,
+    maxPositions: 4,
+    tickerCount:  null,
+    minScore:     0,
+    setupTypes:   ['PULLBACK', 'BASE', 'RES_BREAKOUT', 'HTF', 'LCE'],
+  })
 
   useEffect(() => {
     const controller = new AbortController()
@@ -289,7 +297,18 @@ export default function DiagnosticsTab() {
     setBtRunning(true)
     // Don't clear data — keep existing results visible while re-run progresses
     try {
-      await fetch('/api/diagnostics/backtest/run', { method: 'POST' })
+      await fetch('/api/diagnostics/backtest/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start_date:    `${btConfig.startYear}-01-01`,
+          end_date:      `${btConfig.endYear}-12-31`,
+          max_positions: btConfig.maxPositions,
+          ticker_count:  btConfig.tickerCount,
+          min_score:     btConfig.minScore,
+          setup_types:   btConfig.setupTypes,
+        }),
+      })
       const s = await fetch('/api/diagnostics/backtest/status').then(r => r.json())
       setBacktestStatus(s)
     } catch (err) {
@@ -317,12 +336,20 @@ export default function DiagnosticsTab() {
       <div style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 22, fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--text)', marginBottom: 4 }}>
         Strategy Diagnostics
       </div>
-      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 20 }}>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
         {source === 'backtest'
-          ? 'V4 strategy — scored mode, default params (2023–2024).'
+          ? 'Portfolio-coordinated simulation — best params, global position cap.'
           : 'Live trading performance from closed portfolio trades.'}
         {source === 'live' && !hasData && ' Close trades in the Portfolio tab to populate this report.'}
       </div>
+      {source === 'backtest' && data && (
+        <div style={{ fontSize: 10, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 8 }}>
+          {data.start_date} → {data.end_date}
+          {' · '}{data.tickers_run} tickers
+          {' · '}max {data.max_positions ?? '—'} positions
+          {' · '}{Array.isArray(data.setup_types) ? data.setup_types.join(', ') : '—'}
+        </div>
+      )}
 
       {/* Source toggle */}
       <div style={{ display: 'flex', gap: 4, padding: '12px 20px 0', borderBottom: '1px solid var(--card-border)' }}>
@@ -339,7 +366,7 @@ export default function DiagnosticsTab() {
               cursor: 'pointer',
             }}
           >
-            {src === 'live' ? 'Live Trades' : 'Backtest (V4 baseline)'}
+            {src === 'live' ? 'Live Trades' : 'Full System Backtest'}
           </button>
         ))}
       </div>
@@ -350,7 +377,7 @@ export default function DiagnosticsTab() {
           {btRunning && backtestStatus ? (
             <>
               <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 12 }}>
-                Running V4 backtest — {backtestStatus.done} / {backtestStatus.total} tickers…
+                Running backtest — {backtestStatus.done} / {backtestStatus.total} tickers…
               </div>
               <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, width: 300, margin: '0 auto' }}>
                 <div style={{
@@ -363,7 +390,77 @@ export default function DiagnosticsTab() {
           ) : (
             <>
               <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 16 }}>
-                No V4 backtest data. Run the baseline to generate a strategy audit.
+                No backtest data. Configure and run to generate a strategy audit.
+              </div>
+              {/* Config panel */}
+              <div style={{
+                display: 'flex', flexDirection: 'column', gap: 10,
+                marginBottom: 16, maxWidth: 520, margin: '0 auto 16px',
+              }}>
+                {/* Date range + positions + universe */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <select
+                    value={btConfig.startYear}
+                    onChange={e => setBtConfig(c => ({ ...c, startYear: +e.target.value }))}
+                    style={{ background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: '"IBM Plex Mono", monospace' }}
+                  >
+                    {[2015,2016,2017,2018,2019,2020,2021,2022].map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                  <span style={{ color: 'var(--muted)', fontSize: 11 }}>→</span>
+                  <select
+                    value={btConfig.endYear}
+                    onChange={e => setBtConfig(c => ({ ...c, endYear: +e.target.value }))}
+                    style={{ background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: '"IBM Plex Mono", monospace' }}
+                  >
+                    {[2021,2022,2023,2024,2025].map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                  <span style={{ color: 'var(--muted)', fontSize: 10 }}>·</span>
+                  <label style={{ fontSize: 10, color: 'var(--muted)' }}>Positions</label>
+                  <input
+                    type="number" min={1} max={20} value={btConfig.maxPositions}
+                    onChange={e => setBtConfig(c => ({ ...c, maxPositions: +e.target.value }))}
+                    style={{ width: 44, background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', textAlign: 'center' }}
+                  />
+                  <span style={{ color: 'var(--muted)', fontSize: 10 }}>·</span>
+                  <label style={{ fontSize: 10, color: 'var(--muted)' }}>Min Score</label>
+                  <input
+                    type="number" min={0} max={20} step={0.5} value={btConfig.minScore}
+                    onChange={e => setBtConfig(c => ({ ...c, minScore: +e.target.value }))}
+                    style={{ width: 44, background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', textAlign: 'center' }}
+                  />
+                  <span style={{ color: 'var(--muted)', fontSize: 10 }}>·</span>
+                  <select
+                    value={btConfig.tickerCount ?? ''}
+                    onChange={e => setBtConfig(c => ({ ...c, tickerCount: e.target.value === '' ? null : +e.target.value }))}
+                    style={{ background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: '"IBM Plex Mono", monospace' }}
+                  >
+                    <option value="">Full (~700)</option>
+                    <option value="200">Top 200</option>
+                    <option value="100">Top 100</option>
+                    <option value="50">Top 50</option>
+                  </select>
+                </div>
+
+                {/* Setup type checkboxes */}
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                  {['PULLBACK', 'BASE', 'RES_BREAKOUT', 'HTF', 'LCE'].map(st => (
+                    <label key={st} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--muted)', cursor: 'pointer', fontFamily: '"IBM Plex Mono", monospace' }}>
+                      <input
+                        type="checkbox"
+                        checked={btConfig.setupTypes.includes(st)}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setBtConfig(c => ({ ...c, setupTypes: [...c.setupTypes, st] }))
+                          } else {
+                            setBtConfig(c => ({ ...c, setupTypes: c.setupTypes.filter(s => s !== st) }))
+                          }
+                        }}
+                        style={{ accentColor: 'var(--accent)' }}
+                      />
+                      {st}
+                    </label>
+                  ))}
+                </div>
               </div>
               <button
                 onClick={handleRunBacktest}
@@ -375,7 +472,7 @@ export default function DiagnosticsTab() {
                   border: '1px solid rgba(245,166,35,0.35)', cursor: 'pointer',
                 }}
               >
-                Run V4 Backtest
+                RUN FULL SYSTEM BACKTEST
               </button>
             </>
           )}
