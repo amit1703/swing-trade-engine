@@ -239,6 +239,22 @@ export default function DiagnosticsTab() {
     minScore:     0,
     setupTypes:   ['PULLBACK', 'BASE', 'RES_BREAKOUT', 'HTF', 'LCE'],
   })
+  const [ioConfig, setIoConfig] = useState({
+    isStartYear:  2017,
+    isEndYear:    2021,
+    oosStartYear: 2022,
+    oosEndYear:   2024,
+    maxPositions: 4,
+    minScore:     0,
+    setupTypes:   ['PULLBACK', 'BASE', 'RES_BREAKOUT', 'HTF', 'LCE'],
+  })
+  const [ioRunning, setIoRunning]               = useState(false)
+  const [ioStatus, setIoStatus]                 = useState(null)
+  const [ioData, setIoData]                     = useState(null)
+  const [ioError, setIoError]                   = useState(null)
+  const ioPollRef                               = useRef(null)
+  const [showIsBreakdown, setShowIsBreakdown]   = useState(false)
+  const [showOosBreakdown, setShowOosBreakdown] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -249,18 +265,30 @@ export default function DiagnosticsTab() {
       try {
         const url = source === 'live'
           ? '/api/diagnostics/report'
-          : '/api/diagnostics/backtest'
+          : source === 'backtest'
+          ? '/api/diagnostics/backtest'
+          : '/api/diagnostics/isoos'
         const res = await fetch(url, {
           signal: controller.signal,
           cache: source === 'backtest' ? 'no-store' : 'default',
         })
         if (res.status === 404 && source === 'backtest') {
-          setData(null)   // no cache yet — show "run backtest" prompt
+          setData(null)
+          setLoading(false)
+          return
+        }
+        if (res.status === 404 && source === 'isoos') {
+          setIoData(null)
           setLoading(false)
           return
         }
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        setData(await res.json())
+        const json = await res.json()
+        if (source === 'isoos') {
+          setIoData(json)
+        } else {
+          setData(json)
+        }
       } catch (err) {
         if (err.name !== 'AbortError') setError(err.message)
       } finally {
@@ -292,6 +320,32 @@ export default function DiagnosticsTab() {
     return () => clearInterval(pollRef.current)
   }, [btRunning])
 
+  useEffect(() => {
+    if (!ioRunning) return
+    ioPollRef.current = setInterval(async () => {
+      try {
+        const s = await fetch('/api/diagnostics/isoos/status').then(r => r.json())
+        setIoStatus(s)
+        if (s.status === 'completed' || s.status === 'failed') {
+          clearInterval(ioPollRef.current)
+          setIoRunning(false)
+          if (s.status === 'completed') {
+            const result = await fetch('/api/diagnostics/isoos').then(r => r.json())
+            setIoData(result)
+            setIoError(null)
+          } else {
+            setIoError(s.error || 'IS/OOS backtest failed')
+          }
+        }
+      } catch (err) {
+        clearInterval(ioPollRef.current)
+        setIoRunning(false)
+        setIoError(err.message)
+      }
+    }, 3000)
+    return () => clearInterval(ioPollRef.current)
+  }, [ioRunning])
+
   async function handleRunBacktest() {
     if (btRunning) return
     setBtRunning(true)
@@ -313,6 +367,32 @@ export default function DiagnosticsTab() {
       setBacktestStatus(s)
     } catch (err) {
       setBtRunning(false)
+    }
+  }
+
+  async function handleRunIsOos() {
+    if (ioRunning) return
+    setIoRunning(true)
+    setIoError(null)
+    try {
+      await fetch('/api/diagnostics/isoos/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_start_date:  `${ioConfig.isStartYear}-01-01`,
+          is_end_date:    `${ioConfig.isEndYear}-12-31`,
+          oos_start_date: `${ioConfig.oosStartYear}-01-01`,
+          oos_end_date:   `${ioConfig.oosEndYear}-12-31`,
+          max_positions:  ioConfig.maxPositions,
+          min_score:      ioConfig.minScore,
+          setup_types:    ioConfig.setupTypes,
+        }),
+      })
+      const s = await fetch('/api/diagnostics/isoos/status').then(r => r.json())
+      setIoStatus(s)
+    } catch (err) {
+      setIoRunning(false)
+      setIoError(err.message)
     }
   }
 
@@ -353,10 +433,10 @@ export default function DiagnosticsTab() {
 
       {/* Source toggle */}
       <div style={{ display: 'flex', gap: 4, padding: '12px 20px 0', borderBottom: '1px solid var(--card-border)' }}>
-        {['live', 'backtest'].map(src => (
+        {['live', 'backtest', 'isoos'].map(src => (
           <button
             key={src}
-            onClick={() => { setSource(src); setData(null) }}
+            onClick={() => { setSource(src); setData(null); if (src !== 'isoos') setIoData(null) }}
             style={{
               padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 700,
               fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '0.05em',
@@ -366,7 +446,7 @@ export default function DiagnosticsTab() {
               cursor: 'pointer',
             }}
           >
-            {src === 'live' ? 'Live Trades' : 'Full System Backtest'}
+            {src === 'live' ? 'Live Trades' : src === 'backtest' ? 'Full System Backtest' : 'IS / OOS Split'}
           </button>
         ))}
       </div>
@@ -454,6 +534,80 @@ export default function DiagnosticsTab() {
         </div>
       )}
 
+      {/* IS/OOS config panel */}
+      {source === 'isoos' && (
+        <div style={{
+          padding: '12px 20px', borderBottom: '1px solid var(--border)',
+          background: 'rgba(255,255,255,0.02)',
+        }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace' }}>IS</span>
+            <input type="number" min={2010} max={2030} value={ioConfig.isStartYear}
+              onChange={e => setIoConfig(c => ({ ...c, isStartYear: +e.target.value }))}
+              style={{ width: 60, background: 'var(--card)', border: '1px solid var(--border)',
+                color: 'var(--text)', borderRadius: 4, padding: '3px 6px', fontSize: 11,
+                fontFamily: '"IBM Plex Mono", monospace' }} />
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>→</span>
+            <input type="number" min={2010} max={2030} value={ioConfig.isEndYear}
+              onChange={e => setIoConfig(c => ({ ...c, isEndYear: +e.target.value }))}
+              style={{ width: 60, background: 'var(--card)', border: '1px solid var(--border)',
+                color: 'var(--text)', borderRadius: 4, padding: '3px 6px', fontSize: 11,
+                fontFamily: '"IBM Plex Mono", monospace' }} />
+            <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 8 }}>OOS</span>
+            <input type="number" min={2010} max={2030} value={ioConfig.oosStartYear}
+              onChange={e => setIoConfig(c => ({ ...c, oosStartYear: +e.target.value }))}
+              style={{ width: 60, background: 'var(--card)', border: '1px solid var(--border)',
+                color: 'var(--text)', borderRadius: 4, padding: '3px 6px', fontSize: 11,
+                fontFamily: '"IBM Plex Mono", monospace' }} />
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>→</span>
+            <input type="number" min={2010} max={2030} value={ioConfig.oosEndYear}
+              onChange={e => setIoConfig(c => ({ ...c, oosEndYear: +e.target.value }))}
+              style={{ width: 60, background: 'var(--card)', border: '1px solid var(--border)',
+                color: 'var(--text)', borderRadius: 4, padding: '3px 6px', fontSize: 11,
+                fontFamily: '"IBM Plex Mono", monospace' }} />
+            <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 8 }}>Pos</span>
+            <input type="number" min={1} max={20} value={ioConfig.maxPositions}
+              onChange={e => setIoConfig(c => ({ ...c, maxPositions: +e.target.value }))}
+              style={{ width: 44, background: 'var(--card)', border: '1px solid var(--border)',
+                color: 'var(--text)', borderRadius: 4, padding: '3px 6px', fontSize: 11,
+                fontFamily: '"IBM Plex Mono", monospace' }} />
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>MinScore</span>
+            <input type="number" min={0} max={100} step={0.5} value={ioConfig.minScore}
+              onChange={e => setIoConfig(c => ({ ...c, minScore: +e.target.value }))}
+              style={{ width: 44, background: 'var(--card)', border: '1px solid var(--border)',
+                color: 'var(--text)', borderRadius: 4, padding: '3px 6px', fontSize: 11,
+                fontFamily: '"IBM Plex Mono", monospace' }} />
+            <div style={{ display: 'flex', gap: 4, marginLeft: 4 }}>
+              {['PULLBACK', 'BASE', 'RES_BREAKOUT', 'HTF', 'LCE'].map(st => (
+                <label key={st} style={{ display: 'flex', alignItems: 'center', gap: 3,
+                  fontSize: 10, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace',
+                  cursor: 'pointer' }}>
+                  <input type="checkbox"
+                    checked={ioConfig.setupTypes.includes(st)}
+                    onChange={e => setIoConfig(c => ({
+                      ...c,
+                      setupTypes: e.target.checked
+                        ? [...c.setupTypes, st]
+                        : c.setupTypes.filter(x => x !== st),
+                    }))} />
+                  {st}
+                </label>
+              ))}
+            </div>
+            <button onClick={handleRunIsOos} disabled={ioRunning}
+              style={{
+                marginLeft: 'auto', padding: '4px 14px', borderRadius: 5, fontSize: 11,
+                fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700, letterSpacing: '0.05em',
+                background: 'rgba(245,166,35,0.15)', color: ioRunning ? 'var(--muted)' : 'var(--accent)',
+                border: `1px solid ${ioRunning ? 'var(--border)' : 'rgba(245,166,35,0.35)'}`,
+                cursor: ioRunning ? 'not-allowed' : 'pointer',
+              }}>
+              {ioRunning ? 'Running…' : 'RUN IS/OOS'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Backtest empty state — no data yet */}
       {source === 'backtest' && !data && !loading && !btRunning && (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
@@ -476,6 +630,41 @@ export default function DiagnosticsTab() {
               transition: 'width 0.5s ease',
             }} />
           </div>
+        </div>
+      )}
+
+      {/* IS/OOS running progress */}
+      {source === 'isoos' && ioRunning && (
+        <div style={{ padding: '24px 20px' }}>
+          <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
+            {ioStatus?.phase === 'oos' ? 'Running OOS period' : 'Running IS period'} — {ioStatus?.current ?? 0} / {ioStatus?.total ?? '…'}…
+          </div>
+          <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
+            <div style={{
+              height: '100%', borderRadius: 2, background: 'var(--accent)',
+              width: ioStatus?.total > 0 ? `${(ioStatus.current / ioStatus.total * 100)}%` : '0%',
+              transition: 'width 0.5s ease',
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* IS/OOS empty state */}
+      {source === 'isoos' && !ioData && !ioRunning && !ioError && (
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+          Configure IS and OOS date ranges above, then click RUN IS/OOS.
+        </div>
+      )}
+
+      {/* IS/OOS error state */}
+      {source === 'isoos' && ioError && (
+        <div style={{ padding: '16px 20px', color: 'var(--halt)', fontSize: 12,
+          fontFamily: '"IBM Plex Mono", monospace' }}>
+          Error: {ioError}
+          <button onClick={handleRunIsOos} style={{ marginLeft: 12, fontSize: 11, color: 'var(--accent)',
+            background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+            Retry
+          </button>
         </div>
       )}
 
@@ -540,6 +729,159 @@ export default function DiagnosticsTab() {
       {/* Regime performance */}
       <SectionHeader title="PERFORMANCE BY MARKET REGIME" />
       <RegimePerformance perf={data?.regime_performance} />
+
+      {/* IS/OOS results */}
+      {source === 'isoos' && ioData && !ioRunning && (() => {
+        const is  = ioData.is?.summary  ?? {}
+        const oos = ioData.oos?.summary ?? {}
+
+        const metrics = [
+          {
+            key: 'win_rate',
+            label: 'WIN RATE',
+            fmt: v => v != null ? `${(v * 100).toFixed(1)}%` : '—',
+            delta: v => v != null ? `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%` : '—',
+          },
+          {
+            key: 'profit_factor',
+            label: 'PROFIT F.',
+            fmt: v => v != null ? v.toFixed(2) : '—',
+            delta: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}` : '—',
+          },
+          {
+            key: 'avg_R',
+            label: 'AVG R',
+            fmt: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}R` : '—',
+            delta: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}R` : '—',
+          },
+          {
+            key: 'max_drawdown',
+            label: 'MAX DD',
+            fmt: v => v != null ? `${v.toFixed(2)}R` : '—',
+            delta: v => v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}R` : '—',
+          },
+          {
+            key: 'total_trades',
+            label: 'TRADES',
+            fmt: v => v ?? '—',
+            delta: () => '—',
+            noColor: true,
+          },
+        ]
+
+        const colStyle = { padding: '6px 12px', textAlign: 'right', fontSize: 12,
+          fontFamily: '"IBM Plex Mono", monospace' }
+        const hStyle   = { ...colStyle, fontSize: 9, color: 'var(--muted)',
+          letterSpacing: '0.08em', fontWeight: 700 }
+
+        return (
+          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Run metadata */}
+            {ioData.config && (
+              <div style={{ fontSize: 10, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace' }}>
+                IS: {ioData.config.is_start_date} → {ioData.config.is_end_date}
+                {' · '}OOS: {ioData.config.oos_start_date} → {ioData.config.oos_end_date}
+                {' · '}max {ioData.config.max_positions} pos
+                {' · '}generated {ioData.generated_at
+                  ? new Date(ioData.generated_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+                  : '—'}
+              </div>
+            )}
+
+            {/* Comparison table */}
+            <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)',
+              borderRadius: 10, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
+                    <th style={{ ...hStyle, textAlign: 'left' }}></th>
+                    {metrics.map(m => (
+                      <th key={m.key} style={hStyle}>{m.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
+                    <td style={{ ...colStyle, textAlign: 'left', fontSize: 10,
+                      color: '#50d8f0', fontWeight: 700, letterSpacing: '0.06em' }}>
+                      IN-SAMPLE
+                    </td>
+                    {metrics.map(m => (
+                      <td key={m.key} style={{ ...colStyle, color: 'var(--text)' }}>
+                        {m.fmt(is[m.key])}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
+                    <td style={{ ...colStyle, textAlign: 'left', fontSize: 10,
+                      color: '#f5a623', fontWeight: 700, letterSpacing: '0.06em' }}>
+                      OUT-OF-SAMPLE
+                    </td>
+                    {metrics.map(m => (
+                      <td key={m.key} style={{ ...colStyle, color: 'var(--text)' }}>
+                        {m.fmt(oos[m.key])}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td style={{ ...colStyle, textAlign: 'left', fontSize: 10,
+                      color: 'var(--muted)', letterSpacing: '0.06em' }}>
+                      DELTA
+                    </td>
+                    {metrics.map(m => {
+                      const d = (oos[m.key] != null && is[m.key] != null)
+                        ? oos[m.key] - is[m.key]
+                        : null
+                      const color = m.noColor || d == null
+                        ? 'var(--muted)'
+                        : d < 0 ? 'var(--halt)' : d > 0 ? 'var(--go)' : 'var(--muted)'
+                      return (
+                        <td key={m.key} style={{ ...colStyle, color, fontWeight: 700 }}>
+                          {m.delta(d)}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* IS breakdown (collapsible) */}
+            <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10 }}>
+              <button onClick={() => setShowIsBreakdown(v => !v)}
+                style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  color: 'var(--muted)', fontSize: 10, fontFamily: '"IBM Plex Mono", monospace',
+                  letterSpacing: '0.08em', fontWeight: 700 }}>
+                <span style={{ color: '#50d8f0' }}>IN-SAMPLE BREAKDOWN</span>
+                <span>{showIsBreakdown ? '▲' : '▼'}</span>
+              </button>
+              {showIsBreakdown && (
+                <div style={{ padding: '0 16px 16px' }}>
+                  <SetupBreakdownTable breakdown={ioData.is?.setup_breakdown} />
+                </div>
+              )}
+            </div>
+
+            {/* OOS breakdown (collapsible) */}
+            <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10 }}>
+              <button onClick={() => setShowOosBreakdown(v => !v)}
+                style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none',
+                  cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  color: 'var(--muted)', fontSize: 10, fontFamily: '"IBM Plex Mono", monospace',
+                  letterSpacing: '0.08em', fontWeight: 700 }}>
+                <span style={{ color: '#f5a623' }}>OUT-OF-SAMPLE BREAKDOWN</span>
+                <span>{showOosBreakdown ? '▲' : '▼'}</span>
+              </button>
+              {showOosBreakdown && (
+                <div style={{ padding: '0 16px 16px' }}>
+                  <SetupBreakdownTable breakdown={ioData.oos?.setup_breakdown} />
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
