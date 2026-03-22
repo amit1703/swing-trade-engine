@@ -39,7 +39,6 @@ from indicators import ema as _ema, sma as _sma, atr as _atr, true_range as _tr
 from constants import (
     TARGET_RR, ATR_STOP_MULTIPLIER, VCP_ATR_CONTRACTION_THRESHOLD,
     VCP_TIGHT_RANGE_5D_PCT, VCP_MIN_CONTRACTIONS_STRICT,
-    WL_COIL_WINDOW, WL_MIN_COIL_BARS, WL_COIL_BAND_PCT,
 )
 from zone_utils import nearest_resistance_target
 
@@ -501,23 +500,39 @@ def scan_near_breakout(
 
         is_confirmed_break = best_type in ("KDE-BRK",)
 
-        # ── Coiling gate: stock must have been consolidating near resistance ──
-        # Require WL_MIN_COIL_BARS of the last WL_COIL_WINDOW bars to have their
-        # close within WL_COIL_BAND_PCT (3%) below resistance upper.
-        # This rejects stocks that just trended up to resistance without a base.
-        # Skipped for confirmed breakouts (KDE-BRK) — those already broke through.
-        if not is_confirmed_break and best_upper is not None:
-            _adj_col_name = "Adj Close" if "Adj Close" in data.columns else "Close"
-            _close_hist = data[_adj_col_name].iloc[-WL_COIL_WINDOW:]
-            _bars_near = int((_close_hist >= best_upper * (1 - WL_COIL_BAND_PCT)).sum())
-            if _bars_near < WL_MIN_COIL_BARS:
-                return None
-
         # ATR for entry quality classification
         from indicators import atr as _atr_fn
         _adj_nb = "Adj Close" if "Adj Close" in data.columns else "Close"
         _atr14_nb = data["_ATR14"] if "_ATR14" in data.columns else _atr_fn(data["High"], data["Low"], data[_adj_nb], 14)
         _latr_nb  = float(_atr14_nb.iloc[-1]) if not pd.isna(_atr14_nb.iloc[-1]) else 0.0
+
+        # ── ATR-normalized coiling score ─────────────────────────────────────
+        # Measures how tight the price action has been near resistance.
+        # Uses 5-bar range normalized by ATR — works correctly for any volatility level.
+        # Fixed-percentage bands were biased: too strict for volatile stocks, too loose for stable ones.
+        _high5   = float(data["High"].iloc[-5:].max())
+        _low5    = float(data["Low"].iloc[-5:].min())
+        _range5  = _high5 - _low5
+        _range_ratio = _range5 / _latr_nb if _latr_nb > 0 else 99.0
+
+        # Hard rejection: stock is in active momentum INTO resistance (not consolidating).
+        # 4 consecutive higher highs + wide range = trending up to resistance, not building.
+        # Skipped for confirmed breakouts — they already cleared resistance.
+        if not is_confirmed_break:
+            _highs4 = data["High"].iloc[-4:].values
+            _is_trending_up = all(_highs4[i] < _highs4[i + 1] for i in range(len(_highs4) - 1))
+            if _is_trending_up and _range_ratio > 3.5:
+                return None
+
+        # Coiling score 0–10 (included in return dict for scoring.py)
+        if _range_ratio <= 1.5:
+            _coiling_score = 10
+        elif _range_ratio <= 2.5:
+            _coiling_score = 6
+        elif _range_ratio <= 3.5:
+            _coiling_score = 2
+        else:
+            _coiling_score = 0
 
         return {
             "ticker":      ticker,
@@ -532,6 +547,8 @@ def scan_near_breakout(
             "level":        round(best_level, 2),
             "is_confirmed_break": is_confirmed_break,
             "atr":          round(_latr_nb, 4),
+            "coiling_score": _coiling_score,
+            "range_ratio":   round(_range_ratio, 2),
         }
 
     except Exception as exc:
