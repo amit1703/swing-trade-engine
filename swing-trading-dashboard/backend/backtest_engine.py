@@ -787,18 +787,23 @@ class BacktestEngine:
             run_id, self.ticker, self.start_date, self.end_date,
         )
 
-        # ── 1. Fetch data (or use preloaded df for WFO) ───────────────────
-        if self.ticker_df is not None and self.spy_df is not None:
-            ticker_df = self.ticker_df
-            spy_df    = self.spy_df
-        else:
-            ticker_df, spy_df = await _fetch_data(self.ticker, self.start_date)
-            if ticker_df is None or spy_df is None:
-                logger.warning("Backtest: data fetch failed for %s", self.ticker)
-                return compute_metrics(
-                    self.ticker, "+".join(self.setup_types),
-                    self.start_date, self.end_date, [], run_id,
-                )
+        # ── 1–3. Fetch data and pre-compute indicators/RS via prepare() ───────
+        state = await self.prepare()
+        if state is None:
+            return compute_metrics(
+                self.ticker, "+".join(self.setup_types),
+                self.start_date, self.end_date, [], run_id,
+            )
+
+        ticker_df       = state.ticker_df
+        spy_df          = state.spy_df
+        adj_col         = state.adj_col
+        _sr_zones_cache = state.sr_zones_cache
+        ema20_full      = state.ema20_full
+        _rs_ratio_s     = state.rs_ratio_s
+        _rs_52wh_s      = state.rs_52wh_s
+        _rs_score_s     = state.rs_score_s
+        _spy_3m_s       = state.spy_3m_s
 
         # ── 2. Identify replay window ─────────────────────────────────────
         start = pd.Timestamp(self.start_date)
@@ -813,63 +818,6 @@ class BacktestEngine:
                 self.ticker, "+".join(self.setup_types),
                 self.start_date, self.end_date, [], run_id,
             )
-
-        # ── 3. Price column identification ─────────────────────────────────
-        adj_col = "Adj Close" if "Adj Close" in ticker_df.columns else "Close"
-
-        # ── 3b. Pre-compute SR zones ONCE for the entire window ───────────
-        # NOTE: This uses the full ticker_df (all bars in the IS/OOS slice),
-        # not a per-bar df_slice. This is an intentional performance trade-off:
-        # zones are structural price levels derived from the full window.
-        # In live scanning the optimizer also sees future structure — this
-        # matches the real deployment context. The bias is accepted consciously
-        # to make WFO optimization computationally feasible.
-        from engines.engine1 import calculate_sr_zones as _calc_sr_zones
-        _sr_zones_cache: Optional[List] = _calc_sr_zones(self.ticker, ticker_df)
-
-        # ── 3c. Pre-compute indicator columns on ticker_df ────────────────
-        # When called from WFO, wfo_engine.py pre-computes these on the full
-        # DF; slices inherit the columns, so we skip the copy+compute here.
-        # For standalone backtests, compute now on a copy to avoid mutation.
-        if "_EMA8" not in ticker_df.columns:
-            ticker_df = ticker_df.copy()   # don't mutate caller's DF
-            _c = ticker_df[adj_col]
-            _h = ticker_df["High"]
-            _l = ticker_df["Low"]
-            ticker_df["_EMA8"]    = _ema(_c, 8)
-            ticker_df["_EMA20"]   = _ema(_c, 20)
-            ticker_df["_SMA50"]   = _sma(_c, 50)
-            ticker_df["_SMA200"]  = _sma(_c, 200)
-            ticker_df["_ATR14"]   = _atr(_h, _l, _c, 14)
-            ticker_df["_CCI20"]   = _cci(_h, _l, _c, 20)
-            if "Volume" in ticker_df.columns:
-                ticker_df["_VOLSMA50"] = ticker_df["Volume"].rolling(50, min_periods=10).mean()
-
-        _close_s  = ticker_df[adj_col]
-        ema20_full = ticker_df["_EMA20"]   # reuse pre-computed column
-
-        # ── 3d. Pre-compute RS rolling series (O(1) per-bar lookup) ──────
-        _spy_adj     = "Adj Close" if "Adj Close" in spy_df.columns else "Close"
-        _spy_aligned = spy_df[_spy_adj].reindex(ticker_df.index, method="ffill").fillna(0.0)
-        _mask        = _spy_aligned > 0
-        _rs_ratio_s  = pd.Series(0.0, index=ticker_df.index)
-        _rs_ratio_s[_mask] = _close_s[_mask] / _spy_aligned[_mask]
-        _rs_52wh_s   = _rs_ratio_s.rolling(252, min_periods=1).max()
-
-        _PERIODS = [63, 126, 189, 252]
-        _WEIGHTS = [0.40, 0.20, 0.20, 0.20]
-        _rs_score_s = pd.Series(0.0, index=ticker_df.index)
-        _rs_wt_s    = pd.Series(0.0, index=ticker_df.index)
-        for _p, _w in zip(_PERIODS, _WEIGHTS):
-            _tk_ret  = _close_s / _close_s.shift(_p) - 1.0
-            _spy_ret = _spy_aligned / _spy_aligned.shift(_p) - 1.0
-            _valid   = ~(_tk_ret.isna() | _spy_ret.isna() | ~_mask)
-            _rs_score_s = _rs_score_s + _w * (_tk_ret.where(_valid, 0.0) - _spy_ret.where(_valid, 0.0))
-            _rs_wt_s    = _rs_wt_s    + _w * _valid.astype(float)
-        _rs_score_s = (_rs_score_s / _rs_wt_s.replace(0.0, np.nan)).fillna(0.0)
-
-        # SPY 63-day return series (used by VCP RS gate)
-        _spy_3m_s = (_spy_aligned / _spy_aligned.shift(63) - 1.0).fillna(0.0)
 
         # ── 4. Replay loop ────────────────────────────────────────────────
         completed_trades: List[TradeRecord] = []
