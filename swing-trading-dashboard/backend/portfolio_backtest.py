@@ -86,6 +86,10 @@ class TickerSimState:
     # ── Mutable runtime state ───────────────────────────────────────────────
     is_in_trade:     bool           = False
     last_close_date: Optional[date] = None
+    # ── Pre-computed caches (set once in _prepare_one, never mutated) ────────
+    date_to_idx:     dict           = field(default_factory=dict)   # Timestamp -> int (O(1) bar lookup)
+    liquidity_ok:    Optional[pd.Series] = None                     # bool Series (vectorized liquidity)
+    signal_cache:    dict           = field(default_factory=dict)   # Timestamp -> (full_idx, signal_dict)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -348,6 +352,40 @@ async def run_portfolio_backtest_universe(
                 )
                 state = await engine.prepare(shared_spy_df=spy_df)
                 if state is not None:
+                    # ── O(1) bar lookup dict (replaces get_loc in Phase 2) ──────────
+                    state.date_to_idx = {d: i for i, d in enumerate(state.ticker_dates)}
+
+                    # ── Vectorised liquidity (replaces 1 rolling-median per day) ────
+                    _vol = state.ticker_df.get("Volume") if "Volume" in state.ticker_df.columns else None
+                    if _vol is not None:
+                        _vol50 = _vol.rolling(50, min_periods=10).median()
+                        _dv    = state.ticker_df["Close"] * _vol50
+                        state.liquidity_ok = (
+                            (_vol50 >= _constants.LIQUIDITY_MIN_AVG_VOLUME) &
+                            (_dv    >= _constants.LIQUIDITY_MIN_DOLLAR_VOLUME)
+                        )
+                    else:
+                        state.liquidity_ok = pd.Series(False, index=state.ticker_dates)
+
+                    # ── Pre-compute signal cache (moves Phase 2 engine work here) ───
+                    # Phase 2 becomes O(1) dict lookups instead of full engine runs.
+                    _cache: dict = {}
+                    _range_start = pd.Timestamp(config.start_date)
+                    _range_end   = pd.Timestamp(config.end_date)
+                    for _d, _fi in state.date_to_idx.items():
+                        if _d < _range_start or _d > _range_end:
+                            continue
+                        if _fi + 1 >= len(state.ticker_dates):
+                            continue
+                        if not state.liquidity_ok.iloc[_fi]:
+                            continue
+                        if _fi % 100 == 0:
+                            await asyncio.sleep(0)   # yield to event loop periodically
+                        _sig = _detect_signals_for_date(state, _d, _fi, config.setup_types)
+                        if _sig is not None:
+                            _cache[_d] = (_fi, _sig)
+                    state.signal_cache = _cache
+
                     async with lock:
                         ticker_states.append(state)
             except Exception as exc:
@@ -404,10 +442,10 @@ async def run_portfolio_backtest_universe(
         still_open = []
         for pos in open_positions:
             ts = pos["ticker_state"]
-            if T_date not in ts.ticker_dates:
+            full_idx = ts.date_to_idx.get(T_date)
+            if full_idx is None:
                 still_open.append(pos)
                 continue
-            full_idx = ts.ticker_dates.get_loc(T_date)
             ema20_T  = float(ts.ema20_full.iloc[full_idx])
             atr14_T  = (float(ts.atr14_full.iloc[full_idx])
                         if ts.atr14_full is not None and not np.isnan(ts.atr14_full.iloc[full_idx])
@@ -448,30 +486,24 @@ async def run_portfolio_backtest_universe(
             continue
 
         # ── Step 4: Collect signals from all free tickers ─────────────────
+        # Liquidity, T+1 availability, and engine runs are all pre-computed
+        # during Phase 1. Phase 2 only needs O(1) dict lookups here.
         candidates = []
         for ts in ticker_states:
             if ts.is_in_trade:
                 continue
-            if T_date not in ts.ticker_dates:
-                continue
-            full_idx = ts.ticker_dates.get_loc(T_date)
-            if full_idx + 1 >= len(ts.ticker_dates):
-                continue   # no T+1 bar available for entry
 
-            # Cooldown gate
+            # Cooldown gate (depends on runtime trade state — cannot pre-compute)
             if ts.last_close_date is not None and ts.params is not None:
                 days_since = (T_date.date() - ts.last_close_date).days
                 if days_since < ts.params.cooldown_days:
                     continue
 
-            # Liquidity gate
-            if not passes_liquidity(ts.ticker_df.iloc[:full_idx + 1]):
+            # Signal lookup (O(1) — pre-computed in Phase 1)
+            cached = ts.signal_cache.get(T_date)
+            if cached is None:
                 continue
-
-            # Signal detection
-            signal = _detect_signals_for_date(ts, T_date, full_idx, config.setup_types)
-            if signal is None:
-                continue
+            full_idx, signal = cached
 
             # ── Scored mode: apply weights, regime, threshold ─────────────
             if ts.params is not None:
