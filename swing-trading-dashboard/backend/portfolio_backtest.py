@@ -544,10 +544,13 @@ async def run_portfolio_backtest_universe(
                         continue
 
             score = signal.get("_final_score", 0.0)
-            if score < config.min_score:
+            # Normalize to 0-100 so config.min_score matches the live-scanner scale.
+            # Practical max is ~20 (BASE: 5.0 × base_weight 3.895 ≈ 19.5); cap at 100.
+            score_normalized = min(score / 20.0 * 100.0, 100.0)
+            if score_normalized < config.min_score:
                 continue
 
-            candidates.append((score, signal, ts, full_idx))
+            candidates.append((score_normalized, signal, ts, full_idx))
 
         # ── Step 5: Fill slots — best score first ──────────────────────────
         candidates.sort(key=lambda x: -x[0])
