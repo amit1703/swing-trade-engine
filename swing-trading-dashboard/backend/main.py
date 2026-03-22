@@ -41,6 +41,7 @@ import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
+import math
 from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 
@@ -430,6 +431,29 @@ class _NumpyEncoder(json.JSONEncoder):
         if isinstance(obj, np.bool_):    return bool(obj)
         if isinstance(obj, np.ndarray):  return obj.tolist()
         return super().default(obj)
+
+
+def _json_sanitize(obj):
+    """
+    Recursively replace NaN/Inf (numpy or native float) with None so the
+    output is valid JSON. Browsers reject the literal `NaN` token.
+    """
+    if isinstance(obj, dict):
+        return {k: _json_sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_sanitize(v) for v in obj]
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    if isinstance(obj, np.floating):
+        v = float(obj)
+        return None if not math.isfinite(v) else v
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, np.ndarray):
+        return _json_sanitize(obj.tolist())
+    return obj
 
 # ── Backtest diagnostics state ────────────────────────────────────────────────
 BACKTEST_DIAG_CACHE_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), BACKTEST_DIAG_CACHE_FILE))
@@ -3413,7 +3437,7 @@ async def run_backtest_diagnostics(
             tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(BACKTEST_DIAG_CACHE_PATH))
             try:
                 with os.fdopen(tmp_fd, "w") as f:
-                    json.dump(report, f, cls=_NumpyEncoder)
+                    json.dump(_json_sanitize(report), f)
                 os.replace(tmp_path, BACKTEST_DIAG_CACHE_PATH)
             except Exception:
                 try:
@@ -3573,7 +3597,7 @@ async def run_isoos_diagnostics(
             tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(ISOOS_DIAG_CACHE_PATH))
             try:
                 with os.fdopen(tmp_fd, "w") as f:
-                    json.dump(report, f, cls=_NumpyEncoder)
+                    json.dump(_json_sanitize(report), f)
                 os.replace(tmp_path, ISOOS_DIAG_CACHE_PATH)
             except Exception:
                 try:
