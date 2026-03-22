@@ -1,22 +1,29 @@
 """
-Portfolio-coordinated backtest.
+Portfolio-coordinated backtest — live-scanner parity mode.
 
 Replaces the per-ticker independent run_backtest_universe() with a global
 portfolio cap: at most BacktestConfig.max_positions trades open at any time.
 When a slot opens, the highest-scoring available signal fills it.
 
+Signal quality gates mirror the live scanner exactly:
+  1. RS rank gate          — cross-sectional O'Neil RS percentile ≥ RS_RANK_MIN_PERCENTILE
+  2. Full 7-factor regime  — f1–f7 including breadth (from loaded tickers) and VIX
+  3. compute_setup_score() — same 0-100 scoring function as the live scanner
+  4. config.min_score gate — same 0-100 scale as MIN_SETUP_SCORE in live scanner
+
 Public API
 ----------
-run_portfolio_backtest_universe(tickers, config, params, progress_cb)
+run_portfolio_backtest_universe(tickers, config, params, progress_cb, sectors)
     -> List[dict]   (same TradeRecord.to_dict() format as run_backtest_universe)
 """
 from __future__ import annotations
 
 import asyncio
+import bisect
 import logging
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -25,11 +32,22 @@ import constants as _constants
 from constants import (
     CONCURRENCY_LIMIT,
     RS_BLUE_DOT_TOLERANCE_PCT,
+    RS_RANK_MIN_PERCENTILE,
     SELECTIVE_SETUP_WEIGHTS,
     SELECTIVE_HARD_FILTER,
+    REGIME_WEIGHT_BREADTH,
+    REGIME_WEIGHT_HL,
+    REGIME_WEIGHT_VIX,
+    REGIME_AGGRESSIVE_THRESHOLD,
+    REGIME_SELECTIVE_THRESHOLD,
+    TOP_SECTORS_N,
 )
 import filters as _filters
-from filters import compute_regime_label_series, passes_liquidity
+from filters import (
+    compute_regime_label_series,
+    compute_regime_score_series,
+    passes_liquidity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +63,7 @@ class BacktestConfig:
     end_date:      str           = "2024-12-31"
     max_positions: int           = 4
     ticker_count:  Optional[int] = None      # None = full universe
-    min_score:     float         = 0.0
+    min_score:     float         = 0.0       # 0–100, same scale as live scanner MIN_SETUP_SCORE
     setup_types:   List[str]     = field(default_factory=lambda: [
         "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"
     ])
@@ -86,9 +104,10 @@ class TickerSimState:
     # ── Mutable runtime state ───────────────────────────────────────────────
     is_in_trade:     bool           = False
     last_close_date: Optional[date] = None
-    # ── Pre-computed caches (set once in _prepare_one, never mutated) ────────
+    # ── Pre-computed caches (set once in _prepare_one / post-Phase-1, never mutated) ─
     date_to_idx:     dict           = field(default_factory=dict)   # Timestamp -> int (O(1) bar lookup)
     liquidity_ok:    Optional[pd.Series] = None                     # bool Series (vectorized liquidity)
+    rs_rank_cache:   dict           = field(default_factory=dict)   # Timestamp -> float 0-100 (cross-sectional RS percentile)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -246,7 +265,7 @@ def _build_open_position(
             "trailing_stop":       stop_loss,
             "take_profit":         take_profit,
             "trail_mult_override": trail_mult,
-            "_final_score":        signal.get("_final_score"),
+            "_final_score":        signal.get("setup_score", signal.get("_final_score")),
             "_regime":             signal.get("_regime", "UNKNOWN"),
             "_rs_score":           float(ts.rs_score_s.iloc[full_idx]),
             "_setup_meta":         setup_meta,
@@ -296,6 +315,206 @@ def _build_trade_record(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Live-scanner parity helpers (post-Phase-1 computation)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_adj_close_matrix(
+    ticker_states: List[TickerSimState],
+    spy_index: pd.DatetimeIndex,
+) -> pd.DataFrame:
+    """
+    Build a (date × ticker) DataFrame of adj-close prices, aligned to spy_index.
+    Missing values are forward-filled then left as NaN at the start.
+    """
+    close_dict: Dict[str, pd.Series] = {}
+    for ts in ticker_states:
+        col = ts.adj_col if ts.adj_col in ts.ticker_df.columns else "Close"
+        close_dict[ts.ticker] = ts.ticker_df[col]
+    df = pd.DataFrame(close_dict)
+    return df.reindex(spy_index).ffill()
+
+
+def _compute_rs_ranks_and_assign(
+    ticker_states: List[TickerSimState],
+    spy_df: pd.DataFrame,
+) -> None:
+    """
+    Vectorized cross-sectional O'Neil RS rank computation.
+
+    For each trading day, computes each ticker's O'Neil RS score relative to SPY,
+    then cross-sectionally ranks all tickers (0-100 percentile).  Assigns
+    ts.rs_rank_cache = {Timestamp: percentile} for every TickerSimState.
+
+    Tickers with insufficient history for a period contribute 0 to that period's
+    weight (handled by ffill + pct_change returning NaN for short histories).
+    """
+    spy_col = "Adj Close" if "Adj Close" in spy_df.columns else "Close"
+    spy_close = spy_df[spy_col].dropna()
+    if len(spy_close) < 63 or not ticker_states:
+        return
+
+    close_df = _build_adj_close_matrix(ticker_states, spy_close.index)
+
+    # O'Neil RS score matrix: weighted sum of excess returns over SPY
+    rs_matrix = pd.DataFrame(0.0, index=close_df.index, columns=close_df.columns)
+    for period, weight in zip((63, 126, 189, 252), (0.40, 0.20, 0.20, 0.20)):
+        tk_ret  = close_df.pct_change(period)
+        spy_ret = spy_close.pct_change(period)
+        excess  = tk_ret.sub(spy_ret, axis=0).fillna(0.0)
+        rs_matrix += excess * weight
+
+    # Cross-sectional percentile rank per date: rank(axis=1) gives a rank per row
+    # pct=True normalises to [0, 1]; multiply by 100 → [0, 100]
+    rs_rank_matrix = rs_matrix.rank(axis=1, pct=True, na_option="keep") * 100.0
+
+    for ts in ticker_states:
+        if ts.ticker in rs_rank_matrix.columns:
+            series = rs_rank_matrix[ts.ticker].dropna()
+            ts.rs_rank_cache = series.to_dict()
+
+
+def _compute_full_regime_dicts(
+    spy_df: pd.DataFrame,
+    vix_df: Optional[pd.DataFrame],
+    ticker_states: List[TickerSimState],
+) -> Tuple[Dict, Dict]:
+    """
+    Compute full 7-factor regime score and label for each SPY trading day.
+
+    f1–f4: SPY-only (EMA20, SMA50, MA stack, EMA slope) — via filters.py
+    f5:    breadth (% of loaded tickers with close > 50-SMA)
+    f6:    H/L ratio (52-week highs / (highs + lows + 1))
+    f7:    VIX < VIX SMA20
+
+    Total: 0–100.  Thresholds: AGGRESSIVE ≥ 70, SELECTIVE ≥ 40, DEFENSIVE < 40.
+
+    Returns
+    -------
+    score_dict : {Timestamp: int}   regime score 0-100
+    label_dict : {Timestamp: str}   "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE"
+    """
+    if spy_df is None or len(spy_df) < 200 or not ticker_states:
+        return {}, {}
+
+    # F1–F4 from filters.py (0-60 scale)
+    base_score = compute_regime_score_series(spy_df)  # pd.Series[int]
+
+    # Build close matrix aligned to SPY for f5 / f6
+    close_matrix = _build_adj_close_matrix(ticker_states, spy_df.index)
+
+    # F5: breadth — fraction of tickers with close > 50-day SMA
+    sma50_matrix = close_matrix.rolling(50, min_periods=10).mean()
+    breadth      = (close_matrix > sma50_matrix).mean(axis=1).fillna(0.5)
+    f5           = (breadth.clip(0.0, 1.0) * REGIME_WEIGHT_BREADTH).astype(int)
+
+    # F6: 52-week H/L ratio
+    high_252 = close_matrix.rolling(252, min_periods=63).max()
+    low_252  = close_matrix.rolling(252, min_periods=63).min()
+    n_high   = (close_matrix >= high_252 * 0.99).sum(axis=1)
+    n_low    = (close_matrix <= low_252  * 1.01).sum(axis=1)
+    hl_ratio = n_high / (n_high + n_low + 1)
+    f6       = (hl_ratio.clip(0.0, 1.0) * REGIME_WEIGHT_HL).astype(int)
+
+    # F7: VIX < VIX SMA20
+    f7 = pd.Series(0, index=spy_df.index, dtype=int)
+    if vix_df is not None and not vix_df.empty:
+        try:
+            _vix = vix_df.copy()
+            if isinstance(_vix.columns, pd.MultiIndex):
+                _vix.columns = _vix.columns.get_level_values(0)
+            vcol = "Close" if "Close" in _vix.columns else _vix.columns[0]
+            vc   = _vix[vcol].dropna()
+            if len(vc) >= 20:
+                vix_sma20  = vc.rolling(20).mean()
+                is_low_vix = (vc < vix_sma20).reindex(spy_df.index).fillna(False)
+                f7         = (is_low_vix.astype(int) * REGIME_WEIGHT_VIX)
+        except Exception:
+            pass  # VIX failure is non-fatal — f7 stays 0
+
+    full_score = (base_score + f5 + f6 + f7).clip(0, 100).astype(int)
+
+    labels = pd.Series(
+        np.select(
+            [full_score >= REGIME_AGGRESSIVE_THRESHOLD,
+             full_score >= REGIME_SELECTIVE_THRESHOLD],
+            ["AGGRESSIVE", "SELECTIVE"],
+            default="DEFENSIVE",
+        ),
+        index=spy_df.index,
+        dtype=object,
+    )
+
+    return full_score.to_dict(), labels.to_dict()
+
+
+def _compute_monthly_top_sectors(
+    ticker_states: List[TickerSimState],
+    spy_df: pd.DataFrame,
+    sectors: Dict[str, str],
+    top_n: int = TOP_SECTORS_N,
+) -> List[Tuple[pd.Timestamp, List[str]]]:
+    """
+    Compute top-N sectors by average O'Neil RS for the first trading day of
+    each calendar month.  Returns a list of (Timestamp, [sector names]) sorted
+    ascending by date, for use with _get_top_sectors_for_date().
+    """
+    spy_col   = "Adj Close" if "Adj Close" in spy_df.columns else "Close"
+    spy_close = spy_df[spy_col].dropna()
+    if len(spy_close) < 63 or not sectors or not ticker_states:
+        return []
+
+    close_df  = _build_adj_close_matrix(ticker_states, spy_close.index)
+    rs_matrix = pd.DataFrame(0.0, index=close_df.index, columns=close_df.columns)
+    for period, weight in zip((63, 126, 189, 252), (0.40, 0.20, 0.20, 0.20)):
+        tk_ret  = close_df.pct_change(period)
+        spy_ret = spy_close.pct_change(period)
+        rs_matrix += tk_ret.sub(spy_ret, axis=0).fillna(0.0) * weight
+
+    # Identify first available trading day of each month
+    seen_months: set = set()
+    monthly_dates: List[pd.Timestamp] = []
+    for d in sorted(spy_close.index):
+        ym = (d.year, d.month)
+        if ym not in seen_months:
+            seen_months.add(ym)
+            monthly_dates.append(d)
+
+    result: List[Tuple[pd.Timestamp, List[str]]] = []
+    for mdate in monthly_dates:
+        if mdate not in rs_matrix.index:
+            continue
+        row = rs_matrix.loc[mdate]
+        sector_scores: Dict[str, List[float]] = {}
+        for ticker in row.index:
+            sector = sectors.get(ticker, "Unknown")
+            if sector == "Unknown":
+                continue
+            val = row[ticker]
+            if pd.notna(val):
+                sector_scores.setdefault(sector, []).append(float(val))
+        if not sector_scores:
+            continue
+        sector_avg = {s: sum(v) / len(v) for s, v in sector_scores.items()}
+        top        = sorted(sector_avg, key=sector_avg.__getitem__, reverse=True)[:top_n]
+        result.append((mdate, top))
+
+    return result  # already sorted by date
+
+
+def _get_top_sectors_for_date(
+    monthly_sectors: List[Tuple[pd.Timestamp, List[str]]],
+    T_date: pd.Timestamp,
+) -> List[str]:
+    """Return the most-recent monthly top-sectors entry whose date ≤ T_date."""
+    if not monthly_sectors:
+        return []
+    # monthly_sectors is sorted ascending — find last entry <= T_date
+    dates = [entry[0] for entry in monthly_sectors]
+    pos   = bisect.bisect_right(dates, T_date) - 1
+    return monthly_sectors[pos][1] if pos >= 0 else []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Portfolio runner — full implementation
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -304,11 +523,18 @@ async def run_portfolio_backtest_universe(
     config: BacktestConfig,
     params=None,
     progress_cb=None,
+    sectors: Optional[Dict[str, str]] = None,
 ) -> List[dict]:
     """
-    Portfolio-coordinated backtest over all tickers.
+    Portfolio-coordinated backtest over all tickers, matching live-scanner
+    signal quality gates:
+      - Cross-sectional RS rank ≥ RS_RANK_MIN_PERCENTILE
+      - Full 7-factor regime (including breadth + VIX)
+      - compute_setup_score() → 0-100 (same function as live scanner)
+      - config.min_score compared on 0-100 scale
 
     Phase 1: Prepare all tickers concurrently (fetch + indicator compute).
+             Then post-process: RS ranks, regime, top sectors.
     Phase 2: Single day-by-day replay with global position cap.
 
     Returns flat list of TradeRecord.to_dict() dicts.
@@ -318,18 +544,39 @@ async def run_portfolio_backtest_universe(
         _SIGNAL_BASE_SCORES, _SIGNAL_BASE_SCORE_DEFAULT,
         _fetch_data,
     )
+    from scoring import compute_setup_score as _score_setup
 
     if not tickers:
         return []
 
-    # ── Phase 1a: Fetch SPY once (shared across all tickers) ─────────────
-    # Soft failure: if SPY is unavailable, pass None to prepare() and build
-    # regime series from whichever spy_df is embedded in the first TickerSimState.
+    _sectors = sectors or {}
+
+    # ── Phase 1a: Fetch SPY and VIX once (shared across all tickers) ─────
     try:
         _, spy_df = await _fetch_data("SPY", config.start_date)
     except Exception as exc:
         logger.warning("run_portfolio_backtest_universe: SPY fetch error: %s", exc)
         spy_df = None
+
+    vix_df: Optional[pd.DataFrame] = None
+    try:
+        import yfinance as yf
+        vix_df = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: yf.download(
+                "^VIX",
+                start=config.start_date,
+                interval="1d",
+                auto_adjust=False,
+                progress=False,
+                threads=False,
+            ),
+        )
+        if vix_df is not None and vix_df.empty:
+            vix_df = None
+    except Exception as exc:
+        logger.warning("run_portfolio_backtest_universe: VIX fetch error: %s", exc)
+        vix_df = None
 
     # ── Phase 1b: Prepare all tickers concurrently ────────────────────────
     sem          = asyncio.Semaphore(CONCURRENCY_LIMIT)
@@ -351,10 +598,10 @@ async def run_portfolio_backtest_universe(
                 )
                 state = await engine.prepare(shared_spy_df=spy_df)
                 if state is not None:
-                    # ── O(1) bar lookup dict (replaces get_loc in Phase 2) ──────────
+                    # O(1) bar lookup dict
                     state.date_to_idx = {d: i for i, d in enumerate(state.ticker_dates)}
 
-                    # ── Vectorised liquidity (replaces 1 rolling-median per day) ────
+                    # Vectorised liquidity (replaces 1 rolling-median per day in Phase 2)
                     _vol = state.ticker_df.get("Volume") if "Volume" in state.ticker_df.columns else None
                     if _vol is not None:
                         _vol50 = _vol.rolling(50, min_periods=10).median()
@@ -381,16 +628,40 @@ async def run_portfolio_backtest_universe(
     if not ticker_states:
         return []
 
-    # ── Phase 1c: Regime label series from SPY ────────────────────────────
-    # If the direct SPY fetch succeeded, use it. Otherwise fall back to the
-    # spy_df embedded in the first TickerSimState (always present after prepare()).
-    # Use _filters module reference so tests can monkeypatch filters.compute_regime_label_series.
+    # ── Phase 1c: Cross-sectional RS rank time series ─────────────────────
     _spy_for_regime = spy_df if spy_df is not None else ticker_states[0].spy_df
-    regime_label_s: pd.Series = (
-        _filters.compute_regime_label_series(_spy_for_regime)
-        if _spy_for_regime is not None and len(_spy_for_regime) > 0
-        else pd.Series(dtype=object)
-    )
+    if _spy_for_regime is not None and len(_spy_for_regime) > 0:
+        _compute_rs_ranks_and_assign(ticker_states, _spy_for_regime)
+        logger.info("RS rank cache built for %d tickers", len(ticker_states))
+
+    # ── Phase 1d: Full 7-factor regime score series ───────────────────────
+    regime_score_dict: Dict = {}
+    regime_label_dict: Dict = {}
+    if _spy_for_regime is not None and len(_spy_for_regime) > 0:
+        regime_score_dict, regime_label_dict = _compute_full_regime_dicts(
+            _spy_for_regime, vix_df, ticker_states
+        )
+        logger.info(
+            "Full 7-factor regime computed: %d trading days", len(regime_score_dict)
+        )
+
+    # Fallback: use simple 4-factor labels if full regime computation failed
+    if not regime_label_dict and _spy_for_regime is not None and len(_spy_for_regime) > 0:
+        _fallback = _filters.compute_regime_label_series(_spy_for_regime)
+        regime_label_dict = _fallback.to_dict()
+        regime_score_dict = {d: (70 if v == "AGGRESSIVE" else 40 if v == "SELECTIVE" else 0)
+                             for d, v in regime_label_dict.items()}
+
+    # Sorted SPY date list for O(log n) bisect lookup in Phase 2
+    _spy_dates_sorted = sorted(regime_score_dict.keys())
+
+    # ── Phase 1e: Monthly top sectors ────────────────────────────────────
+    monthly_top_sectors: List = []
+    if _spy_for_regime is not None and _sectors:
+        monthly_top_sectors = _compute_monthly_top_sectors(
+            ticker_states, _spy_for_regime, _sectors, top_n=TOP_SECTORS_N
+        )
+        logger.info("Monthly top sectors: %d months computed", len(monthly_top_sectors))
 
     # ── Phase 2: Reset mutable state ──────────────────────────────────────
     for ts in ticker_states:
@@ -455,15 +726,19 @@ async def run_portfolio_backtest_universe(
         if available <= 0:
             continue
 
-        # ── Step 3: Resolve regime ─────────────────────────────────────────
-        spy_before = regime_label_s.index[regime_label_s.index <= T_date]
-        current_regime = (
-            str(regime_label_s.loc[spy_before[-1]])
-            if len(spy_before) > 0
-            else "UNKNOWN"
-        )
+        # ── Step 3: Resolve regime via bisect (O(log n)) ──────────────────
+        _pos = bisect.bisect_right(_spy_dates_sorted, T_date) - 1
+        if _pos < 0:
+            continue
+        _spy_date      = _spy_dates_sorted[_pos]
+        current_regime = regime_label_dict.get(_spy_date, "DEFENSIVE")
+        regime_score   = int(regime_score_dict.get(_spy_date, 0))
+
         if current_regime == "DEFENSIVE":
             continue
+
+        # Top sectors for this date (from monthly pre-computation)
+        top_sectors = _get_top_sectors_for_date(monthly_top_sectors, T_date)
 
         # ── Step 4: Collect signals from all free tickers ─────────────────
         candidates = []
@@ -471,7 +746,7 @@ async def run_portfolio_backtest_universe(
             if ts.is_in_trade:
                 continue
 
-            # O(1) date lookup (replaces get_loc)
+            # O(1) date lookup
             full_idx = ts.date_to_idx.get(T_date)
             if full_idx is None:
                 continue
@@ -484,6 +759,11 @@ async def run_portfolio_backtest_universe(
                 if days_since < ts.params.cooldown_days:
                     continue
 
+            # ── RS rank gate (live-scanner parity) ────────────────────────
+            rs_rank = ts.rs_rank_cache.get(T_date)
+            if rs_rank is None or rs_rank < _constants.RS_RANK_MIN_PERCENTILE:
+                continue
+
             # Liquidity gate (O(1) — pre-computed boolean Series)
             if ts.liquidity_ok is None or not ts.liquidity_ok.iloc[full_idx]:
                 continue
@@ -493,7 +773,7 @@ async def run_portfolio_backtest_universe(
             if signal is None:
                 continue
 
-            # ── Scored mode: apply weights, regime, threshold ─────────────
+            # ── Internal BacktestParams scoring (mechanism quality gate) ──
             if ts.params is not None:
                 signal["_regime"] = current_regime
                 setup_type_sig    = signal.get("setup_type", "")
@@ -523,6 +803,7 @@ async def run_portfolio_backtest_universe(
                         continue
                     final_score *= sel_w
 
+                # Internal mechanism quality gate
                 if final_score < ts.params.score_threshold:
                     continue
 
@@ -537,20 +818,36 @@ async def run_portfolio_backtest_universe(
 
             else:
                 signal["_regime"] = current_regime
-                # Apply SELECTIVE hard filter in legacy mode too
                 if current_regime == "SELECTIVE" and SELECTIVE_HARD_FILTER and SELECTIVE_SETUP_WEIGHTS:
                     setup_type_sig = signal.get("setup_type", "")
                     if SELECTIVE_SETUP_WEIGHTS.get(setup_type_sig, 1.0) == 0.0:
                         continue
 
-            score = signal.get("_final_score", 0.0)
-            # Normalize to 0-100 so config.min_score matches the live-scanner scale.
-            # Practical max is ~20 (BASE: 5.0 × base_weight 3.895 ≈ 19.5); cap at 100.
-            score_normalized = min(score / 20.0 * 100.0, 100.0)
-            if score_normalized < config.min_score:
+            # ── Live-scanner quality score (compute_setup_score) ──────────
+            # Inject sector (required by scoring.py sector component)
+            signal["sector"] = _sectors.get(ts.ticker, "Unknown")
+
+            # Estimate R:R for the score's RR component
+            _close = float(ts.ticker_df["Close"].iloc[full_idx])
+            _stop  = signal.get("stop_loss", 0.0)
+            if ts.params is not None and _close > 0 and _stop > 0 and _stop < _close:
+                _risk = _close - _stop
+                if _risk > 0:
+                    signal["rr"] = ts.params.tp_multiple  # rr = tp_mult when risk=1R
+            elif "take_profit" in signal and _close > 0 and _stop > 0 and _stop < _close:
+                _tp = signal["take_profit"]
+                if _tp > _close:
+                    signal["rr"] = (_tp - _close) / (_close - _stop)
+
+            # Compute true 0-100 setup score
+            setup_score = _score_setup(signal, rs_rank, regime_score, current_regime, top_sectors)
+            signal["setup_score"] = setup_score
+
+            # ── Market quality gate ────────────────────────────────────────
+            if setup_score < config.min_score:
                 continue
 
-            candidates.append((score_normalized, signal, ts, full_idx))
+            candidates.append((setup_score, signal, ts, full_idx))
 
         # ── Step 5: Fill slots — best score first ──────────────────────────
         candidates.sort(key=lambda x: -x[0])

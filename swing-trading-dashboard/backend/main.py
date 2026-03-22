@@ -3413,6 +3413,7 @@ async def run_backtest_diagnostics(
                 config,
                 params=BacktestParams(),
                 progress_cb=_progress,
+                sectors=SECTORS,
             )
             adapted = [_backtest_trade_to_analytics(t) for t in raw_trades]
 
@@ -3539,7 +3540,8 @@ async def run_isoos_diagnostics(
                 setup_types   = req.setup_types,
             )
             is_raw = await run_portfolio_backtest_universe(
-                tickers, is_config, params=BacktestParams(), progress_cb=_progress_is
+                tickers, is_config, params=BacktestParams(), progress_cb=_progress_is,
+                sectors=SECTORS,
             )
             is_adapted = [_backtest_trade_to_analytics(t) for t in is_raw]
 
@@ -3567,7 +3569,8 @@ async def run_isoos_diagnostics(
                 setup_types   = req.setup_types,
             )
             oos_raw = await run_portfolio_backtest_universe(
-                tickers, oos_config, params=BacktestParams(), progress_cb=_progress_oos
+                tickers, oos_config, params=BacktestParams(), progress_cb=_progress_oos,
+                sectors=SECTORS,
             )
             oos_adapted = [_backtest_trade_to_analytics(t) for t in oos_raw]
 

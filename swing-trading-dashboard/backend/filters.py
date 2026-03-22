@@ -96,6 +96,18 @@ _BACKTEST_REGIME_AGGRESSIVE = round(REGIME_AGGRESSIVE_THRESHOLD / 100 * _BACKTES
 _BACKTEST_REGIME_SELECTIVE  = round(REGIME_SELECTIVE_THRESHOLD  / 100 * _BACKTEST_REGIME_MAX)
 
 
+def compute_regime_score_series(spy_df: pd.DataFrame) -> pd.Series:
+    """
+    Return integer regime score (0–60, f1–f4 only) per date as a pd.Series.
+    Public wrapper around _compute_spy_regime_score for use in portfolio_backtest.
+    """
+    if spy_df is None or len(spy_df) < 200:
+        if spy_df is not None:
+            return pd.Series(0, index=spy_df.index, dtype=int)
+        return pd.Series(dtype=int)
+    return _compute_spy_regime_score(spy_df)
+
+
 def compute_regime_label_series(spy_df: pd.DataFrame) -> pd.Series:
     """
     Return a pd.Series of str ('AGGRESSIVE'|'SELECTIVE'|'DEFENSIVE') per date.
