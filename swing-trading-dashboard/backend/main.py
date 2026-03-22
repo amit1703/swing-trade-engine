@@ -67,7 +67,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from filters import in_earnings_blackout as _in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, cci as _cci, atr as _atr
 from indicators.indicator_engine import compute_indicators, TickerIndicators
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 
@@ -167,6 +167,7 @@ from email_digest import send_digest
 from services.macro_service import get_market_overview
 from services.narrative import generate_narrative
 from backtest_engine import BacktestEngine, BacktestParams, run_backtest_universe
+from portfolio_backtest import run_portfolio_backtest_universe, BacktestConfig
 from execution.trailing_engine import compute_live_trail as _compute_live_trail
 from config.trailing_config import validate_trail_config
 from execution.trailing_engine import log_trail_config as _log_trail_config
@@ -1900,6 +1901,17 @@ class BacktestRequest(BaseModel):
         return self
 
 
+class BacktestRunRequest(BaseModel):
+    start_date:    str           = Field(default_factory=lambda: BACKTEST_DIAG_START_DATE)
+    end_date:      str           = Field(default_factory=lambda: BACKTEST_DIAG_END_DATE)
+    max_positions: int           = 4
+    ticker_count:  Optional[int] = None
+    min_score:     float         = 0.0
+    setup_types:   List[str]     = Field(default_factory=lambda: [
+        "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"
+    ])
+
+
 class WFODownloadRequest(BaseModel):
     tickers: List[str]
 
@@ -3297,27 +3309,36 @@ async def diagnostics_report():
 
 
 @app.post("/api/diagnostics/backtest/run", status_code=202)
-async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
+async def run_backtest_diagnostics(
+    background_tasks: BackgroundTasks,
+    req: BacktestRunRequest = Body(default=BacktestRunRequest()),
+):
     """
-    Trigger a background backtest over the full universe using the current live system.
-    Engines: PULLBACK, BASE, RES_BREAKOUT, HTF, LCE (no VCP — disabled in live scanner).
-    Uses V5 per-setup ATR trail multipliers (no single-trail override).
-    Returns immediately with 202. Poll /api/diagnostics/backtest/status for progress.
+    Trigger a background portfolio-coordinated backtest.
+    Accepts optional JSON body (BacktestRunRequest). No body = defaults used.
     Returns 409 if a run is already in progress.
     """
     global _backtest_diag_status
     if _backtest_diag_status["status"] == "running":
         raise HTTPException(status_code=409, detail="Backtest already running")
 
-    tickers = list(ACTIVE_UNIVERSE) if ACTIVE_UNIVERSE else list(SCAN_UNIVERSE)
+    all_tickers = list(ACTIVE_UNIVERSE) if ACTIVE_UNIVERSE else list(SCAN_UNIVERSE)
+    tickers     = all_tickers[:req.ticker_count] if req.ticker_count else all_tickers
 
-    # Set running state synchronously before the response is sent so that
-    # an immediate /status poll after POST sees "running", not the previous
-    # "completed" / "idle" state (background task starts after response).
-    _backtest_diag_status.update({"status": "running", "done": 0, "total": len(tickers)})
+    _backtest_diag_status.update({
+        "status": "running",
+        "done":   0,
+        "total":  len(tickers),
+    })
 
-    # Current live system: no VCP, V5 per-setup trails (trail_mult_override=None)
-    _CURRENT_SETUP_TYPES = ["PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"]
+    config = BacktestConfig(
+        start_date    = req.start_date,
+        end_date      = req.end_date,
+        max_positions = req.max_positions,
+        ticker_count  = req.ticker_count,
+        min_score     = req.min_score,
+        setup_types   = req.setup_types,
+    )
 
     async def _do_backtest():
         global _backtest_diag_status
@@ -3325,29 +3346,29 @@ async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
             async def _progress(done: int, total: int):
                 _backtest_diag_status["done"] = done
 
-            raw_trades = await run_backtest_universe(
+            raw_trades = await run_portfolio_backtest_universe(
                 tickers,
-                BACKTEST_DIAG_START_DATE,
-                BACKTEST_DIAG_END_DATE,
-                trail_mult_override=None,        # V5: per-setup trail multipliers
+                config,
                 params=BacktestParams(),
                 progress_cb=_progress,
-                setup_types=_CURRENT_SETUP_TYPES,
             )
             adapted = [_backtest_trade_to_analytics(t) for t in raw_trades]
 
             report = {
                 "generated_at":        datetime.now(timezone.utc).isoformat(),
-                "start_date":          BACKTEST_DIAG_START_DATE,
-                "end_date":            BACKTEST_DIAG_END_DATE,
+                "start_date":          req.start_date,
+                "end_date":            req.end_date,
+                "max_positions":       req.max_positions,
                 "tickers_run":         len(tickers),
+                "setup_types":         req.setup_types,
+                "min_score":           req.min_score,
                 "total_trades":        len(adapted),
                 "summary":             compute_live_diagnostics(adapted),
                 "setup_breakdown":     compute_setup_breakdown(adapted),
                 "ticker_distribution": compute_ticker_distribution(adapted),
                 "regime_performance":  compute_regime_performance(adapted),
                 "selective_analysis":  compute_selective_breakdown(adapted),
-                "trades":              raw_trades,   # full TradeRecord dicts for deep analysis
+                "trades":              raw_trades,
             }
 
             os.makedirs(os.path.dirname(BACKTEST_DIAG_CACHE_PATH), exist_ok=True)
@@ -3365,14 +3386,14 @@ async def run_backtest_diagnostics(background_tasks: BackgroundTasks):
 
             now_iso = datetime.now(timezone.utc).isoformat()
             _backtest_diag_status.update({"status": "completed", "last_run": now_iso})
-            log.info("Backtest diagnostics complete: %d trades from %d tickers",
+            log.info("Portfolio backtest complete: %d trades from %d tickers",
                      len(adapted), len(tickers))
         except Exception as exc:
             _backtest_diag_status["status"] = "failed"
-            log.error("Backtest diagnostics failed: %s", exc)
+            log.error("Portfolio backtest failed: %s", exc)
 
     background_tasks.add_task(_do_backtest)
-    return {"status": "started", "message": f"V4 backtest running over {len(tickers)} tickers"}
+    return {"status": "started", "tickers": len(tickers)}
 
 
 @app.get("/api/diagnostics/backtest/status")
