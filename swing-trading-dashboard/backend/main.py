@@ -3488,6 +3488,13 @@ async def run_isoos_diagnostics(
         global _isoos_running, _isoos_status
         try:
             # ── Phase IS ──────────────────────────────────────────────────
+            _isoos_status.update({
+                "status":  "running_is",
+                "phase":   "is",
+                "current": 0,
+                "total":   len(tickers),
+            })
+
             async def _progress_is(done: int, total: int):
                 _isoos_status["current"] = done
                 _isoos_status["total"]   = total
