@@ -507,8 +507,13 @@ async def run_portfolio_backtest_universe(
 
             else:
                 signal["_regime"] = current_regime
+                # Apply SELECTIVE hard filter in legacy mode too
+                if current_regime == "SELECTIVE" and SELECTIVE_HARD_FILTER and SELECTIVE_SETUP_WEIGHTS:
+                    setup_type_sig = signal.get("setup_type", "")
+                    if SELECTIVE_SETUP_WEIGHTS.get(setup_type_sig, 1.0) == 0.0:
+                        continue
 
-            score = signal.get("_final_score") or 0.0
+            score = signal.get("_final_score", 0.0)
             if score < config.min_score:
                 continue
 
