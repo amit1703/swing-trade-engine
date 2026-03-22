@@ -384,6 +384,11 @@ async def run_portfolio_backtest_universe(
     end_ts   = pd.Timestamp(config.end_date)
     all_union = sorted(set().union(*[set(ts.ticker_dates) for ts in ticker_states]))
     replay_dates = [d for d in all_union if start_ts <= d <= end_ts]
+    total_dates  = len(replay_dates)
+
+    # Signal start of Phase 2 so callers can update progress displays
+    if progress_cb is not None:
+        await progress_cb(0, total_dates)
 
     open_positions: List[dict]   = []
     completed_trades: List[dict] = []
@@ -392,6 +397,8 @@ async def run_portfolio_backtest_universe(
         # Yield to event loop every 50 dates so the server stays responsive
         if _day_idx % 50 == 0:
             await asyncio.sleep(0)
+            if progress_cb is not None:
+                await progress_cb(_day_idx, total_dates)
 
         # ── Step 1: Advance all open positions ────────────────────────────
         still_open = []

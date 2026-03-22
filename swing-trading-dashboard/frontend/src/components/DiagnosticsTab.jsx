@@ -461,12 +461,30 @@ export default function DiagnosticsTab() {
         </div>
       )}
 
+      {/* Backtest first-run loading state (no existing data) */}
+      {source === 'backtest' && !data && btRunning && (
+        <div style={{ padding: '24px 20px' }}>
+          <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
+            Running backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'}…
+          </div>
+          <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
+            <div style={{
+              height: '100%', borderRadius: 2, background: 'var(--accent)',
+              width: backtestStatus?.total > 0
+                ? `${(backtestStatus.done / backtestStatus.total * 100)}%`
+                : '0%',
+              transition: 'width 0.5s ease',
+            }} />
+          </div>
+        </div>
+      )}
+
       {/* Backtest running overlay (when re-running over existing data) */}
       {source === 'backtest' && data && btRunning && (
         <div style={{ padding: '12px 20px', background: 'rgba(245,166,35,0.06)',
                       borderBottom: '1px solid rgba(245,166,35,0.2)' }}>
           <div style={{ fontSize: 10, color: 'var(--accent)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 6 }}>
-            Re-running backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'} tickers…
+            Re-running backtest — {backtestStatus?.done ?? 0} / {backtestStatus?.total ?? '…'}…
           </div>
           <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, width: '100%' }}>
             <div style={{

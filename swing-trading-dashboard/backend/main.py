@@ -3344,7 +3344,8 @@ async def run_backtest_diagnostics(
         global _backtest_diag_status
         try:
             async def _progress(done: int, total: int):
-                _backtest_diag_status["done"] = done
+                _backtest_diag_status["done"]  = done
+                _backtest_diag_status["total"] = total
 
             raw_trades = await run_portfolio_backtest_universe(
                 tickers,

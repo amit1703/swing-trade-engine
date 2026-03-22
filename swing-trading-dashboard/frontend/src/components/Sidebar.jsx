@@ -3,7 +3,6 @@ import {
   Star,
   Heart,
   Briefcase,
-  BarChart2,
   Activity,
   Settings,
   TrendingUp,
@@ -14,7 +13,6 @@ const NAV_ITEMS = [
   { id: 'watchlist',   icon: Star,      label: 'Watchlist'   },
   { id: 'favorites',   icon: Heart,     label: 'Favorites'   },
   { id: 'portfolio',   icon: Briefcase, label: 'Portfolio'   },
-  { id: 'analytics',   icon: BarChart2, label: 'Analytics'   },
   { id: 'diagnostics', icon: Activity,  label: 'Diagnostics' },
 ]
 

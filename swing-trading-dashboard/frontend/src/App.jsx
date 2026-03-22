@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BarChart2, Activity, Settings as SettingsIcon } from 'lucide-react'
+import { Activity, Settings as SettingsIcon } from 'lucide-react'
 
 import {
   fetchRegime,
@@ -41,7 +41,6 @@ import FavoritesPage    from './components/FavoritesPage.jsx'
 import SystemGuideModal from './components/SystemGuideModal.jsx'
 import EngineHealthPanel from './components/EngineHealthPanel.jsx'
 import DebugDrawer      from './components/DebugDrawer.jsx'
-import BacktestPanel    from './components/BacktestPanel.jsx'
 import DiagnosticsTab   from './components/DiagnosticsTab.jsx'
 import BottomTabBar       from './components/BottomTabBar.jsx'
 import MobileSignalSheet  from './components/MobileSignalSheet.jsx'
@@ -456,13 +455,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ── ANALYTICS PAGE ───────────────────────────────── */}
-        {activePage === 'analytics' && (
-          <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
-            <BacktestPanel />
-          </div>
-        )}
-
         {/* ── DIAGNOSTICS PAGE ─────────────────────────────── */}
         {activePage === 'diagnostics' && (
           <div style={{ flex: 1, overflow: 'auto' }}>
@@ -474,7 +466,6 @@ export default function App() {
         {activePage === 'more' && (
           <div style={{ flex: 1, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              { id: 'analytics',   label: 'Analytics',   Icon: BarChart2     },
               { id: 'diagnostics', label: 'Diagnostics', Icon: Activity      },
               { id: 'settings',    label: 'Settings',    Icon: SettingsIcon  },
             ].map(({ id, label, Icon }) => (
