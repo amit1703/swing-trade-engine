@@ -29,7 +29,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
-from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT, ATR_STOP_MULTIPLIER
+from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT, ATR_STOP_MULTIPLIER, PB_MIN_TREND_BARS
 from zone_utils import nearest_resistance_target
 
 # RS gate: reject stocks that persistently underperform SPY.
@@ -83,15 +83,18 @@ def _find_structural_support(
     volume: pd.Series,
     avg_vol: float,
     latr: float = 0.0,
+    sma200: float = 0.0,
 ) -> Optional[Dict]:
     """
     Find the nearest structural support for a pullback.
 
-    Checks four layers in priority order:
-      1. KDE SUPPORT zone (Engine 1 horizontal zone)
-      2. Prior consolidation low (recent swing low where price bounced ≥3 bars)
-      3. High-volume demand zone (reversal bar with volume ≥150% avg)
-      4. Ascending trendline touch
+    Checks three institutional layers in priority order:
+      1. KDE SUPPORT zone   (Engine 1 horizontal density zone)
+      2. Prior pivot low    (swing low where price bounced ≥3 bars)
+      3. SMA200 touch       (200-day SMA acting as dynamic support)
+
+    Ascending trendlines and demand zones are intentionally excluded —
+    they are subjective and produce too many false positives on choppy charts.
 
     Returns a dict with keys: level, lower, upper, source
     Returns None if no structural support found.
@@ -111,7 +114,7 @@ def _find_structural_support(
                 "source": "KDE",
             }
 
-    # ── 2. Prior consolidation low ────────────────────────────────────────────
+    # ── 2. Prior pivot low ────────────────────────────────────────────────────
     if len(low) >= 15:
         low_vals = low.values[-60:] if len(low) >= 60 else low.values
         for i in range(len(low_vals) - 8, 3, -1):
@@ -119,7 +122,6 @@ def _find_structural_support(
             if candidate <= 0:
                 continue
             # Shallow 3-bar pivot: candidate must be ≤ min of 3 bars before AND after.
-            # Not a full 5-bar pivot definition — the 3% proximity + bounce guards compensate.
             if not (candidate <= min(low_vals[max(0, i-3):i])
                     and candidate <= min(low_vals[i+1:min(len(low_vals), i+4)])):
                 continue
@@ -131,7 +133,6 @@ def _find_structural_support(
             if bounced < 3:
                 continue
             # Candidate must be within ATR-relative proximity of current bar's low.
-            # Floor of 3% preserves behaviour on low-ATR stocks; expands for high-ATR leaders.
             _prox_pct = max(0.03, 1.2 * latr / ll) if ll > 0 else 0.03
             if abs(ll - candidate) / candidate > _prox_pct:
                 continue
@@ -142,54 +143,16 @@ def _find_structural_support(
                 "source": "CONSOLIDATION_LOW",
             }
 
-    # ── 3. High-volume demand zone ────────────────────────────────────────────
-    if avg_vol > 0 and len(close) >= 10 and len(low) >= 10:
-        lookback = min(30, len(close))
-        close_vals = close.values[-lookback:]
-        low_vals   = low.values[-lookback:]
-        high_vals  = high.values[-lookback:]
-        vol_vals   = volume.values[-lookback:] if len(volume) >= lookback else None
-
-        if vol_vals is not None:
-            for i in range(len(close_vals) - 2, 1, -1):  # skip last bar (current)
-                bar_vol = float(vol_vals[i])
-                if bar_vol < 1.5 * avg_vol:
-                    continue
-                bar_close = float(close_vals[i])
-                bar_low   = float(low_vals[i])
-                bar_high  = float(high_vals[i])
-                bar_open  = float(close_vals[i - 1])  # approximate open with prev close
-                if bar_close <= bar_open:
-                    continue
-                _prox_pct = max(0.03, 1.2 * latr / ll) if ll > 0 else 0.03
-                if abs(ll - bar_low) / bar_low > _prox_pct:
-                    continue
-                # Price must have held above this zone since
-                held = all(
-                    float(low_vals[j]) >= bar_low * 0.98
-                    for j in range(i + 1, len(low_vals))
-                )
-                if not held:
-                    continue
-                return {
-                    "level":  round(bar_low, 4),
-                    "lower":  round(bar_low * 0.99, 4),
-                    "upper":  round(bar_high, 4),
-                    "source": "DEMAND_ZONE",
-                }
-
-    # ── 4. Ascending trendline ────────────────────────────────────────────────
-    if trendline is not None:
-        ascending_tl = trendline.get("ascending")
-        if ascending_tl is not None:
-            touched, tl_value = _check_ascending_trendline_touch(ll, ascending_tl)
-            if touched and tl_value > 0:
-                return {
-                    "level":  round(tl_value, 4),
-                    "lower":  round(tl_value * 0.99, 4),
-                    "upper":  round(tl_value * 1.01, 4),
-                    "source": "ASCENDING_TDL",
-                }
+    # ── 3. SMA200 touch ───────────────────────────────────────────────────────
+    if sma200 > 0:
+        _prox_pct = max(0.02, 1.0 * latr / sma200) if sma200 > 0 else 0.02
+        if abs(ll - sma200) / sma200 <= _prox_pct and lc >= sma200 * 0.99:
+            return {
+                "level":  round(sma200, 4),
+                "lower":  round(sma200 * 0.99, 4),
+                "upper":  round(sma200 * 1.01, 4),
+                "source": "SMA200",
+            }
 
     return None
 
@@ -238,6 +201,25 @@ def scan_pullback(
                 )
             return None
 
+        # ── 1b. Trend duration gate ────────────────────────────────────────
+        # Require EMA8>EMA20 AND Close>SMA50 for at least PB_MIN_TREND_BARS consecutive
+        # bars before the signal bar — ensures pullback is into an established trend,
+        # not a fresh or recovering turn.
+        _e8   = ind.ema8.values[:-1]
+        _e20  = ind.ema20.values[:-1]
+        _c    = ind.close.values[:-1]
+        _s50  = ind.sma50.values[:-1]
+        _trend_mask = (_e8 > _e20) & (_c > _s50)
+        _flipped = (~_trend_mask)[::-1]
+        _trend_bars = int(np.argmax(_flipped)) if _flipped.any() else len(_flipped)
+        if _trend_bars < PB_MIN_TREND_BARS:
+            if debug:
+                print(
+                    f"Engine 3 Pullback: REJECTED - Trend too short "
+                    f"({_trend_bars} bars < {PB_MIN_TREND_BARS} required)"
+                )
+            return None
+
         # ── 2. Value zone retest ──────────────────────────────────────────
         # Low must penetrate 8 EMA or 20 EMA to be "in the value zone"
         if not (ll <= l8 or ll <= l20):
@@ -248,7 +230,7 @@ def scan_pullback(
                 )
             return None
 
-        # ── 3. Structural support (KDE zone / consolidation low / demand zone / TDL) ──
+        # ── 3. Structural support (KDE / pivot low / SMA200) ─────────────
         vol_sma50   = ind.volume.rolling(50).mean()
         vsm_val     = vol_sma50.iloc[-1]
         avg_vol_sup = float(vsm_val.item() if hasattr(vsm_val, "item") else vsm_val)
@@ -256,6 +238,7 @@ def scan_pullback(
         nearest_sup = _find_structural_support(
             ll, lc, sr_zones, trendline,
             ind.high, ind.low, ind.close, ind.volume, avg_vol_sup, latr,
+            sma200=ind.l200,
         )
         if nearest_sup is None:
             if debug:
@@ -380,6 +363,22 @@ def scan_relaxed_pullback(
                 )
             return None
 
+        # ── 1b. Trend duration gate ────────────────────────────────────────
+        _e8   = ind.ema8.values[:-1]
+        _e20  = ind.ema20.values[:-1]
+        _c    = ind.close.values[:-1]
+        _s50  = ind.sma50.values[:-1]
+        _trend_mask = (_e8 > _e20) & (_c > _s50)
+        _flipped = (~_trend_mask)[::-1]
+        _trend_bars = int(np.argmax(_flipped)) if _flipped.any() else len(_flipped)
+        if _trend_bars < PB_MIN_TREND_BARS:
+            if debug:
+                print(
+                    f"Engine 3 RLX Pullback: REJECTED - Trend too short "
+                    f"({_trend_bars} bars < {PB_MIN_TREND_BARS} required)"
+                )
+            return None
+
         # ── 2. Value Zone: low penetrates EMA8/20 OR close within ATR proximity ──
         # Two ways to qualify: classic value-zone penetration (strict-style)
         # or proximity measured in ATR units — normalized for volatility.
@@ -424,10 +423,11 @@ def scan_relaxed_pullback(
             return None
         avg_vol = vsm_scalar
 
-        # ── Structural support (KDE zone / consolidation low / demand zone / TDL) ──
+        # ── Structural support (KDE zone / consolidation low / SMA200) ──
         nearest_sup = _find_structural_support(
             ll, lc, sr_zones, trendline,
             ind.high, ind.low, ind.close, ind.volume, avg_vol, latr,
+            sma200=ind.l200,
         )
         if nearest_sup is None:
             if debug:
@@ -537,11 +537,12 @@ def _prepare_indicators(
 
     # Use pre-computed indicator columns when available (set by BacktestEngine
     # before the replay loop) to avoid O(n) recomputation on every bar.
-    ema8  = data["_EMA8"]   if "_EMA8"  in data.columns else _ema(close, 8)
-    ema20 = data["_EMA20"]  if "_EMA20" in data.columns else _ema(close, 20)
-    sma50 = data["_SMA50"]  if "_SMA50" in data.columns else _sma(close, 50)
-    cci20 = data["_CCI20"]  if "_CCI20" in data.columns else _cci(high, low, close, 20)
-    atr14 = data["_ATR14"]  if "_ATR14" in data.columns else _atr(high, low, close, 14)
+    ema8   = data["_EMA8"]    if "_EMA8"   in data.columns else _ema(close, 8)
+    ema20  = data["_EMA20"]   if "_EMA20"  in data.columns else _ema(close, 20)
+    sma50  = data["_SMA50"]   if "_SMA50"  in data.columns else _sma(close, 50)
+    sma200 = data["_SMA200"]  if "_SMA200" in data.columns else _sma(close, 200)
+    cci20  = data["_CCI20"]   if "_CCI20"  in data.columns else _cci(high, low, close, 20)
+    atr14  = data["_ATR14"]   if "_ATR14"  in data.columns else _atr(high, low, close, 14)
 
     cci_clean = cci20.dropna()
     if len(cci_clean) < 2:
@@ -559,6 +560,9 @@ def _prepare_indicators(
     latr  = _s(atr14.iloc[-1])
     cci_today = _s(cci20.iloc[-1])
     cci_prev  = _s(cci20.iloc[-2])
+    # SMA200 may be NaN on short histories — treat as 0.0 (SMA200 support layer disabled)
+    _l200_raw = sma200.iloc[-1]
+    l200 = _s(_l200_raw) if not (hasattr(_l200_raw, '__float__') and np.isnan(float(_l200_raw))) else 0.0
 
     if any(np.isnan(v) for v in [lc, lh, ll, l8, l20, l50, latr, cci_today, cci_prev]):
         return None
@@ -567,9 +571,9 @@ def _prepare_indicators(
         data=data,
         close=close, high=high, low=low, volume=volume,
         lc=lc, lh=lh, ll=ll,
-        l8=l8, l20=l20, l50=l50, latr=latr,
+        l8=l8, l20=l20, l50=l50, l200=l200, latr=latr,
         cci_today=cci_today, cci_prev=cci_prev,
-        ema8=ema8, ema20=ema20, sma50=sma50, atr14=atr14, cci20=cci20,
+        ema8=ema8, ema20=ema20, sma50=sma50, sma200=sma200, atr14=atr14, cci20=cci20,
     )
 
 
@@ -823,6 +827,19 @@ def scan_pullback_scored(
         else:
             return None, 0.0   # hard gate: no uptrend at all
 
+        # ── Trend duration gate ───────────────────────────────────────────────
+        # Require PB_MIN_TREND_BARS consecutive bars of EMA8>EMA20 AND Close>SMA50
+        # before the signal bar to exclude fresh/choppy trends.
+        _e8   = ind.ema8.values[:-1]
+        _e20  = ind.ema20.values[:-1]
+        _c    = ind.close.values[:-1]
+        _s50  = ind.sma50.values[:-1]
+        _trend_mask = (_e8 > _e20) & (_c > _s50)
+        _flipped = (~_trend_mask)[::-1]
+        _trend_bars = int(np.argmax(_flipped)) if _flipped.any() else len(_flipped)
+        if _trend_bars < PB_MIN_TREND_BARS:
+            return None, 0.0
+
         # ── Value zone (hard gate + score) ────────────────────────────────────
         # Low must actually penetrate EMA8 or EMA20 — proximity alone is rejected.
         # Bonus point if close recovered deep into the zone (within params.ema_distance ATR).
@@ -861,6 +878,7 @@ def scan_pullback_scored(
         nearest_sup = _find_structural_support(
             ll, lc, sr_zones, trendline,
             ind.high, ind.low, ind.close, ind.volume, avg_vol_sup, latr,
+            sma200=ind.l200,
         )
         if nearest_sup is None:
             return None, 0.0   # hard gate: no structural support

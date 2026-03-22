@@ -66,6 +66,7 @@ SMA_LONG = 50  # Long-term SMA period
 CCI_PERIOD = 20  # Commodity Channel Index period
 CCI_STRICT_FLOOR = -39.10  # Optuna v4 best (trial #951); was -50.0 (v3)
 CCI_RLX_FLOOR = -20.0   # restored from v4 overfit (-1.95 came from 43 OOS trades)
+PB_MIN_TREND_BARS = 20   # min consecutive bars EMA8>EMA20 AND Close>SMA50 before pullback signal
 
 # ──────────────────────────────────────────────────────────────────────────
 # Risk Management & Stop Loss
