@@ -441,6 +441,21 @@ _backtest_diag_status: dict = {
     "last_run": None,     # ISO timestamp of last completed run
 }
 
+# ── IS/OOS diagnostics state ──────────────────────────────────────────────────
+ISOOS_DIAG_CACHE_PATH = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "cache", "isoos_diagnostics.json")
+)
+
+_isoos_running: bool = False
+_isoos_status: dict = {
+    "status":  "idle",   # "idle" | "running_is" | "running_oos" | "completed" | "failed"
+    "is_done": False,
+    "current": 0,
+    "total":   0,
+    "phase":   None,     # "is" | "oos" | "done" | None
+    "error":   None,
+}
+
 
 def _backtest_trade_to_analytics(tr: dict) -> dict:
     """Map TradeRecord.to_dict() fields to analytics.py contract."""
@@ -1908,6 +1923,19 @@ class BacktestRunRequest(BaseModel):
     ticker_count:  Optional[int] = None
     min_score:     float         = 0.0
     setup_types:   List[str]     = Field(default_factory=lambda: [
+        "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"
+    ])
+
+
+class ISOOSRunRequest(BaseModel):
+    is_start_date:  str           = "2017-01-01"
+    is_end_date:    str           = "2021-12-31"
+    oos_start_date: str           = "2022-01-01"
+    oos_end_date:   str           = "2024-12-31"
+    max_positions:  int           = 4
+    ticker_count:   Optional[int] = None
+    min_score:      float         = 0.0
+    setup_types:    List[str]     = Field(default_factory=lambda: [
         "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"
     ])
 
@@ -3425,6 +3453,169 @@ async def backtest_diagnostics_report():
     except Exception as exc:
         log.error("Failed to read backtest diagnostics cache: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to read backtest cache")
+
+
+# ── IS / OOS Split endpoints ──────────────────────────────────────────────────
+
+@app.post("/api/diagnostics/isoos/run", status_code=202)
+async def run_isoos_diagnostics(
+    background_tasks: BackgroundTasks,
+    req: ISOOSRunRequest = Body(default=ISOOSRunRequest()),
+):
+    """
+    Trigger IS/OOS split backtest. Runs two sequential portfolio backtests
+    (IS period then OOS period) and caches combined results.
+    Returns 409 if already running.
+    """
+    global _isoos_running, _isoos_status
+    if _isoos_running:
+        raise HTTPException(status_code=409, detail="IS/OOS backtest already running")
+
+    all_tickers = list(ACTIVE_UNIVERSE) if ACTIVE_UNIVERSE else list(SCAN_UNIVERSE)
+    tickers     = all_tickers[:req.ticker_count] if req.ticker_count else all_tickers
+
+    _isoos_running = True
+    _isoos_status.update({
+        "status":  "running_is",
+        "is_done": False,
+        "current": 0,
+        "total":   len(tickers),
+        "phase":   "is",
+        "error":   None,
+    })
+
+    async def _do_isoos():
+        global _isoos_running, _isoos_status
+        try:
+            # ── Phase IS ──────────────────────────────────────────────────
+            async def _progress_is(done: int, total: int):
+                _isoos_status["current"] = done
+                _isoos_status["total"]   = total
+
+            is_config = BacktestConfig(
+                start_date    = req.is_start_date,
+                end_date      = req.is_end_date,
+                max_positions = req.max_positions,
+                ticker_count  = req.ticker_count,
+                min_score     = req.min_score,
+                setup_types   = req.setup_types,
+            )
+            is_raw = await run_portfolio_backtest_universe(
+                tickers, is_config, params=BacktestParams(), progress_cb=_progress_is
+            )
+            is_adapted = [_backtest_trade_to_analytics(t) for t in is_raw]
+
+            # ── Phase OOS ─────────────────────────────────────────────────
+            _isoos_status.update({
+                "status":  "running_oos",
+                "phase":   "oos",
+                "current": 0,
+                "total":   len(tickers),
+            })
+
+            async def _progress_oos(done: int, total: int):
+                _isoos_status["current"] = done
+                _isoos_status["total"]   = total
+
+            oos_config = BacktestConfig(
+                start_date    = req.oos_start_date,
+                end_date      = req.oos_end_date,
+                max_positions = req.max_positions,
+                ticker_count  = req.ticker_count,
+                min_score     = req.min_score,
+                setup_types   = req.setup_types,
+            )
+            oos_raw = await run_portfolio_backtest_universe(
+                tickers, oos_config, params=BacktestParams(), progress_cb=_progress_oos
+            )
+            oos_adapted = [_backtest_trade_to_analytics(t) for t in oos_raw]
+
+            # ── Analytics & cache ─────────────────────────────────────────
+            report = {
+                "generated_at":   datetime.now(timezone.utc).isoformat(),
+                "config": {
+                    "is_start_date":  req.is_start_date,
+                    "is_end_date":    req.is_end_date,
+                    "oos_start_date": req.oos_start_date,
+                    "oos_end_date":   req.oos_end_date,
+                    "max_positions":  req.max_positions,
+                    "setup_types":    req.setup_types,
+                    "min_score":      req.min_score,
+                },
+                "is": {
+                    "summary":         compute_live_diagnostics(is_adapted),
+                    "setup_breakdown": compute_setup_breakdown(is_adapted),
+                },
+                "oos": {
+                    "summary":         compute_live_diagnostics(oos_adapted),
+                    "setup_breakdown": compute_setup_breakdown(oos_adapted),
+                },
+            }
+
+            os.makedirs(os.path.dirname(ISOOS_DIAG_CACHE_PATH), exist_ok=True)
+            tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(ISOOS_DIAG_CACHE_PATH))
+            try:
+                with os.fdopen(tmp_fd, "w") as f:
+                    json.dump(report, f, cls=_NumpyEncoder)
+                os.replace(tmp_path, ISOOS_DIAG_CACHE_PATH)
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+
+            _isoos_status.update({
+                "status":  "completed",
+                "is_done": True,
+                "phase":   "done",
+            })
+            log.info("IS/OOS backtest complete: IS=%d trades, OOS=%d trades",
+                     len(is_adapted), len(oos_adapted))
+
+        except Exception as exc:
+            _isoos_status.update({
+                "status": "failed",
+                "error":  str(exc),
+            })
+            log.error("IS/OOS backtest failed: %s", exc)
+        finally:
+            _isoos_running = False
+
+    background_tasks.add_task(_do_isoos)
+    return {"status": "started", "tickers": len(tickers)}
+
+
+@app.get("/api/diagnostics/isoos/status")
+async def isoos_diagnostics_status():
+    """Poll progress of the IS/OOS background backtest run."""
+    return {
+        "status":  _isoos_status["status"],
+        "is_done": _isoos_status["is_done"],
+        "current": _isoos_status["current"],
+        "total":   _isoos_status["total"],
+        "phase":   _isoos_status["phase"],
+        "error":   _isoos_status["error"],
+    }
+
+
+@app.get("/api/diagnostics/isoos")
+async def isoos_diagnostics_report():
+    """
+    Return the cached IS/OOS split diagnostics report.
+    Returns 404 if no run has been completed yet.
+    """
+    if not os.path.exists(ISOOS_DIAG_CACHE_PATH):
+        raise HTTPException(
+            status_code=404,
+            detail="No IS/OOS cache found. POST /api/diagnostics/isoos/run to generate.",
+        )
+    try:
+        with open(ISOOS_DIAG_CACHE_PATH, "r") as f:
+            return json.load(f)
+    except Exception as exc:
+        log.error("Failed to read IS/OOS diagnostics cache: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to read IS/OOS cache")
 
 
 @app.delete("/api/trades/{trade_id}", status_code=200)
