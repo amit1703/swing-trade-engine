@@ -279,7 +279,7 @@ DISCOVERY_VOL_RATIO     = 1.5   # 5-day avg vol must be >= 1.5x 50-day avg
 DISCOVERY_MAX_PCT       = 0.10  # cap discovery candidates at 10% of universe size
 
 # ── V4 Backtest Diagnostics ───────────────────────────────────────────────────
-BACKTEST_DIAG_START_DATE = "2020-01-01"   # extended to 5-year window for SELECTIVE analysis
+BACKTEST_DIAG_START_DATE = "2017-01-01"   # 8-year full validation window
 BACKTEST_DIAG_END_DATE   = "2024-12-31"   # fixed 2-year baseline window end
 BACKTEST_V4_TRAIL_MULT   = 4.162          # strict V4 single trail multiplier (all setup types)
 BACKTEST_DIAG_CACHE_FILE = "cache/backtest_diagnostics.json"   # relative to backend/
