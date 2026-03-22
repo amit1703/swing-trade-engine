@@ -30,19 +30,25 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(__file__))
 from constants import (
     MIN_SETUP_SCORE,
+    RS_RANK_MIN_PERCENTILE_AGGRESSIVE,
+    RS_RANK_MIN_PERCENTILE_SELECTIVE,
     RS_TIER1_MULTIPLIER,
     RS_TIER1_THRESHOLD,
     SCORE_SELECTIVE_REGIME_FACTOR,
+    SCORE_WEIGHT_COILING,
     SCORE_WEIGHT_QUALITY,
     SCORE_WEIGHT_REGIME,
     SCORE_WEIGHT_RS_QUALITY,
     SCORE_WEIGHT_RS_RANK,
     SCORE_WEIGHT_RR,
     SCORE_WEIGHT_SECTOR,
+    SCORE_WEIGHT_SUPPORT_TIER,
+    SCORE_WEIGHT_TREND_DUR,
     SCORE_WEIGHT_VOL,
     SECTOR_OUT_OF_TOP_FACTOR,
     SECTOR_TIER1_N,
     SECTOR_TIER2_FACTOR,
+    SUPPORT_TIER_SCORES,
     TOP_SECTORS_N,
     SELECTIVE_SETUP_WEIGHTS,
     SELECTIVE_HARD_FILTER,
@@ -358,6 +364,65 @@ def _rs_quality_component(setup: Dict) -> float:
     return min(max_pts, pts)
 
 
+def _score_trend_duration(setup: Dict) -> float:
+    """
+    Trend duration score (0 – SCORE_WEIGHT_TREND_DUR pts).
+
+    Only applies to PULLBACK setup type. Rewards established trends:
+      10–14 bars → 2 pts
+      15–19 bars → 5 pts
+      20–29 bars → 7 pts
+      30+ bars   → 10 pts (full)
+    """
+    if setup.get("setup_type") != "PULLBACK":
+        return 0.0
+    tb = int(setup.get("trend_bars") or 0)
+    if tb >= 30:
+        trend_pts = 10
+    elif tb >= 20:
+        trend_pts = 7
+    elif tb >= 15:
+        trend_pts = 5
+    elif tb >= 10:
+        trend_pts = 2
+    else:
+        trend_pts = 0
+    return float(trend_pts) / 10.0 * SCORE_WEIGHT_TREND_DUR
+
+
+def _score_support_tier(setup: Dict) -> float:
+    """
+    Structural support tier quality (0 – SCORE_WEIGHT_SUPPORT_TIER pts).
+
+    Maps support_source to a quality tier score:
+      KDE               → 5 pts (horizontal density zone — strongest)
+      CONSOLIDATION_LOW → 4 pts (prior pivot low)
+      SMA200 / EMA50    → 3 pts (medium-term dynamic support)
+      EMA20             → 2 pts (short-term dynamic support — strict conditions)
+
+    Only applies to PULLBACK setups.
+    """
+    if setup.get("setup_type") != "PULLBACK":
+        return 0.0
+    src = setup.get("support_source", "")
+    tier_pts = SUPPORT_TIER_SCORES.get(src, 0)
+    return float(tier_pts) / 5.0 * SCORE_WEIGHT_SUPPORT_TIER
+
+
+def _score_coiling(setup: Dict) -> float:
+    """
+    Coiling quality score (0 – SCORE_WEIGHT_COILING pts).
+
+    Only applies to WATCHLIST setups.
+    coiling_score (0–10) is set by scan_near_breakout() in engine2.py
+    based on the ATR-normalized 5-bar range ratio.
+    """
+    if setup.get("setup_type") != "WATCHLIST":
+        return 0.0
+    coiling_raw = float(setup.get("coiling_score") or 0.0)
+    return coiling_raw / 10.0 * SCORE_WEIGHT_COILING
+
+
 def compute_setup_score(
     setup: Dict,
     rs_rank: float,
@@ -416,7 +481,27 @@ def compute_setup_score(
     # ── 7. RS Quality Signals (0 – SCORE_WEIGHT_RS_QUALITY pts) ──────────────
     rs_qual_pts = _rs_quality_component(setup)
 
-    raw = rs_pts + rr_pts + vol_pts + reg_pts + sector_pts + qual_pts + rs_qual_pts
+    # ── 8. Trend Duration (PULLBACK only) ─────────────────────────────────────
+    trend_dur_pts = _score_trend_duration(setup)
+
+    # ── 9. Support Tier Quality (PULLBACK only) ───────────────────────────────
+    support_tier_pts = _score_support_tier(setup)
+
+    # ── 10. Coiling Quality (WATCHLIST only) ──────────────────────────────────
+    coiling_pts = _score_coiling(setup)
+
+    # ── 11. Extension penalty (PULLBACK only) ─────────────────────────────────
+    # Penalizes setups where close is far above the structural support level.
+    ext_penalty = 0.0
+    if setup.get("setup_type") == "PULLBACK":
+        ext = float(setup.get("extension_atr") or 0.0)
+        if ext > 1.5:
+            ext_penalty = 4.0
+        elif ext > 0.75:
+            ext_penalty = 2.0
+
+    raw = (rs_pts + rr_pts + vol_pts + reg_pts + sector_pts + qual_pts + rs_qual_pts
+           + trend_dur_pts + support_tier_pts + coiling_pts - ext_penalty)
     return min(100, max(0, int(round(raw))))
 
 
@@ -449,6 +534,10 @@ def score_and_filter_setups(
     regime_str   = regime.get("regime", "SELECTIVE")
     regime_score = int(regime.get("regime_score", 50))
 
+    # Mode-based RS hard floor: AGGRESSIVE allows RS ≥ 65, SELECTIVE keeps RS ≥ 70
+    _rs_floor = (RS_RANK_MIN_PERCENTILE_AGGRESSIVE if regime_str == "AGGRESSIVE"
+                 else RS_RANK_MIN_PERCENTILE_SELECTIVE)
+
     surviving: List[Dict] = []
     for setup in setups:
         ticker = setup.get("ticker", "")
@@ -464,6 +553,10 @@ def score_and_filter_setups(
                 rs_rank = 0.0  # will score low but still surfaces in the watchlist
             else:
                 continue  # no RS rank → exclude actionable setups
+
+        # Apply mode-based RS floor (skip watchlist — proximity is quality filter)
+        if rs_rank is not None and not is_watchlist and rs_rank < _rs_floor:
+            continue
 
         score = compute_setup_score(
             setup, rs_rank, regime_score, regime_str, top_sectors
@@ -481,9 +574,12 @@ def score_and_filter_setups(
 
         setup["setup_score"] = score
 
-        # WATCHLIST items bypass the score threshold — proximity to resistance is
-        # already the quality filter (engine2 gates at ≤1.5% below level).
-        if is_watchlist or score >= min_score:
+        # WATCHLIST: apply minimum coiling score in SELECTIVE regime
+        if is_watchlist:
+            if regime_str == "SELECTIVE" and int(setup.get("coiling_score") or 0) < 2:
+                continue   # too weak consolidation in uncertain market
+            surviving.append(setup)
+        elif score >= min_score:
             surviving.append(setup)
 
     surviving.sort(key=lambda s: s["setup_score"], reverse=True)
