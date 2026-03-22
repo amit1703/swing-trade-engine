@@ -12,10 +12,12 @@ def test_backtest_config_defaults():
     assert cfg.min_score == 0.0
     assert "PULLBACK" in cfg.setup_types
     assert "VCP" not in cfg.setup_types
+    for st in ["BASE", "RES_BREAKOUT", "HTF", "LCE"]:
+        assert st in cfg.setup_types
 
 
-def test_ticker_sim_state_mutable_reset():
-    """Mutable fields reset to defaults on fresh construction."""
+def test_ticker_sim_state_default_values():
+    """Mutable fields have correct defaults on fresh construction."""
     from portfolio_backtest import TickerSimState
     import pandas as pd
     ts = TickerSimState(

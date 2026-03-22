@@ -25,8 +25,8 @@ import constants as _constants
 from constants import (
     CONCURRENCY_LIMIT,
     RS_BLUE_DOT_TOLERANCE_PCT,
-    SELECTIVE_SETUP_WEIGHTS,   # confirmed in constants.py: {"PULLBACK": 0.5, "RES_BREAKOUT": 1.0}
-    SELECTIVE_HARD_FILTER,     # confirmed in constants.py: False
+    SELECTIVE_SETUP_WEIGHTS,
+    SELECTIVE_HARD_FILTER,
 )
 from filters import compute_regime_label_series, passes_liquidity
 
@@ -109,6 +109,9 @@ def _detect_signals_for_date(
           All types routed through _detect_signals.
 
     Returns raw signal dict (with _raw_score) or None. No scoring/threshold applied.
+
+    Note: The SELECTIVE regime filter is NOT applied here — it is the caller's
+    (run_portfolio_backtest_universe) responsibility.
     """
     from backtest_engine import _detect_signals, _SIGNAL_BASE_SCORES, _SIGNAL_BASE_SCORE_DEFAULT
 
@@ -151,24 +154,31 @@ def _detect_signals_for_date(
                     pass
                 pb_setup["_raw_score"] = pb_score
                 return pb_setup
-
-        non_pb = [s for s in setup_types if s not in ("PULLBACK", "VCP")]
-        if non_pb:
+            # PULLBACK present but no setup found — fall through to non-PB types
+            non_pb = [s for s in setup_types if s not in ("PULLBACK", "VCP")]
             return _detect_signals(
                 ts.ticker, df_slice, spy_slice, non_pb,
                 sr_zones=ts.sr_zones_cache,
                 precomputed_rs=rs_t,
                 params=ts.params,
-            )
-        return None
-
-    # Legacy mode
-    return _detect_signals(
-        ts.ticker, df_slice, spy_slice, setup_types,
-        sr_zones=ts.sr_zones_cache,
-        precomputed_rs=rs_t,
-        params=None,
-    )
+            ) if non_pb else None
+        else:
+            # Scored mode, no PULLBACK in setup_types
+            non_vcp = [s for s in setup_types if s != "VCP"]
+            return _detect_signals(
+                ts.ticker, df_slice, spy_slice, non_vcp,
+                sr_zones=ts.sr_zones_cache,
+                precomputed_rs=rs_t,
+                params=ts.params,
+            ) if non_vcp else None
+    else:
+        # Legacy mode
+        return _detect_signals(
+            ts.ticker, df_slice, spy_slice, setup_types,
+            sr_zones=ts.sr_zones_cache,
+            precomputed_rs=rs_t,
+            params=None,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -194,7 +204,13 @@ def _build_open_position(
     full_idx: int,
 ) -> dict:
     """
-    Build the open-position dict used by _manage_open_trade().
+    Build the open-position dict used by the portfolio coordinator.
+
+    Returns a position dict with two keys:
+      - "ticker_state": the TickerSimState (used by advance/close logic in coordinator)
+      - "trade_state": the flat state dict that _manage_open_trade() reads/mutates
+
+    Callers must pass pos["trade_state"] to _manage_open_trade(), not pos.
 
     trade_state keys must match what _manage_open_trade() and _build_trade_record()
     expect — mirrors the open_trades.append() block in BacktestEngine.run().
