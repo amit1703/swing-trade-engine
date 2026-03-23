@@ -1,14 +1,16 @@
 import { ScanLine, Star, Heart, Briefcase, MoreHorizontal } from 'lucide-react'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 const TABS = [
-  { id: 'scanner',   icon: ScanLine,       label: 'Scanner' },
-  { id: 'watchlist', icon: Star,           label: 'WL'      },
-  { id: 'favorites', icon: Heart,          label: 'Favs'    },
-  { id: 'portfolio', icon: Briefcase,      label: 'Port'    },
-  { id: 'more',      icon: MoreHorizontal, label: 'More'    },
+  { id: 'scanner',   icon: ScanLine,       labelKey: 'nav.tab.scanner'   },
+  { id: 'watchlist', icon: Star,           labelKey: 'nav.tab.watchlist' },
+  { id: 'favorites', icon: Heart,          labelKey: 'nav.tab.favorites' },
+  { id: 'portfolio', icon: Briefcase,      labelKey: 'nav.tab.portfolio' },
+  { id: 'more',      icon: MoreHorizontal, labelKey: 'nav.tab.more'      },
 ]
 
 export default function BottomTabBar({ activePage, onNavigate }) {
+  const { tr, lang } = useAppSettings()
   return (
     <nav
       className="bottom-tab-bar"
@@ -25,7 +27,7 @@ export default function BottomTabBar({ activePage, onNavigate }) {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {TABS.map(({ id, icon: Icon, label }) => {
+      {TABS.map(({ id, icon: Icon, labelKey }) => {
         const isActive = activePage === id || (id === 'more' && ['analytics', 'diagnostics', 'settings'].includes(activePage))
         return (
           <button
@@ -48,13 +50,13 @@ export default function BottomTabBar({ activePage, onNavigate }) {
             <Icon size={20} strokeWidth={1.75} />
             <span style={{
               fontSize: 9,
-              fontFamily: '"IBM Plex Mono", monospace',
+              fontFamily: lang === 'he' ? '"Inter", sans-serif' : '"IBM Plex Mono", monospace',
               fontWeight: 700,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
+              letterSpacing: lang === 'he' ? '0' : '0.06em',
+              textTransform: lang === 'he' ? 'none' : 'uppercase',
               lineHeight: 1,
             }}>
-              {label}
+              {tr(labelKey)}
             </span>
           </button>
         )

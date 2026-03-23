@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, Settings as SettingsIcon } from 'lucide-react'
+import { useAppSettings } from './contexts/AppSettingsContext'
 
 import {
   fetchRegime,
@@ -44,6 +45,7 @@ import DebugDrawer      from './components/DebugDrawer.jsx'
 import DiagnosticsTab   from './components/DiagnosticsTab.jsx'
 import BottomTabBar       from './components/BottomTabBar.jsx'
 import MobileSignalSheet  from './components/MobileSignalSheet.jsx'
+import Settings from './components/Settings.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -58,6 +60,7 @@ const DEFAULT_SCAN_STATUS = {
 }
 
 export default function App() {
+  const { tr } = useAppSettings()
   const [activePage,      setActivePage     ] = useState('scanner')
   const [regime,         setRegime        ] = useState(null)
   const [vcpSetups,      setVcpSetups     ] = useState([])
@@ -466,8 +469,8 @@ export default function App() {
         {activePage === 'more' && (
           <div style={{ flex: 1, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              { id: 'diagnostics', label: 'Diagnostics', Icon: Activity      },
-              { id: 'settings',    label: 'Settings',    Icon: SettingsIcon  },
+              { id: 'diagnostics', label: tr('nav.diagnostics'), Icon: Activity      },
+              { id: 'settings',    label: tr('nav.settings'),    Icon: SettingsIcon  },
             ].map(({ id, label, Icon }) => (
               <button
                 key={id}
@@ -490,18 +493,8 @@ export default function App() {
           </div>
         )}
 
-        {/* ── SETTINGS — stub ───────────────────────────────── */}
-        {['settings'].includes(activePage) && (
-          <div style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--muted)', flexDirection: 'column', gap: 8,
-          }}>
-            <span style={{ fontSize: 32 }}>🚧</span>
-            <span style={{ fontSize: 13, fontFamily: '"IBM Plex Mono", monospace' }}>
-              {activePage.toUpperCase()} — coming soon
-            </span>
-          </div>
-        )}
+        {/* ── SETTINGS ──────────────────────────────────────── */}
+        {activePage === 'settings' && <Settings />}
       </div>
 
       {/* ── Bottom tab bar (mobile only) ─────────────────────── */}

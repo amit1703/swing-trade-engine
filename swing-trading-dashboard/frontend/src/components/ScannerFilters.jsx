@@ -1,8 +1,20 @@
 import { Filter, Flame } from 'lucide-react'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 const SETUP_TYPES = ['ALL', 'VCP', 'PULLBACK', 'BASE', 'RES-BRK', 'HTF', 'LCE']
 
+const SETUP_TYPE_KEYS = {
+  ALL:      'filter.all',
+  VCP:      'filter.vcp',
+  PULLBACK: 'filter.pullback',
+  BASE:     'filter.base',
+  'RES-BRK':'filter.resBreakout',
+  HTF:      'filter.htf',
+  LCE:      'filter.lce',
+}
+
 export default function ScannerFilters({ filters, onFiltersChange }) {
+  const { tr, lang } = useAppSettings()
   const { minScore, setupType, hotOnly, searchQuery } = filters
   const update = (key, val) => onFiltersChange({ ...filters, [key]: val })
 
@@ -12,7 +24,7 @@ export default function ScannerFilters({ filters, onFiltersChange }) {
       <span className="font-mono text-[10px] text-t-muted tracking-wider font-semibold">FILTER</span>
 
       <div className="flex items-center gap-1.5">
-        <span className="font-mono text-[10px] text-t-muted">Score ≥</span>
+        <span className="font-mono text-[10px] text-t-muted">{tr('filter.minScore')} ≥</span>
         <input
           type="number" min={0} max={100} step={5}
           value={minScore}
@@ -34,7 +46,7 @@ export default function ScannerFilters({ filters, onFiltersChange }) {
                 : 'bg-t-panel text-t-muted border-transparent hover:text-t-text'
             }`}
           >
-            {t}
+            {tr(SETUP_TYPE_KEYS[t] ?? t)}
           </button>
         ))}
       </div>
@@ -58,7 +70,7 @@ export default function ScannerFilters({ filters, onFiltersChange }) {
             : 'bg-t-panel text-t-muted border-t-border hover:text-t-text'
         }`}
       >
-        <Flame size={11} /> HOT
+        <Flame size={11} /> {tr('filter.hotSector')}
       </button>
     </div>
   )

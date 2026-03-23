@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 // ── Pure sort helper ──────────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ function SectionHeader({ label, count }) {
   )
 }
 
-function SortHeader({ sort, onSort }) {
+function SortHeader({ sort, onSort, tr, lang }) {
   const th = (label, col) => {
     const active = sort.col === col
     const arrow  = active ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''
@@ -64,7 +65,7 @@ function SortHeader({ sort, onSort }) {
           fontWeight: 700,
           letterSpacing: '0.08em',
           textTransform: 'uppercase',
-          fontFamily: MONO,
+          fontFamily: lang === 'he' ? undefined : MONO,
           color: active ? 'var(--accent)' : 'var(--muted)',
           cursor: col ? 'pointer' : 'default',
           userSelect: 'none',
@@ -81,13 +82,13 @@ function SortHeader({ sort, onSort }) {
   return (
     <thead>
       <tr>
-        {th('Ticker', null)}
-        {th('Dist',   'dist')}
-        {th('Scr',    'scr')}
-        {th('Entry',  null)}
-        {th('SL',     null)}
-        {th('R:R',    null)}
-        {th('',       null)}
+        {th(tr('table.ticker'), null)}
+        {th('Dist',             'dist')}
+        {th(tr('table.score'),  'scr')}
+        {th(tr('table.entry'),  null)}
+        {th(tr('table.stop'),   null)}
+        {th(tr('table.rr'),     null)}
+        {th('',                 null)}
       </tr>
     </thead>
   )
@@ -210,6 +211,7 @@ function ShowMoreBtn({ allItems, showAll, onToggle }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function WatchlistPanel({ items = [], selectedTicker, onSelectTicker, loading, favorites = [], onToggleFavorite }) {
+  const { tr, lang } = useAppSettings()
   const [brkSort, setBrkSort] = useState({ col: 'dist', dir: 'asc' })
   const [pbSort,  setPbSort]  = useState({ col: 'dist', dir: 'asc' })
   const [showAllBrk, setShowAllBrk] = useState(false)
@@ -243,7 +245,7 @@ export default function WatchlistPanel({ items = [], selectedTicker, onSelectTic
       <>
         <SectionHeader label={label} count={sectionItems.length} />
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <SortHeader sort={sort} onSort={col => handleSort(setSort, sort, col)} />
+          <SortHeader sort={sort} onSort={col => handleSort(setSort, sort, col)} tr={tr} lang={lang} />
           <tbody>
             {visibleItems.map(item => (
               <WatchRow
@@ -285,8 +287,8 @@ export default function WatchlistPanel({ items = [], selectedTicker, onSelectTic
             ))}
           </div>
         ) : totalCount === 0 ? (
-          <div className="py-8 px-4 text-center text-[10px] font-mono tracking-widest uppercase text-t-muted">
-            No items — run a scan
+          <div className={`py-8 px-4 text-center text-[10px] ${lang === 'he' ? 'font-sans' : 'font-mono'} tracking-widest uppercase text-t-muted`}>
+            {tr('msg.noWatchlist')}
           </div>
         ) : (
           <>

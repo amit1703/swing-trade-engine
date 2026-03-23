@@ -1,6 +1,7 @@
 import { TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
-function RegimeCard({ regime }) {
+function RegimeCard({ regime, tr }) {
   const regimeType  = regime?.regime
   const isNoData    = !regime || !regimeType
   const isAggr      = regimeType === 'AGGRESSIVE'
@@ -15,7 +16,7 @@ function RegimeCard({ regime }) {
   return (
     <div className="stat-card" style={{ minWidth: 220 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span className="stat-card-label">Market Regime</span>
+        <span className="stat-card-label">{tr('market.regime')}</span>
         <Activity size={14} color="var(--muted)" />
       </div>
 
@@ -62,7 +63,7 @@ function RegimeCard({ regime }) {
 }
 
 
-function SpyCard({ regime }) {
+function SpyCard({ regime, tr }) {
   const close  = regime?.spy_close ?? 0
   const ema20  = regime?.spy_20ema ?? 0
   const sma50  = regime?.spy_sma50 ?? 0
@@ -83,7 +84,7 @@ function SpyCard({ regime }) {
   return (
     <div className="stat-card">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span className="stat-card-label">SPY Trend</span>
+        <span className="stat-card-label">{tr('market.spyTrend')}</span>
         <TrendIcon size={14} color={trendColor} />
       </div>
       <span className="stat-card-value" style={{ color: trendColor }}>{trend}</span>
@@ -161,11 +162,12 @@ function RegimeBanner({ regime }) {
 }
 
 export default function StatCards({ regime }) {
+  const { tr, lang } = useAppSettings()
   return (
     <>
       <div className="stat-cards-row flex gap-3 px-4 py-3 flex-shrink-0">
-        <RegimeCard regime={regime} />
-        <SpyCard regime={regime} />
+        <RegimeCard regime={regime} tr={tr} />
+        <SpyCard regime={regime} tr={tr} />
       </div>
       <RegimeBanner regime={regime} />
     </>

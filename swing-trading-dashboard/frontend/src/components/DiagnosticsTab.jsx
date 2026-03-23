@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart } from 'lightweight-charts'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
 function MetricCard({ label, value, sub }) {
@@ -224,6 +225,7 @@ function RegimePerformance({ perf }) {
 
 // ─── DiagnosticsTab (main) ────────────────────────────────────────────────────
 export default function DiagnosticsTab() {
+  const { tr, lang } = useAppSettings()
   const [data, setData]           = useState(null)
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
@@ -601,7 +603,7 @@ export default function DiagnosticsTab() {
               cursor: 'pointer',
             }}
           >
-            {src === 'live' ? 'Live Trades' : src === 'backtest' ? 'Full System Backtest' : 'IS / OOS Split'}
+            {src === 'live' ? tr('diag.liveSource') : src === 'backtest' ? 'Full System Backtest' : 'IS / OOS Split'}
           </button>
         ))}
       </div>
@@ -683,7 +685,7 @@ export default function DiagnosticsTab() {
                 cursor: btRunning ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
               }}
             >
-              {btRunning ? 'Running…' : 'RUN BACKTEST'}
+              {btRunning ? tr('msg.backtestRunning') : tr('btn.runBacktest').toUpperCase()}
             </button>
           </div>
         </div>
@@ -768,7 +770,7 @@ export default function DiagnosticsTab() {
           {/* Backtest empty state — no data yet */}
           {source === 'backtest' && !data && !loading && !btRunning && (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
-              No backtest data. Configure above and run to generate a strategy audit.
+              {tr('msg.noBacktest')}
             </div>
           )}
 
@@ -831,12 +833,12 @@ export default function DiagnosticsTab() {
 
           {/* Summary cards */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <MetricCard label="TOTAL TRADES"  value={s.total_trades ?? 0} />
-            <MetricCard label="PROFIT FACTOR" value={s.profit_factor != null ? s.profit_factor.toFixed(2) : '—'} />
-            <MetricCard label="WIN RATE"      value={s.win_rate != null ? `${(s.win_rate * 100).toFixed(1)}%` : '—'} />
-            <MetricCard label="AVG R"         value={s.avg_R != null ? `${s.avg_R >= 0 ? '+' : ''}${s.avg_R.toFixed(2)}R` : '—'} />
+            <MetricCard label={tr('diag.totalTrades').toUpperCase()}  value={s.total_trades ?? 0} />
+            <MetricCard label={tr('diag.profitFactor').toUpperCase()} value={s.profit_factor != null ? s.profit_factor.toFixed(2) : '—'} />
+            <MetricCard label={tr('diag.winRate').toUpperCase()}      value={s.win_rate != null ? `${(s.win_rate * 100).toFixed(1)}%` : '—'} />
+            <MetricCard label={tr('diag.avgR').toUpperCase()}         value={s.avg_R != null ? `${s.avg_R >= 0 ? '+' : ''}${s.avg_R.toFixed(2)}R` : '—'} />
             <MetricCard label="EXPECTANCY"    value={s.expectancy != null ? `${s.expectancy >= 0 ? '+' : ''}${s.expectancy.toFixed(2)}R` : '—'} />
-            <MetricCard label="MAX DRAWDOWN"  value={s.max_drawdown != null ? `${s.max_drawdown.toFixed(2)}R` : '—'} sub="peak-to-trough" />
+            <MetricCard label={tr('diag.maxDrawdown').toUpperCase()}  value={s.max_drawdown != null ? `${s.max_drawdown.toFixed(2)}R` : '—'} sub="peak-to-trough" />
           </div>
 
           {/* Equity curve */}
@@ -846,19 +848,19 @@ export default function DiagnosticsTab() {
           </div>
 
           {/* Setup breakdown */}
-          <SectionHeader title="PERFORMANCE BY SETUP TYPE" />
+          <SectionHeader title={tr('diag.setupBreakdown').toUpperCase()} />
           <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
             <SetupBreakdownTable breakdown={data?.setup_breakdown} />
           </div>
 
           {/* Ticker distribution */}
-          <SectionHeader title="TRADE CONCENTRATION BY TICKER" />
+          <SectionHeader title={tr('diag.tickerDist').toUpperCase()} />
           <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
             <TickerDistribution rows={data?.ticker_distribution} />
           </div>
 
           {/* Regime performance */}
-          <SectionHeader title="PERFORMANCE BY MARKET REGIME" />
+          <SectionHeader title={tr('diag.regimePerf').toUpperCase()} />
           <RegimePerformance perf={data?.regime_performance} />
         </>
       )}

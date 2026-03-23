@@ -1,4 +1,5 @@
 import { Target, ChevronRight } from 'lucide-react'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 function SignalRow({ label, value, color }) {
   return (
@@ -136,6 +137,8 @@ function V5AnalysisSection({ analysis }) {
 }
 
 export default function StockIntelPanel({ setup, livePrices, analysis, analysisLoading }) {
+  const { tr, lang } = useAppSettings()
+
   // Synthesize a display object from analysis when setup (scan result) is not available.
   // The `setup` prop parameter is NOT renamed — it stays as-is so the ?? expression can read it.
   const displaySetup = setup ?? (analysis ? {
@@ -167,7 +170,7 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
       <div className="w-[320px] flex-shrink-0 bg-t-card border border-t-cardBorder rounded-xl flex flex-col items-center justify-center gap-2 text-t-muted p-5">
         <Target size={28} strokeWidth={1} color="var(--border-light)" />
         <span style={{ fontSize: 11, textAlign: 'center', lineHeight: 1.5 }}>
-          Select a stock to view signals
+          {tr('msg.selectTicker')}
         </span>
       </div>
     )
@@ -232,7 +235,10 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
 
       {/* Signals */}
       <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--card-border)' }}>
-        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 6 }}>SIGNALS</div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 6 }}
+             className={lang === 'he' ? 'font-sans' : 'font-mono'}>
+          {tr('intel.signals').toUpperCase()}
+        </div>
         <SignalRow
           label="Relative Strength"
           value={displaySetup.rs_score != null ? `RS${displaySetup.rs_score >= 0 ? '+' : ''}${Math.round(displaySetup.rs_score * 100)}` : '—'}
@@ -257,20 +263,23 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
 
       {/* Trade Plan */}
       <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--card-border)' }}>
-        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 6 }}>TRADE PLAN</div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 6 }}
+             className={lang === 'he' ? 'font-sans' : 'font-mono'}>
+          {tr('intel.tradePlan').toUpperCase()}
+        </div>
         {[
-          { label: 'Entry',  value: displaySetup.entry       ? `$${displaySetup.entry.toFixed(2)}`       : '—', color: 'var(--text)'   },
-          { label: 'Stop',   value: displaySetup.stop_loss   ? `$${displaySetup.stop_loss.toFixed(2)}`   : '—', color: 'var(--halt)'   },
-          { label: 'Target', value: displaySetup.take_profit ? `$${displaySetup.take_profit.toFixed(2)}` : '—', color: 'var(--go)'     },
-          { label: 'Risk',   value: risk ? `${risk}%` : '—',                                                     color: 'var(--accent)' },
-          { label: 'R:R',    value: rr ?? '—',
+          { labelKey: 'table.entry',  value: displaySetup.entry       ? `$${displaySetup.entry.toFixed(2)}`       : '—', color: 'var(--text)'   },
+          { labelKey: 'table.stop',   value: displaySetup.stop_loss   ? `$${displaySetup.stop_loss.toFixed(2)}`   : '—', color: 'var(--halt)'   },
+          { labelKey: 'intel.target', value: displaySetup.take_profit ? `$${displaySetup.take_profit.toFixed(2)}` : '—', color: 'var(--go)'     },
+          { labelKey: 'intel.risk',   value: risk ? `${risk}%` : '—',                                                    color: 'var(--accent)' },
+          { labelKey: 'intel.rr',     value: rr ?? '—',
             color: rr && Number(rr) >= 2 ? 'var(--go)' : 'var(--text)' },
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{
+        ].map(({ labelKey, value, color }) => (
+          <div key={labelKey} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '5px 0', borderBottom: '1px solid rgba(26,37,53,0.4)',
           }}>
-            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{label}</span>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{tr(labelKey)}</span>
             <span style={{ fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700, color }}>
               {value}
             </span>
@@ -282,7 +291,10 @@ export default function StockIntelPanel({ setup, livePrices, analysis, analysisL
       {analysis && (
         <div style={{ padding: '10px 16px', borderTop: '1px solid var(--card-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)' }}>AI VERDICT</span>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--muted)' }}
+                  className={lang === 'he' ? 'font-sans' : 'font-mono'}>
+              {tr('intel.analysis').toUpperCase()}
+            </span>
             <span style={{
               padding: '3px 8px', borderRadius: 5,
               fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
