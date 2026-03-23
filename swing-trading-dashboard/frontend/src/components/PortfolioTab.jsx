@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchTrades, addTrade, closeTrade, fetchClosedTrades } from '../api.js'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Health config
@@ -30,6 +31,7 @@ const HEALTH = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PortfolioTab({ onTickerClick }) {
+  const { tr, lang } = useAppSettings()
   const [trades,        setTrades       ] = useState([])
   const [closedTrades,  setClosedTrades ] = useState([])
   const [loading,       setLoading      ] = useState(false)
@@ -111,7 +113,7 @@ export default function PortfolioTab({ onTickerClick }) {
             className="btn-scan"
             onClick={() => setShowModal(true)}
           >
-            + ADD TRADE
+            + {tr('portfolio.addTrade')}
           </button>
         </div>
       </div>
@@ -143,18 +145,18 @@ export default function PortfolioTab({ onTickerClick }) {
             <table className="terminal-table" style={{ minWidth: 940 }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left' }}>Ticker</th>
+                  <th style={{ textAlign: 'left', fontFamily: lang === 'he' ? undefined : undefined }}>{tr('table.ticker')}</th>
                   <th>Qty</th>
-                  <th>Entry $</th>
+                  <th>{tr('table.entry')} $</th>
                   <th>Current $</th>
-                  <th>P/L $</th>
-                  <th>P/L %</th>
-                  <th>Stop $</th>
+                  <th>{tr('table.pnl')} $</th>
+                  <th>{tr('table.pnl')} %</th>
+                  <th>{tr('table.stop')} $</th>
                   <th>Trail $</th>
                   <th>T1 $</th>
                   <th>T2 $</th>
                   <th>T3 $</th>
-                  <th>Days</th>
+                  <th className={lang === 'he' ? 'font-sans' : 'font-mono'}>{tr('table.days')}</th>
                   <th style={{ textAlign: 'center' }}>Health</th>
                   <th style={{ textAlign: 'center' }}>Act</th>
                 </tr>
@@ -272,7 +274,10 @@ export default function PortfolioTab({ onTickerClick }) {
                             fontWeight: 700,
                           }}
                         >
-                          {h.label}
+                          {t.health === 'HOLD'    ? tr('portfolio.hold')
+                           : t.health === 'CAUTION' ? tr('portfolio.caution')
+                           : t.health === 'EXIT'    ? tr('portfolio.exit')
+                           : h.label}
                         </span>
                       </td>
 
@@ -318,7 +323,7 @@ export default function PortfolioTab({ onTickerClick }) {
               fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
               textTransform: 'uppercase', color: 'var(--muted)',
             }}>
-              Closed Trades
+              {tr('portfolio.closedTrades')}
             </span>
             <span style={{
               fontSize: 9, padding: '1px 5px',
@@ -342,13 +347,13 @@ export default function PortfolioTab({ onTickerClick }) {
             <table className="terminal-table" style={{ minWidth: 700 }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left' }}>Ticker</th>
-                  <th>Entry $</th>
+                  <th style={{ textAlign: 'left' }}>{tr('table.ticker')}</th>
+                  <th>{tr('table.entry')} $</th>
                   <th>Exit $</th>
                   <th>Qty</th>
-                  <th>P/L $</th>
-                  <th>P/L %</th>
-                  <th>Days</th>
+                  <th>{tr('table.pnl')} $</th>
+                  <th>{tr('table.pnl')} %</th>
+                  <th className={lang === 'he' ? 'font-sans' : 'font-mono'}>{tr('table.days')}</th>
                   <th>Closed</th>
                 </tr>
               </thead>
