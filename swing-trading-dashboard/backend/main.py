@@ -1242,8 +1242,8 @@ async def _run_scan(
 
         if not regime["is_bullish"]:
             log.info(
-                "Regime DEFENSIVE (score=%d < %d) — Engines 2 & 3 (VCP/Pullback) disabled; "
-                "Engines 5/6/7 (Base/ResBreakout/Options) still active%s",
+                "Regime DEFENSIVE (score=%d < %d) — VCP disabled; "
+                "Pullback/Base/ResBreakout/Options still active (scoring penalises regime)%s",
                 regime["regime_score"], REGIME_SELECTIVE_THRESHOLD,
                 "  [force=True]" if force else "",
             )
@@ -1446,8 +1446,8 @@ async def _run_scan(
                 except Exception as wl_exc:
                     log.warning("WL pullback_approaching failed for %s: %s", ticker, wl_exc)
 
-                # ── Engine 3: Pullback (SELECTIVE/AGGRESSIVE only) ────────────────────
-                if regime["is_bullish"] or force:
+                # ── Engine 3: Pullback (always runs — scoring handles regime quality) ──
+                if True:
                     _regime_str = regime.get("regime", "SELECTIVE")
                     pb, pb_score = await loop.run_in_executor(
                         None, scan_pullback_scored, ticker, df, zones, _LIVE_PARAMS, tl, rs_score, _regime_str
@@ -1536,13 +1536,8 @@ async def _run_scan(
                 except Exception as base_exc:
                     log.warning("Base pattern check failed for %s: %s", ticker, base_exc)
 
-                # Engine 6: Resistance breakout
-                # brk_aggressive_only: skip BRK in any non-AGGRESSIVE regime.
-                # SELECTIVE underperforms per OOS; DEFENSIVE is worse than SELECTIVE.
-                _brk_regime_ok = (
-                    regime["regime"] == "AGGRESSIVE"
-                    or not getattr(_LIVE_PARAMS, "brk_aggressive_only", True)
-                )
+                # Engine 6: Resistance breakout (always runs — scoring handles regime quality)
+                _brk_regime_ok = True
                 if zones and _brk_regime_ok:
                     try:
                         res_brk = await loop.run_in_executor(
