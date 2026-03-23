@@ -116,7 +116,8 @@ TOP_SECTORS_N           = 8     # top N sectors by avg RS (raised from 5; scorin
 # lower-quality setups. The combination of these three constants produces the
 # effective quality drop observed near ~59 — keeping the behaviour as a soft
 # scoring effect preserves flexibility vs a hard cutoff.
-MIN_SETUP_SCORE         = 70    # gate: discard setups with unified score < 70
+MIN_SETUP_SCORE          = 70   # gate: discard setups with unified score < 70
+MIN_SETUP_SCORE_DEFENSIVE = 55  # lower gate in DEFENSIVE — regime penalty (0 pts) would kill all signals
 LOW_SAMPLE_THRESHOLD    = 20    # min trades per setup type for reliable diagnostics
 
 # Score component weights — sum of primary weights = 100

@@ -96,6 +96,7 @@ from constants import (
     TRADING_DAYS_IN_YEAR,
     RS_RANK_MIN_PERCENTILE,
     MIN_SETUP_SCORE,
+    MIN_SETUP_SCORE_DEFENSIVE,
     TOP_SECTORS_N,
     # Universe loader aging thresholds
     UNIVERSE_MAX_AGE_DAYS,
@@ -1714,7 +1715,12 @@ async def _run_scan(
         # findings reach the frontend despite a DEFENSIVE regime penalty of 0.
         # Production (force=False): strict 70 threshold unchanged.
         pre_score_count = len(collected_setups)
-        _score_threshold = 50 if force else MIN_SETUP_SCORE
+        if force:
+            _score_threshold = 50
+        elif regime.get("regime") == "DEFENSIVE":
+            _score_threshold = MIN_SETUP_SCORE_DEFENSIVE
+        else:
+            _score_threshold = MIN_SETUP_SCORE
         try:
             collected_setups = score_and_filter_setups(
                 collected_setups,
