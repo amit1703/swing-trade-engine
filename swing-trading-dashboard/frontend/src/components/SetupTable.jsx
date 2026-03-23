@@ -14,8 +14,10 @@
  *   RS+  → Stock 3m RS outperforming SPY (rs_vs_spy > 0)
  */
 import React, { useState } from 'react'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 export default function SetupTable({ title, accentColor, setups, selectedTicker, onSelectTicker, loading, devMode, onDebug, livePrices = {} }) {
+  const { tr, lang } = useAppSettings()
   const count = setups.length
   const [expandedTicker, setExpandedTicker] = useState(null)
   const toggleNarrative = (ticker) => setExpandedTicker(v => v === ticker ? null : ticker)
@@ -49,21 +51,24 @@ export default function SetupTable({ title, accentColor, setups, selectedTicker,
         </div>
       ) : count === 0 ? (
         <div className="py-5 text-center text-t-muted text-[10px] tracking-widest uppercase">
-          No setups
+          {tr('msg.noResults')}
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="terminal-table">
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>Ticker</th>
-                <th style={{ textAlign: 'right', width: 32 }}>Scr</th>
-                <th>Now $</th>
-                <th>Entry $</th>
-                <th>Stop $</th>
-                <th>Target $</th>
-                <th>R:R</th>
-                <th style={{ textAlign: 'left' }}>Signal</th>
+                <th style={{ textAlign: 'left' }}
+                    className={lang === 'he' ? 'font-sans' : 'font-mono'}>{tr('table.ticker')}</th>
+                <th style={{ textAlign: 'right', width: 32 }}
+                    className={lang === 'he' ? 'font-sans' : 'font-mono'}>{tr('table.score')}</th>
+                <th className={lang === 'he' ? 'font-sans' : 'font-mono'}>Now $</th>
+                <th className={lang === 'he' ? 'font-sans' : 'font-mono'}>{tr('table.entry')} $</th>
+                <th className={lang === 'he' ? 'font-sans' : 'font-mono'}>{tr('table.stop')} $</th>
+                <th className={lang === 'he' ? 'font-sans' : 'font-mono'}>{tr('table.target')} $</th>
+                <th className={lang === 'he' ? 'font-sans' : 'font-mono'}>{tr('table.rr')}</th>
+                <th style={{ textAlign: 'left' }}
+                    className={lang === 'he' ? 'font-sans' : 'font-mono'}>{tr('table.signal')}</th>
                 {devMode && <th style={{ width: 24 }} />}
               </tr>
             </thead>

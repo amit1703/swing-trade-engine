@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 const SETUP_TYPE_LABEL = {
   VCP:                'VCP',
@@ -28,6 +29,7 @@ function SortIcon({ col, sortCol, sortDir }) {
 }
 
 export default function ScannerTable({ allSetups, filters, selectedTicker, onSelectTicker, livePrices = {}, devMode = false, onDebug, favorites = [], onToggleFavorite }) {
+  const { tr, lang } = useAppSettings()
   const [sortCol, setSortCol] = useState('score')
   const [sortDir, setSortDir] = useState('desc')
   const [showExtended, setShowExtended] = useState(false)
@@ -83,17 +85,17 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
   }, [allSetups, filters, sortCol, sortDir, showExtended, livePrices])
 
   const COLS = [
-    { col: 'score',  label: 'SCR',    align: 'right' },
-    { col: 'ticker', label: 'TICKER', align: 'left'  },
-    { col: null,     label: 'TYPE',   align: 'left'  },
-    { col: null,     label: 'PRICE',  align: 'right' },
-    { col: 'vol',    label: 'VOL ×',  align: 'right' },
-    { col: 'rs',     label: 'RS',     align: 'right' },
-    { col: null,     label: 'DIST',   align: 'right' },
-    { col: null,     label: 'ENTRY',  align: 'right' },
-    { col: null,     label: 'STOP',   align: 'right' },
-    { col: 'rr',     label: 'R:R',    align: 'right' },
-    { col: null,     label: 'SECTOR', align: 'left'  },
+    { col: 'score',  label: tr('table.score'),  align: 'right' },
+    { col: 'ticker', label: tr('table.ticker'), align: 'left'  },
+    { col: null,     label: 'TYPE',             align: 'left'  },
+    { col: null,     label: 'PRICE',            align: 'right' },
+    { col: 'vol',    label: tr('table.vol'),    align: 'right' },
+    { col: 'rs',     label: tr('table.rs'),     align: 'right' },
+    { col: null,     label: 'DIST',             align: 'right' },
+    { col: null,     label: tr('table.entry'),  align: 'right' },
+    { col: null,     label: tr('table.stop'),   align: 'right' },
+    { col: 'rr',     label: tr('table.rr'),     align: 'right' },
+    { col: null,     label: tr('table.sector'), align: 'left'  },
   ]
 
   return (
@@ -132,7 +134,7 @@ export default function ScannerTable({ allSetups, filters, selectedTicker, onSel
             {rows.length === 0 && (
               <tr>
                 <td colSpan={11} style={{ textAlign: 'center', color: 'var(--muted)', padding: '24px', fontSize: 11 }}>
-                  No setups match current filters
+                  {tr('msg.noResults')}
                 </td>
               </tr>
             )}
