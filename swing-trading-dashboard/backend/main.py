@@ -384,6 +384,10 @@ PRICE_CACHE_TTL = 60  # seconds
 _earnings_cache: dict = {}
 _earnings_cache_lock = threading.Lock()
 
+# Last scan's RS rank map and top sectors — used for on-demand scoring
+_last_rs_rank_map: Dict[str, float] = {}
+_last_top_sectors: List[str] = []
+
 _scan_state: Dict = {
     "in_progress": False,
     "progress": 0,
@@ -1193,6 +1197,9 @@ async def _run_scan(
         _top_sectors = compute_top_sectors(
             _ticker_cache, tickers, SECTORS, spy_df_full, top_n=TOP_SECTORS_N
         )
+        global _last_rs_rank_map, _last_top_sectors
+        _last_rs_rank_map = _rs_rank_map
+        _last_top_sectors = _top_sectors
         log.info(
             "RS rank map: %d tickers ranked  top_sectors=%s  [%.1fs]",
             len(_rs_rank_map), _top_sectors, time.time() - rs_rank_start,
@@ -2907,6 +2914,155 @@ def _build_v5_analysis_fields(
     }
 
 
+async def _on_demand_score_ticker(
+    ticker: str,
+    df: "pd.DataFrame",
+    spy_df: "pd.DataFrame",
+) -> Optional[dict]:
+    """
+    Run the full engine pipeline on a single ticker on demand.
+    Used by analyze_ticker when the stock has no existing DB setup.
+
+    Returns the highest-scored setup dict (with setup_score), or None.
+    """
+    import asyncio as _asyncio
+    loop = _asyncio.get_event_loop()
+
+    # ── RS rank ──────────────────────────────────────────────────────────────
+    rs_rank: float = _last_rs_rank_map.get(ticker, 0.0)
+    if rs_rank == 0.0:
+        # Ticker not in last scan map — estimate from 12m return vs SPY
+        try:
+            n252 = min(252, len(df) - 1, len(spy_df) - 1)
+            _sr = float(df["Close"].iloc[-1] / df["Close"].iloc[-(n252 + 1)] - 1)
+            _spy_r = float(spy_df["Close"].iloc[-1] / spy_df["Close"].iloc[-(n252 + 1)] - 1)
+            # Linear mapping: 0.25 outperformance ≈ rank 100, -0.25 ≈ rank 0
+            rs_rank = float(min(99.0, max(1.0, 50.0 + (_sr - _spy_r) * 150.0)))
+        except Exception:
+            rs_rank = 50.0
+
+    # ── RS score (63-day raw) ────────────────────────────────────────────────
+    try:
+        n63 = min(63, len(df) - 1, len(spy_df) - 1)
+        _s63 = float(df["Close"].iloc[-1] / df["Close"].iloc[-(n63 + 1)] - 1)
+        _spy63 = float(spy_df["Close"].iloc[-1] / spy_df["Close"].iloc[-(n63 + 1)] - 1)
+        rs_score = _s63 - _spy63
+        spy_3m = _spy63
+    except Exception:
+        rs_score = 0.0
+        spy_3m = 0.0
+
+    # ── RS ratio / blue dot ──────────────────────────────────────────────────
+    try:
+        _spy_aligned = spy_df["Close"].reindex(df.index, method="ffill")
+        _rs_line = df["Close"] / _spy_aligned
+        rs_ratio = float(_rs_line.iloc[-1])
+        rs_52w_high = float(_rs_line.rolling(min(252, len(_rs_line))).max().iloc[-1])
+        rs_blue_dot = rs_ratio >= rs_52w_high * 0.995
+    except Exception:
+        rs_ratio = 1.0
+        rs_52w_high = 1.0
+        rs_blue_dot = False
+
+    # ── Regime ───────────────────────────────────────────────────────────────
+    try:
+        _regime_row = await get_latest_regime(DB_PATH)
+        _regime_str = _regime_row.get("regime", "SELECTIVE") if _regime_row else "SELECTIVE"
+        _regime_score_val = int(_regime_row.get("regime_score", 50) or 50) if _regime_row else 50
+    except Exception:
+        _regime_str = "SELECTIVE"
+        _regime_score_val = 50
+    regime = {"regime": _regime_str, "regime_score": _regime_score_val, "is_bullish": _regime_str != "DEFENSIVE"}
+
+    top_sectors = _last_top_sectors or []
+    sector = SECTORS.get(ticker, "Unknown")
+
+    # ── Engine 1: SR zones ───────────────────────────────────────────────────
+    try:
+        zones = await loop.run_in_executor(None, calculate_sr_zones, ticker, df)
+    except Exception:
+        zones = []
+
+    collected: list = []
+
+    # ── Engine 2: VCP / WATCHLIST ────────────────────────────────────────────
+    try:
+        _vcp = await loop.run_in_executor(
+            None, scan_vcp, ticker, df, zones, spy_3m,
+            rs_ratio, rs_52w_high, rs_blue_dot, rs_score,
+        )
+        if _vcp:
+            _vcp["sector"] = sector
+            collected.append(_vcp)
+    except Exception:
+        pass
+
+    # WATCHLIST (near-breakout approaching)
+    try:
+        from engines.engine2 import scan_near_breakout as _snb
+        _wl = await loop.run_in_executor(None, _snb, ticker, df, zones)
+        if _wl:
+            _wl["sector"] = sector
+            _wl["rs_blue_dot"] = rs_blue_dot
+            collected.append(_wl)
+    except Exception:
+        pass
+
+    # ── Engine 3: Pullback ───────────────────────────────────────────────────
+    try:
+        _tl = await loop.run_in_executor(None, detect_trendline, ticker, df)
+        _pb, _ = await loop.run_in_executor(
+            None, scan_pullback_scored, ticker, df, zones, _LIVE_PARAMS, _tl, rs_score, _regime_str
+        )
+        if _pb:
+            _pb["sector"] = sector
+            _pb["rs_score"] = rs_score
+            collected.append(_pb)
+    except Exception:
+        pass
+
+    # ── Engine 5: Base ───────────────────────────────────────────────────────
+    try:
+        from engines.engine5 import scan_base_pattern as _sbp
+        _base = await loop.run_in_executor(
+            None, _sbp, ticker, df, spy_3m,
+            rs_ratio, rs_52w_high, rs_blue_dot, rs_score, zones, _LIVE_PARAMS,
+        )
+        if _base:
+            _base["sector"] = sector
+            _base["rs_score"] = rs_score
+            collected.append(_base)
+    except Exception:
+        pass
+
+    # ── Engine 6: ResBreakout ────────────────────────────────────────────────
+    try:
+        from engines.engine6 import scan_resistance_breakout as _srb
+        _brk = await loop.run_in_executor(None, _srb, ticker, df, zones, False, _LIVE_PARAMS)
+        if _brk:
+            _brk["sector"] = sector
+            _brk["rs_score"] = rs_score
+            _brk["rs_blue_dot"] = rs_blue_dot
+            collected.append(_brk)
+    except Exception:
+        pass
+
+    if not collected:
+        return None
+
+    # ── Score all, pick best (min_score=0 — caller decides what to show) ─────
+    _scored = score_and_filter_setups(
+        collected, {ticker: rs_rank}, regime, top_sectors, min_score=0
+    )
+    if not _scored:
+        return None
+
+    best = _scored[0]
+    best["rs_rank"] = round(rs_rank, 1)
+    best["on_demand"] = True   # flag so frontend can indicate this is a live compute
+    return best
+
+
 @app.get("/api/analyze/{ticker}")
 async def analyze_ticker(ticker: str):
     """Full technical analysis for any ticker."""
@@ -2938,11 +3094,13 @@ async def analyze_ticker(ticker: str):
         vol_now = float(df["Volume"].iloc[-1]) if "Volume" in df.columns else 1.0
         vol_ratio = (vol_now / vol_50) if vol_50 > 0 else 1.0
 
+        spy_df_analyze = None
         try:
-            spy_raw = yf.download("SPY", period="6mo", auto_adjust=True, progress=False)
+            spy_raw = yf.download("SPY", period="1y", auto_adjust=True, progress=False)
             if isinstance(spy_raw.columns, pd.MultiIndex):
                 spy_raw.columns = spy_raw.columns.get_level_values(0)
-            spy_close = spy_raw["Close"] if "Close" in spy_raw.columns else spy_raw.iloc[:, 0]
+            spy_df_analyze = spy_raw.rename(columns=str.title).copy()
+            spy_close = spy_df_analyze["Close"]
             n = min(63, len(df) - 1, len(spy_close) - 1)
             stock_ret = float(df["Close"].iloc[-1] / df["Close"].iloc[-(n + 1)] - 1)
             spy_ret   = float(spy_close.iloc[-1] / spy_close.iloc[-(n + 1)] - 1)
@@ -2967,6 +3125,18 @@ async def analyze_ticker(ticker: str):
             best_setup = max(existing, key=lambda s: s.get("setup_score") or 0)
             signals["vol_ratio"] = best_setup.get("vol_ratio", signals["vol_ratio"])
             signals["rs_score"]  = best_setup.get("rs_score",  signals["rs_score"])
+
+        # ── On-demand scoring for tickers not in the latest scan ─────────────
+        if best_setup is None and spy_df_analyze is not None:
+            try:
+                best_setup = await _on_demand_score_ticker(ticker, df, spy_df_analyze)
+                if best_setup:
+                    signals["vol_ratio"] = best_setup.get("vol_ratio", signals["vol_ratio"])
+                    signals["rs_score"]  = best_setup.get("rs_score",  signals["rs_score"])
+                    log.info("On-demand score for %s: %s  score=%s",
+                             ticker, best_setup.get("setup_type"), best_setup.get("setup_score"))
+            except Exception as _ode:
+                log.warning("On-demand scoring failed for %s: %s", ticker, _ode)
 
         # Fetch current regime score for V5 alignment fields
         try:
