@@ -127,16 +127,17 @@ html, body, #root {
            text-t-muted border-b border-t-border bg-t-card sticky top-0 z-10;
   }
   .terminal-table td {
-    @apply px-2 py-[5px] border-b border-t-border/50 align-middle;
+    @apply px-2 py-[5px] border-b align-middle;
+    border-bottom-color: rgba(30, 30, 30, 0.5);
   }
   .terminal-table tr {
     @apply cursor-pointer transition-colors duration-100;
   }
   .terminal-table tr:hover td {
-    @apply bg-white/[0.025];
+    background-color: rgba(255, 255, 255, 0.025);
   }
   .terminal-table tr.selected td {
-    @apply bg-t-accent/[0.06];
+    background-color: rgba(80, 216, 240, 0.06);
   }
   .terminal-table tr.selected td:first-child {
     @apply border-l-2 border-t-accent;
