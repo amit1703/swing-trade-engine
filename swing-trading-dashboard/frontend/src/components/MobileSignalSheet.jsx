@@ -1,6 +1,8 @@
 import StockIntelPanel from './StockIntelPanel.jsx'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 export default function MobileSignalSheet({ onClose, setup, livePrices, analysis, analysisLoading }) {
+  const { tr, lang } = useAppSettings()
   return (
     <div
       className="mobile-sheet-overlay"

@@ -9,6 +9,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { fetchMarketOverview } from '../api.js'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 const REFRESH_MS = 20 * 60 * 1000  // 20 minutes
 
@@ -82,6 +83,7 @@ function ToggleBtn({ collapsed, onClick }) {
 }
 
 export default function MarketOverview() {
+  const { tr, lang } = useAppSettings()
   const [data,      setData     ] = useState(null)
   const [loading,   setLoading  ] = useState(true)
   const [error,     setError    ] = useState(false)
