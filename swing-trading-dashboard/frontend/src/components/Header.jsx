@@ -6,8 +6,10 @@
  * NO_DATA / loading → neutral state
  */
 import { useRef, useState } from 'react'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, onOpenGuide, devMode, dryRun, onToggleDev, onToggleDryRun }) {
+  const { tr, lang } = useAppSettings()
   const regimeType = regime?.regime  // "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE" | undefined
   const isNoData   = !regime || !regimeType || regimeType === 'NO_DATA'
   const isAggressive = regimeType === 'AGGRESSIVE'
@@ -95,27 +97,27 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
 
               {/* Row 2: SPY + SMA50 + VIX + Breadth */}
               <div className="flex items-center gap-3">
-                <span className="font-mono tabular-nums text-[10px]">
-                  <span className="text-t-muted text-[8px] mr-1">SPY</span>
+                <span className={`tabular-nums text-[10px] ${lang === 'he' ? 'font-sans' : 'font-mono'}`}>
+                  <span className="text-t-muted text-[8px] mr-1">{tr('regime.spyClose')}</span>
                   <span className={textClass}>${regime.spy_close?.toFixed(2)}</span>
                 </span>
                 {(regime.spy_sma50 ?? 0) > 0 && (
-                  <span className="font-mono text-[9px] tabular-nums">
-                    <span className="text-t-muted text-[8px] mr-0.5">SMA50</span>
+                  <span className={`text-[9px] tabular-nums ${lang === 'he' ? 'font-sans' : 'font-mono'}`}>
+                    <span className="text-t-muted text-[8px] mr-0.5">{tr('regime.sma50')}</span>
                     <span style={{ color: regime.spy_close > regime.spy_sma50 ? 'var(--go)' : 'var(--halt)' }}>
                       {regime.spy_close > regime.spy_sma50 ? '✔' : '✖'}
                     </span>
                   </span>
                 )}
                 {(regime.vix ?? 0) > 0 && (
-                  <span className="font-mono text-[9px] tabular-nums">
-                    <span className="text-t-muted text-[8px] mr-0.5">VIX</span>
+                  <span className={`text-[9px] tabular-nums ${lang === 'he' ? 'font-sans' : 'font-mono'}`}>
+                    <span className="text-t-muted text-[8px] mr-0.5">{tr('regime.vix')}</span>
                     <span style={{ color: 'var(--muted)' }}>{regime.vix.toFixed(1)}</span>
                   </span>
                 )}
                 {regime.breadth_pct != null && (
-                  <span className="font-mono text-[9px] tabular-nums">
-                    <span className="text-t-muted text-[8px] mr-0.5">BRD</span>
+                  <span className={`text-[9px] tabular-nums ${lang === 'he' ? 'font-sans' : 'font-mono'}`}>
+                    <span className="text-t-muted text-[8px] mr-0.5">{tr('regime.breadth')}</span>
                     <span style={{ color: regime.breadth_pct > 0.6 ? 'var(--go)' : regime.breadth_pct > 0.4 ? 'var(--accent)' : 'var(--halt)' }}>
                       {Math.round(regime.breadth_pct * 100)}%
                     </span>
