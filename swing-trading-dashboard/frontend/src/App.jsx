@@ -44,6 +44,7 @@ import DebugDrawer      from './components/DebugDrawer.jsx'
 import DiagnosticsTab   from './components/DiagnosticsTab.jsx'
 import BottomTabBar       from './components/BottomTabBar.jsx'
 import MobileSignalSheet  from './components/MobileSignalSheet.jsx'
+import Settings from './components/Settings.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -490,18 +491,8 @@ export default function App() {
           </div>
         )}
 
-        {/* ── SETTINGS — stub ───────────────────────────────── */}
-        {['settings'].includes(activePage) && (
-          <div style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--muted)', flexDirection: 'column', gap: 8,
-          }}>
-            <span style={{ fontSize: 32 }}>🚧</span>
-            <span style={{ fontSize: 13, fontFamily: '"IBM Plex Mono", monospace' }}>
-              {activePage.toUpperCase()} — coming soon
-            </span>
-          </div>
-        )}
+        {/* ── SETTINGS ──────────────────────────────────────── */}
+        {activePage === 'settings' && <Settings />}
       </div>
 
       {/* ── Bottom tab bar (mobile only) ─────────────────────── */}
