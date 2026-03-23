@@ -7,16 +7,19 @@ import {
   Settings,
   TrendingUp,
 } from 'lucide-react'
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 const NAV_ITEMS = [
-  { id: 'scanner',     icon: ScanLine,  label: 'Scanner'     },
-  { id: 'watchlist',   icon: Star,      label: 'Watchlist'   },
-  { id: 'favorites',   icon: Heart,     label: 'Favorites'   },
-  { id: 'portfolio',   icon: Briefcase, label: 'Portfolio'   },
-  { id: 'diagnostics', icon: Activity,  label: 'Diagnostics' },
+  { id: 'scanner',     icon: ScanLine,  labelKey: 'nav.scanner'     },
+  { id: 'watchlist',   icon: Star,      labelKey: 'nav.watchlist'   },
+  { id: 'favorites',   icon: Heart,     labelKey: 'nav.favorites'   },
+  { id: 'portfolio',   icon: Briefcase, labelKey: 'nav.portfolio'   },
+  { id: 'diagnostics', icon: Activity,  labelKey: 'nav.diagnostics' },
 ]
 
 export default function Sidebar({ activePage, onNavigate }) {
+  const { tr, lang } = useAppSettings()
+  const fontClass = lang === 'he' ? 'font-sans' : 'font-mono'
   return (
     <nav className="hidden sm:flex w-56 flex-shrink-0 bg-t-panel border-r border-t-border flex-col h-full">
 
@@ -30,22 +33,22 @@ export default function Sidebar({ activePage, onNavigate }) {
 
       {/* Main nav */}
       <div className="flex-1 flex flex-col gap-1 px-2 py-3">
-        {NAV_ITEMS.map(({ id, icon: Icon, label }) => {
+        {NAV_ITEMS.map(({ id, icon: Icon, labelKey }) => {
           const isActive = activePage === id
           return (
             <button
               key={id}
               onClick={() => onNavigate(id)}
-              title={label}
+              title={tr(labelKey)}
               className={[
-                'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-mono font-medium transition-colors duration-150 border',
+                `w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${fontClass} font-medium transition-colors duration-150 border`,
                 isActive
                   ? 'bg-t-accent/10 text-t-accent border-t-accent/20'
                   : 'text-t-muted hover:bg-white/5 hover:text-t-text border-transparent',
               ].join(' ')}
             >
               <Icon size={17} strokeWidth={1.75} />
-              {label}
+              {tr(labelKey)}
             </button>
           )
         })}
@@ -55,16 +58,16 @@ export default function Sidebar({ activePage, onNavigate }) {
       <div className="px-2 py-3 border-t border-t-border flex-shrink-0">
         <button
           onClick={() => onNavigate('settings')}
-          title="Settings"
+          title={tr('nav.settings')}
           className={[
-            'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-mono font-medium transition-colors duration-150 border',
+            `w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${fontClass} font-medium transition-colors duration-150 border`,
             activePage === 'settings'
               ? 'bg-t-accent/10 text-t-accent border-t-accent/20'
               : 'text-t-muted hover:bg-white/5 hover:text-t-text border-transparent',
           ].join(' ')}
         >
           <Settings size={17} strokeWidth={1.75} />
-          Settings
+          {tr('nav.settings')}
         </button>
       </div>
     </nav>
