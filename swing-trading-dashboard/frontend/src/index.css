@@ -20,6 +20,10 @@
   --halt:         #ff2d55;
   --blue:         #4a9eff;
   --purple:       #9B6EFF;
+  --accent-dim:   #0d4050;
+  --go-dim:       #003d25;
+  --halt-dim:     #4a0015;
+  --blue-dim:     #0a1f3a;
   --radius-card:  12px;
   --shadow-card:  0 4px 24px rgba(0,0,0,0.5);
 
@@ -59,6 +63,10 @@
   --halt:         #dc2626;
   --blue:         #0ea5e9;
   --purple:       #8b5cf6;
+  --accent-dim:   #cffafe;
+  --go-dim:       #dcfce7;
+  --halt-dim:     #fee2e2;
+  --blue-dim:     #dbeafe;
   --radius-card:  12px;
   --shadow-card:  0 1px 3px rgba(0,0,0,0.08);
 
