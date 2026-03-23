@@ -1,16 +1,6 @@
 import { Search, Play, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
-
-const PAGE_TITLES = {
-  scanner:     'Scanner',
-  watchlist:   'Watchlist',
-  favorites:   'Favorites',
-  portfolio:   'Portfolio',
-  analytics:   'Analytics',
-  diagnostics: 'Diagnostics',
-  settings:    'Settings',
-  more:        'More',
-}
+import { useAppSettings } from '../contexts/AppSettingsContext'
 
 export default function TopBar({
   activePage,
@@ -23,12 +13,25 @@ export default function TopBar({
   onToggleDryRun,
   onOpenGuide,
 }) {
+  const { tr, lang } = useAppSettings()
   const [searchVal, setSearchVal] = useState('')
+
+  const PAGE_TITLE_KEYS = {
+    scanner:     'nav.scanner',
+    watchlist:   'nav.watchlist',
+    favorites:   'nav.favorites',
+    portfolio:   'nav.portfolio',
+    analytics:   'nav.analytics',
+    diagnostics: 'nav.diagnostics',
+    settings:    'nav.settings',
+    more:        'nav.more',
+  }
 
   // Keep all local derived variables unchanged
   const isScanning  = scanStatus?.in_progress
   const progressPct = scanStatus?.progress_pct ?? 0
-  const title       = PAGE_TITLES[activePage] ?? activePage
+  const titleKey = PAGE_TITLE_KEYS[activePage]
+  const title = titleKey ? tr(titleKey) : activePage
 
   // Market open check (US hours Mon-Fri 9:30–16:00 ET) — logic unchanged
   const now   = new Date()
@@ -59,7 +62,7 @@ export default function TopBar({
       )}
 
       {/* Page title */}
-      <span className="font-condensed font-bold text-lg text-t-text flex-shrink-0 w-24 tracking-tight">
+      <span className={`font-condensed font-bold text-lg text-t-text flex-shrink-0 w-24 tracking-tight ${lang === 'he' ? 'font-sans' : 'font-mono'}`}>
         {title}
       </span>
 
@@ -70,7 +73,7 @@ export default function TopBar({
           <input
             value={searchVal}
             onChange={e => setSearchVal(e.target.value.toUpperCase())}
-            placeholder="Search ticker..."
+            placeholder={tr('search.placeholder')}
             className="bg-transparent border-none outline-none text-t-text font-mono text-[11px] w-full placeholder:text-t-muted"
           />
         </div>
@@ -104,7 +107,7 @@ export default function TopBar({
         >
           {isScanning
             ? <><RefreshCw size={12} className="animate-spin" /> {Math.round(progressPct)}%</>
-            : <><Play size={11} fill="currentColor" /> RUN SCAN</>
+            : <><Play size={11} fill="currentColor" /> {tr('btn.runScan')}</>
           }
         </button>
         {/* Status sub-label — keep this span, it shows scan phase */}
