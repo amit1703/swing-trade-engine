@@ -1,0 +1,272 @@
+<style>
+  body { margin: 0; }
+  .preview-wrap { display: flex; gap: 16px; margin-top: 8px; }
+
+  /* ── MOCK DASHBOARD (full shell) ── */
+  .dash {
+    display: flex; flex: 1; border-radius: 10px; overflow: hidden;
+    border: 1px solid #222; background: #000; font-family: 'IBM Plex Mono', monospace;
+    height: 460px;
+  }
+
+  /* Sidebar */
+  .dash-sidebar {
+    width: 48px; background: #0d0d0d; border-right: 1px solid #1e1e1e;
+    display: flex; flex-direction: column; align-items: center; padding: 8px 0; gap: 4px;
+  }
+  .dash-logo { font-size: 13px; color: #50d8f0; font-weight: 900; margin-bottom: 8px; }
+  .nav-item {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: #444; cursor: pointer;
+  }
+  .nav-item.active { background: rgba(80,216,240,0.12); color: #50d8f0; }
+  .nav-item:not(.active):hover { background: rgba(255,255,255,0.05); color: #888; }
+
+  /* Main area */
+  .dash-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Topbar */
+  .dash-topbar {
+    padding: 0 12px; height: 36px; background: #111; border-bottom: 1px solid #1e1e1e;
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .regime-pill {
+    padding: 2px 8px; border-radius: 4px; font-size: 8px; font-weight: 700;
+    letter-spacing: 0.1em; background: rgba(0,200,122,0.1);
+    border: 1px solid rgba(0,200,122,0.25); color: #00c87a;
+  }
+  .score-bar-wrap { display: flex; align-items: center; gap: 6px; }
+  .score-bar { width: 60px; height: 3px; background: #222; border-radius: 2px; overflow: hidden; }
+  .score-fill { height: 100%; width: 73%; background: #00c87a; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .scan-btn {
+    padding: 3px 10px; border-radius: 5px; font-size: 8px; font-weight: 700;
+    letter-spacing: 0.08em; background: rgba(80,216,240,0.12);
+    border: 1px solid rgba(80,216,240,0.3); color: #50d8f0; cursor: pointer;
+  }
+  .time-lbl { font-size: 8px; color: #444; letter-spacing: 0.06em; }
+
+  /* Content row */
+  .dash-content { flex: 1; display: flex; overflow: hidden; }
+
+  /* Scanner panel */
+  .dash-scanner { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid #1e1e1e; }
+  .panel-header {
+    padding: 5px 10px; background: #111; border-bottom: 1px solid #1e1e1e;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: space-between; color: #555; flex-shrink:0;
+  }
+  .count-badge {
+    padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 700;
+    background: rgba(80,216,240,0.08); border: 1px solid rgba(80,216,240,0.2); color: #50d8f0;
+  }
+
+  .mock-table { width: 100%; border-collapse: collapse; }
+  .mock-table th {
+    padding: 4px 8px; font-size: 7px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; text-align: right;
+    background: #111; border-bottom: 1px solid #1e1e1e; color: #444; position: sticky; top: 0;
+  }
+  .mock-table th:first-child { text-align: left; }
+  .mock-table th.sort-active { color: #50d8f0; }
+  .mock-table td { padding: 4px 8px; font-size: 9px; text-align: right; border-bottom: 1px solid #181818; }
+  .mock-table td:first-child { text-align: left; }
+  .mock-table tbody tr:hover td { background: rgba(255,255,255,0.025); }
+
+  .row-selected td { background: rgba(80,216,240,0.05) !important; }
+  .row-selected { border-left: 3px solid #50d8f0 !important; }
+  .row-normal { border-left: 3px solid transparent; }
+
+  .t-cyan { color: #50d8f0; }
+  .t-go { color: #00c87a; }
+  .t-halt { color: #ff2d55; }
+  .t-amber { color: #50d8f0; }  /* accent now cyan */
+  .t-muted { color: #555; }
+  .t-text { color: #ccc; }
+  .t-bold { font-weight: 700; }
+  .blue-dot { color: #4a9eff; font-size: 7px; margin-left: 3px; }
+
+  /* Right panel */
+  .dash-right { width: 180px; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Watchlist section */
+  .wl-section { flex: 1; overflow: hidden; display: flex; flex-direction: column; border-bottom: 1px solid #1e1e1e; }
+  .wl-item {
+    padding: 5px 10px; border-bottom: 1px solid #181818;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .wl-item.wl-selected { background: rgba(80,216,240,0.05); border-left: 3px solid #50d8f0; }
+  .wl-item:not(.wl-selected) { border-left: 3px solid rgba(0,200,122,0.3); }
+
+  /* Stat cards */
+  .stat-row { padding: 8px; background: #0d0d0d; display: flex; gap: 6px; }
+  .stat-mini {
+    flex: 1; background: #131313; border: 1px solid #222; border-radius: 6px;
+    padding: 6px 8px;
+  }
+  .stat-mini-label { font-size: 7px; color: #444; letter-spacing: 0.1em; text-transform: uppercase; }
+  .stat-mini-value { font-size: 14px; font-weight: 700; line-height: 1.2; }
+</style>
+
+<h2>Final Design Preview</h2>
+<p class="subtitle">Pure Charcoal + Bright Soft Cyan <code style="background:rgba(80,216,240,0.1);color:#50d8f0;padding:1px 6px;border-radius:3px;font-size:11px">#50d8f0</code> · green/red signals unchanged</p>
+
+<div class="preview-wrap">
+  <div class="dash">
+
+    <!-- Sidebar -->
+    <div class="dash-sidebar">
+      <div class="dash-logo">S</div>
+      <div class="nav-item active">⊞</div>
+      <div class="nav-item">◎</div>
+      <div class="nav-item">◈</div>
+      <div class="nav-item">⚡</div>
+    </div>
+
+    <!-- Main -->
+    <div class="dash-main">
+
+      <!-- Topbar -->
+      <div class="dash-topbar">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="regime-pill">AGGRESSIVE</span>
+          <div class="score-bar-wrap">
+            <div class="score-bar"><div class="score-fill"></div></div>
+            <span style="font-size:8px;color:#555">73</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <span class="time-lbl">14:32 ET</span>
+          <button class="scan-btn">▶ RUN SCAN</button>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="dash-content">
+
+        <!-- Scanner table -->
+        <div class="dash-scanner">
+          <div class="panel-header">
+            Scanner
+            <span class="count-badge">24</span>
+          </div>
+          <div style="overflow-y:auto;flex:1">
+            <table class="mock-table">
+              <thead><tr>
+                <th style="text-align:left">Ticker</th>
+                <th class="sort-active">Score ▼</th>
+                <th>Entry</th>
+                <th>SL</th>
+                <th>R:R</th>
+                <th>Type</th>
+              </tr></thead>
+              <tbody>
+                <tr class="row-selected">
+                  <td><span class="t-cyan t-bold">NVDA</span><span class="blue-dot">●</span></td>
+                  <td class="t-go">91</td>
+                  <td class="t-text">$874.20</td>
+                  <td class="t-halt">$848.00</td>
+                  <td class="t-go">3.2×</td>
+                  <td class="t-muted">VCP</td>
+                </tr>
+                <tr class="row-normal">
+                  <td><span class="t-text t-bold">AAPL</span></td>
+                  <td class="t-go">84</td>
+                  <td class="t-text">$189.50</td>
+                  <td class="t-halt">$183.00</td>
+                  <td class="t-go">2.4×</td>
+                  <td class="t-muted">PB</td>
+                </tr>
+                <tr class="row-normal">
+                  <td><span class="t-text t-bold">MSFT</span><span class="blue-dot">●</span></td>
+                  <td class="t-cyan">77</td>
+                  <td class="t-text">$415.00</td>
+                  <td class="t-halt">$408.00</td>
+                  <td class="t-muted">1.8×</td>
+                  <td class="t-muted">BRK</td>
+                </tr>
+                <tr class="row-normal">
+                  <td><span class="t-text t-bold">META</span></td>
+                  <td class="t-cyan">74</td>
+                  <td class="t-text">$512.30</td>
+                  <td class="t-halt">$498.00</td>
+                  <td class="t-go">2.1×</td>
+                  <td class="t-muted">VCP</td>
+                </tr>
+                <tr class="row-normal">
+                  <td><span class="t-text t-bold">AMD</span></td>
+                  <td class="t-muted">71</td>
+                  <td class="t-text">$164.80</td>
+                  <td class="t-halt">$158.00</td>
+                  <td class="t-muted">1.6×</td>
+                  <td class="t-muted">PB</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Right panel -->
+        <div class="dash-right">
+          <div class="panel-header">Watchlist <span class="count-badge">8</span></div>
+
+          <div class="wl-section">
+            <div style="padding:4px 10px;font-size:7px;color:#444;letter-spacing:0.1em;text-transform:uppercase;border-bottom:1px solid #1e1e1e;background:#111">Near Breakout</div>
+            <div class="wl-item wl-selected">
+              <span style="font-size:10px;font-weight:700;color:#50d8f0">NVDA</span>
+              <span style="font-size:9px;color:#00c87a">0.3atr↓</span>
+            </div>
+            <div class="wl-item" style="border-left-color:rgba(0,200,122,0.3)">
+              <span style="font-size:10px;font-weight:700;color:#ccc">AAPL</span>
+              <span style="font-size:9px;color:#50d8f0">0.9atr↓</span>
+            </div>
+            <div style="padding:4px 10px;font-size:7px;color:#444;letter-spacing:0.1em;text-transform:uppercase;border-bottom:1px solid #1e1e1e;border-top:1px solid #1e1e1e;background:#111">Pullback</div>
+            <div class="wl-item" style="border-left-color:rgba(100,180,255,0.3)">
+              <span style="font-size:10px;font-weight:700;color:#ccc">TSLA</span>
+              <span style="font-size:9px;color:#00c87a">0.5atr↑</span>
+            </div>
+            <div class="wl-item" style="border-left-color:rgba(100,180,255,0.3)">
+              <span style="font-size:10px;font-weight:700;color:#ccc">AMZN</span>
+              <span style="font-size:9px;color:#50d8f0">1.2atr↑</span>
+            </div>
+          </div>
+
+          <!-- Stat cards -->
+          <div class="stat-row">
+            <div class="stat-mini">
+              <div class="stat-mini-label">Win %</div>
+              <div class="stat-mini-value t-go">61%</div>
+            </div>
+            <div class="stat-mini">
+              <div class="stat-mini-label">Avg R</div>
+              <div class="stat-mini-value t-cyan">+1.4</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+  <div style="padding:8px 14px;border-radius:8px;background:rgba(255,255,255,0.04);font-size:11px;color:#666;line-height:1.8;flex:1;min-width:200px">
+    <strong style="color:#888;display:block;margin-bottom:4px">What changes</strong>
+    All backgrounds/borders → pure grey<br>
+    Accent: <span style="color:#F5A623">amber</span> → <span style="color:#50d8f0">cyan #50d8f0</span><br>
+    RS blue dot: <span style="color:#00C8FF">#00C8FF</span> → <span style="color:#4a9eff">#4a9eff</span> (more blue, avoids clash)
+  </div>
+  <div style="padding:8px 14px;border-radius:8px;background:rgba(255,255,255,0.04);font-size:11px;color:#666;line-height:1.8;flex:1;min-width:200px">
+    <strong style="color:#888;display:block;margin-bottom:4px">What stays</strong>
+    Green <span style="color:#00c87a">■</span> = positive signals<br>
+    Red <span style="color:#ff2d55">■</span> = stop loss / halt<br>
+    IBM Plex Mono, layout, all data
+  </div>
+</div>
+
+<div style="margin-top:12px;text-align:center">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)" style="display:inline-block;padding:10px 28px;border-radius:8px;border:1px solid rgba(80,216,240,0.3);background:rgba(80,216,240,0.08);color:#50d8f0;font-size:12px;font-weight:700;letter-spacing:0.08em;cursor:pointer">
+    ✓ Looks good — build it
+  </div>
+</div>

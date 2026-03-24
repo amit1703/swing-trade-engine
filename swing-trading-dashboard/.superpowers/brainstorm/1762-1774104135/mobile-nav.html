@@ -1,0 +1,62 @@
+<h2>Mobile Layout — Navigation Pattern</h2>
+<p class="subtitle">The sidebar takes 48px on every phone screen. Which nav pattern should replace it on mobile?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="bottom-tabs" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#111;padding:12px;border-radius:8px;font-family:monospace">
+      <div style="background:#0d0d0d;border-radius:6px;overflow:hidden;width:200px;margin:0 auto">
+        <!-- phone mockup -->
+        <div style="background:#111;padding:6px 8px;font-size:9px;color:#555;border-bottom:1px solid #1e1e1e">SCANNER · AGGRESSIVE 73</div>
+        <div style="background:#0d0d0d;height:110px;display:flex;align-items:center;justify-content:center;color:#555;font-size:9px">[ chart + table — full width ]</div>
+        <div style="background:#111;display:flex;border-top:1px solid #1e1e1e;padding:6px 0">
+          <div style="flex:1;text-align:center;font-size:8px;color:#50d8f0">⬜<br/>Scanner</div>
+          <div style="flex:1;text-align:center;font-size:8px;color:#555">⬜<br/>WL</div>
+          <div style="flex:1;text-align:center;font-size:8px;color:#555">⬜<br/>Fav</div>
+          <div style="flex:1;text-align:center;font-size:8px;color:#555">⬜<br/>Port</div>
+          <div style="flex:1;text-align:center;font-size:8px;color:#555">⬜<br/>More</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Bottom Tab Bar</h3>
+      <p>Sidebar hidden on mobile. A fixed bottom bar replaces it with 5 icons + labels. Full screen width for content. Standard mobile app pattern.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="hamburger" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#111;padding:12px;border-radius:8px;font-family:monospace">
+      <div style="background:#0d0d0d;border-radius:6px;overflow:hidden;width:200px;margin:0 auto">
+        <div style="background:#111;padding:6px 8px;font-size:9px;color:#50d8f0;border-bottom:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center">
+          <span>☰</span>
+          <span style="color:#555">SCANNER · AGG 73</span>
+          <span style="color:#555">🔍</span>
+        </div>
+        <div style="background:#0d0d0d;height:130px;display:flex;align-items:center;justify-content:center;color:#555;font-size:9px">[ content — full width ]</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Hamburger Drawer</h3>
+      <p>Sidebar hidden, hamburger ☰ in top-left opens a full-height side drawer overlay. Content always full width. Tap outside to close.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="keep-sidebar" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#111;padding:12px;border-radius:8px;font-family:monospace">
+      <div style="background:#0d0d0d;border-radius:6px;overflow:hidden;width:200px;margin:0 auto;display:flex">
+        <div style="width:32px;background:#111;border-right:1px solid #1e1e1e;display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:8px">
+          <div style="width:16px;height:16px;background:#50d8f0;border-radius:3px;opacity:0.8"></div>
+          <div style="width:16px;height:16px;background:#333;border-radius:3px"></div>
+          <div style="width:16px;height:16px;background:#333;border-radius:3px"></div>
+          <div style="width:16px;height:16px;background:#333;border-radius:3px"></div>
+        </div>
+        <div style="flex:1;background:#0d0d0d;height:130px;display:flex;align-items:center;justify-content:center;color:#555;font-size:9px;text-align:center;padding:4px">[ content<br/>~160px wide ]</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Keep Slim Sidebar</h3>
+      <p>Keep the current 48px icon-only sidebar. Fix layout issues within the remaining width. Simplest change, but content area stays narrow (~327px on iPhone).</p>
+    </div>
+  </div>
+
+</div>

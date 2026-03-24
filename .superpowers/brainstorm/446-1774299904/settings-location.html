@@ -1,0 +1,40 @@
+<h2>Where should Dark Mode & Language live?</h2>
+<p class="subtitle">Both toggles need to be always accessible. Pick the placement that feels most natural.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Settings Page (dedicated)</h3>
+      <p>Both toggles live in the Settings page you already have (currently "coming soon"). You navigate there to change theme or language. Clean separation — settings are in one place.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>All preferences in one place</li><li>Expandable for future settings</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Need to navigate away to toggle</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>TopBar (always visible)</h3>
+      <p>Small icon buttons in the top-right of the header — a sun/moon icon for theme and a flag/globe for language. One click from anywhere in the app.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Instant access, no navigation</li><li>Standard pattern (GitHub, VS Code)</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Adds icons to an already-busy TopBar</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Both — Settings Page + TopBar shortcuts</h3>
+      <p>Settings page is the "home" for preferences. TopBar also has the sun/moon + language icons as quick shortcuts. Clicking in TopBar changes it instantly; Settings page shows the current state.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Best of both worlds</li><li>Settings page feels "complete"</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More UI surface to build</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

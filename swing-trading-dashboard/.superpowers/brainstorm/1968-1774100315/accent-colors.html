@@ -1,0 +1,253 @@
+<style>
+  .accents { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+  .accent-card {
+    flex: 1; min-width: 200px;
+    border-radius: 10px; overflow: hidden;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+  .accent-card:hover { transform: translateY(-2px); }
+  .accent-card.selected { border-color: #fff !important; }
+
+  .accent-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 8px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: #111; border-bottom: 1px solid #222;
+  }
+  .accent-swatch { width: 12px; height: 12px; border-radius: 3px; }
+
+  .mock-widget { font-family: 'IBM Plex Mono', monospace; background: #0d0d0d; }
+  .mock-topbar {
+    padding: 6px 10px; font-size: 9px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    background: #111; border-bottom: 1px solid #1e1e1e;
+    display: flex; align-items: center; justify-content: space-between;
+    color: #555;
+  }
+  .mock-table { width: 100%; border-collapse: collapse; }
+  .mock-table th {
+    padding: 4px 8px; font-size: 8px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; text-align: right;
+    background: #111; border-bottom: 1px solid #1e1e1e;
+  }
+  .mock-table th:first-child { text-align: left; }
+  .mock-table td { padding: 5px 8px; font-size: 10px; text-align: right; }
+  .mock-table td:first-child { text-align: left; }
+
+  .mock-nav {
+    padding: 8px 6px; background: #111; border-right: 1px solid #1e1e1e;
+    display: flex; flex-direction: column; gap: 4px; align-items: center;
+  }
+  .nav-dot {
+    width: 28px; height: 28px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #444;
+  }
+
+  .mock-layout { display: flex; }
+</style>
+
+<h2>Accent Color — Pick a vibe</h2>
+<p class="subtitle">Charcoal background (A). Which accent feels right for a trading terminal?</p>
+
+<div class="accents">
+
+  <!-- 1: Pure White -->
+  <div class="accent-card" data-choice="white" onclick="toggleSelect(this)" style="border-color:#2a2a2a">
+    <div class="accent-label" style="color:#e0e0e0;">
+      White
+      <div class="accent-swatch" style="background:#ffffff; border:1px solid #444"></div>
+    </div>
+    <div class="mock-layout">
+      <div class="mock-nav">
+        <div class="nav-dot" style="background:rgba(255,255,255,0.12); color:#fff">⊞</div>
+        <div class="nav-dot">◎</div>
+        <div class="nav-dot">◈</div>
+      </div>
+      <div class="mock-widget" style="flex:1">
+        <div class="mock-topbar">
+          SCANNER <span style="color:#ffffff">▶ Run Scan</span>
+        </div>
+        <table class="mock-table">
+          <thead><tr>
+            <th style="color:#444">TICKER</th>
+            <th style="color:#fff">SCORE ▼</th>
+            <th style="color:#444">ENTRY</th>
+            <th style="color:#444">R:R</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-left:3px solid #fff; background:rgba(255,255,255,0.05)">
+              <td style="color:#fff; font-weight:700">NVDA <span style="color:#4a9eff; font-size:8px">●</span></td>
+              <td style="color:#00c87a">91</td>
+              <td style="color:#ccc">$874.20</td>
+              <td style="color:#00c87a">3.2×</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1e1e1e">
+              <td style="color:#ccc; font-weight:700">AAPL</td>
+              <td style="color:#00c87a">84</td>
+              <td style="color:#ccc">$189.50</td>
+              <td style="color:#00c87a">2.4×</td>
+            </tr>
+            <tr>
+              <td style="color:#ccc; font-weight:700">MSFT</td>
+              <td style="color:#888">74</td>
+              <td style="color:#ccc">$415.00</td>
+              <td style="color:#888">1.8×</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2: Electric Blue -->
+  <div class="accent-card" data-choice="blue" onclick="toggleSelect(this)" style="border-color:#2a2a2a">
+    <div class="accent-label" style="color:#e0e0e0;">
+      Electric Blue
+      <div class="accent-swatch" style="background:#4a9eff"></div>
+    </div>
+    <div class="mock-layout">
+      <div class="mock-nav">
+        <div class="nav-dot" style="background:rgba(74,158,255,0.15); color:#4a9eff">⊞</div>
+        <div class="nav-dot">◎</div>
+        <div class="nav-dot">◈</div>
+      </div>
+      <div class="mock-widget" style="flex:1">
+        <div class="mock-topbar">
+          SCANNER <span style="color:#4a9eff">▶ Run Scan</span>
+        </div>
+        <table class="mock-table">
+          <thead><tr>
+            <th style="color:#444">TICKER</th>
+            <th style="color:#4a9eff">SCORE ▼</th>
+            <th style="color:#444">ENTRY</th>
+            <th style="color:#444">R:R</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-left:3px solid #4a9eff; background:rgba(74,158,255,0.06)">
+              <td style="color:#4a9eff; font-weight:700">NVDA <span style="color:#4a9eff; font-size:8px">●</span></td>
+              <td style="color:#00c87a">91</td>
+              <td style="color:#ccc">$874.20</td>
+              <td style="color:#00c87a">3.2×</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1e1e1e">
+              <td style="color:#ccc; font-weight:700">AAPL</td>
+              <td style="color:#00c87a">84</td>
+              <td style="color:#ccc">$189.50</td>
+              <td style="color:#00c87a">2.4×</td>
+            </tr>
+            <tr>
+              <td style="color:#ccc; font-weight:700">MSFT</td>
+              <td style="color:#888">74</td>
+              <td style="color:#ccc">$415.00</td>
+              <td style="color:#888">1.8×</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3: Cyan -->
+  <div class="accent-card" data-choice="cyan" onclick="toggleSelect(this)" style="border-color:#2a2a2a">
+    <div class="accent-label" style="color:#e0e0e0;">
+      Cyan
+      <div class="accent-swatch" style="background:#00d4ff"></div>
+    </div>
+    <div class="mock-layout">
+      <div class="mock-nav">
+        <div class="nav-dot" style="background:rgba(0,212,255,0.12); color:#00d4ff">⊞</div>
+        <div class="nav-dot">◎</div>
+        <div class="nav-dot">◈</div>
+      </div>
+      <div class="mock-widget" style="flex:1">
+        <div class="mock-topbar">
+          SCANNER <span style="color:#00d4ff">▶ Run Scan</span>
+        </div>
+        <table class="mock-table">
+          <thead><tr>
+            <th style="color:#444">TICKER</th>
+            <th style="color:#00d4ff">SCORE ▼</th>
+            <th style="color:#444">ENTRY</th>
+            <th style="color:#444">R:R</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-left:3px solid #00d4ff; background:rgba(0,212,255,0.05)">
+              <td style="color:#00d4ff; font-weight:700">NVDA <span style="color:#00d4ff; font-size:8px">●</span></td>
+              <td style="color:#00c87a">91</td>
+              <td style="color:#ccc">$874.20</td>
+              <td style="color:#00c87a">3.2×</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1e1e1e">
+              <td style="color:#ccc; font-weight:700">AAPL</td>
+              <td style="color:#00c87a">84</td>
+              <td style="color:#ccc">$189.50</td>
+              <td style="color:#00c87a">2.4×</td>
+            </tr>
+            <tr>
+              <td style="color:#ccc; font-weight:700">MSFT</td>
+              <td style="color:#888">74</td>
+              <td style="color:#ccc">$415.00</td>
+              <td style="color:#888">1.8×</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4: Soft Green (distinct from "go" green) -->
+  <div class="accent-card" data-choice="lime" onclick="toggleSelect(this)" style="border-color:#2a2a2a">
+    <div class="accent-label" style="color:#e0e0e0;">
+      Lime Green
+      <div class="accent-swatch" style="background:#39e75f"></div>
+    </div>
+    <div class="mock-layout">
+      <div class="mock-nav">
+        <div class="nav-dot" style="background:rgba(57,231,95,0.12); color:#39e75f">⊞</div>
+        <div class="nav-dot">◎</div>
+        <div class="nav-dot">◈</div>
+      </div>
+      <div class="mock-widget" style="flex:1">
+        <div class="mock-topbar">
+          SCANNER <span style="color:#39e75f">▶ Run Scan</span>
+        </div>
+        <table class="mock-table">
+          <thead><tr>
+            <th style="color:#444">TICKER</th>
+            <th style="color:#39e75f">SCORE ▼</th>
+            <th style="color:#444">ENTRY</th>
+            <th style="color:#444">R:R</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-left:3px solid #39e75f; background:rgba(57,231,95,0.05)">
+              <td style="color:#39e75f; font-weight:700">NVDA <span style="color:#4a9eff; font-size:8px">●</span></td>
+              <td style="color:#00c87a">91</td>
+              <td style="color:#ccc">$874.20</td>
+              <td style="color:#00c87a">3.2×</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1e1e1e">
+              <td style="color:#ccc; font-weight:700">AAPL</td>
+              <td style="color:#00c87a">84</td>
+              <td style="color:#ccc">$189.50</td>
+              <td style="color:#00c87a">2.4×</td>
+            </tr>
+            <tr>
+              <td style="color:#ccc; font-weight:700">MSFT</td>
+              <td style="color:#888">74</td>
+              <td style="color:#ccc">$415.00</td>
+              <td style="color:#888">1.8×</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:16px; padding:10px 14px; border-radius:8px; background:rgba(255,255,255,0.04); font-size:12px; color:#666; line-height:1.6;">
+  The accent is used on: selected row highlight, active nav icon, sort arrows, TV badge, run-scan button, scrollbar hover. Green <span style="color:#00c87a">■</span> stays as the "positive / go" signal — accent is purely for UI selection/interaction.
+</div>

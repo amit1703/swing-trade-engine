@@ -1,0 +1,159 @@
+<h2>IS/OOS Tab — Layout Options</h2>
+<p class="subtitle">How should the results be displayed after both periods run?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="A" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:11px;padding:12px;background:#0a0a0a;border-radius:6px;color:#aaa">
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <span style="background:#111;border:1px solid #333;padding:3px 10px;border-radius:4px;color:#aaa;font-size:10px">Live Trades</span>
+          <span style="background:#111;border:1px solid #333;padding:3px 10px;border-radius:4px;color:#aaa;font-size:10px">Full Backtest</span>
+          <span style="background:#111;border:1px solid #50d8f0;padding:3px 10px;border-radius:4px;color:#50d8f0;font-size:10px">IS / OOS Split</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <div style="background:#111;border:1px solid #1e1e1e;border-radius:4px;padding:4px 8px;font-size:10px;color:#555">2017 → 2021</div>
+          <div style="color:#555;font-size:10px;padding:4px">IS</div>
+          <div style="background:#111;border:1px solid #1e1e1e;border-radius:4px;padding:4px 8px;font-size:10px;color:#555">2022 → 2024</div>
+          <div style="color:#555;font-size:10px;padding:4px">OOS</div>
+          <div style="flex:1"></div>
+          <div style="background:rgba(80,216,240,0.1);border:1px solid rgba(80,216,240,0.3);border-radius:4px;padding:3px 10px;font-size:10px;color:#50d8f0">RUN</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:8px">
+            <div style="color:#50d8f0;font-size:9px;margin-bottom:6px;letter-spacing:0.08em">IN-SAMPLE · 2017–2021</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+              <div style="background:#0d0d0d;border-radius:4px;padding:4px 6px"><div style="color:#555;font-size:8px">WIN RATE</div><div style="color:#e0e0e0;font-size:13px;font-weight:bold">62.4%</div></div>
+              <div style="background:#0d0d0d;border-radius:4px;padding:4px 6px"><div style="color:#555;font-size:8px">PROFIT F.</div><div style="color:#e0e0e0;font-size:13px;font-weight:bold">1.84</div></div>
+              <div style="background:#0d0d0d;border-radius:4px;padding:4px 6px"><div style="color:#555;font-size:8px">AVG R</div><div style="color:#4caf50;font-size:13px;font-weight:bold">+0.38R</div></div>
+              <div style="background:#0d0d0d;border-radius:4px;padding:4px 6px"><div style="color:#555;font-size:8px">TRADES</div><div style="color:#e0e0e0;font-size:13px;font-weight:bold">312</div></div>
+            </div>
+          </div>
+          <div style="background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:8px">
+            <div style="color:#f5a623;font-size:9px;margin-bottom:6px;letter-spacing:0.08em">OUT-OF-SAMPLE · 2022–2024</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+              <div style="background:#0d0d0d;border-radius:4px;padding:4px 6px"><div style="color:#555;font-size:8px">WIN RATE</div><div style="color:#e0e0e0;font-size:13px;font-weight:bold">58.1%</div></div>
+              <div style="background:#0d0d0d;border-radius:4px;padding:4px 6px"><div style="color:#555;font-size:8px">PROFIT F.</div><div style="color:#e0e0e0;font-size:13px;font-weight:bold">1.61</div></div>
+              <div style="background:#0d0d0d;border-radius:4px;padding:4px 6px"><div style="color:#555;font-size:8px">AVG R</div><div style="color:#4caf50;font-size:13px;font-weight:bold">+0.29R</div></div>
+              <div style="background:#0d0d0d;border-radius:4px;padding:4px 6px"><div style="color:#555;font-size:8px">TRADES</div><div style="color:#e0e0e0;font-size:13px;font-weight:bold">187</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Side by Side</h3>
+      <p>IS and OOS stat cards shown in two columns. Immediately comparable. Degradation is obvious at a glance.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="B" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:11px;padding:12px;background:#0a0a0a;border-radius:6px;color:#aaa">
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <span style="background:#111;border:1px solid #333;padding:3px 10px;border-radius:4px;color:#aaa;font-size:10px">Live Trades</span>
+          <span style="background:#111;border:1px solid #333;padding:3px 10px;border-radius:4px;color:#aaa;font-size:10px">Full Backtest</span>
+          <span style="background:#111;border:1px solid #50d8f0;padding:3px 10px;border-radius:4px;color:#50d8f0;font-size:10px">IS / OOS Split</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <div style="background:#111;border:1px solid #1e1e1e;border-radius:4px;padding:4px 8px;font-size:10px;color:#555">2017 → 2021</div>
+          <div style="color:#555;font-size:10px;padding:4px">IS</div>
+          <div style="background:#111;border:1px solid #1e1e1e;border-radius:4px;padding:4px 8px;font-size:10px;color:#555">2022 → 2024</div>
+          <div style="color:#555;font-size:10px;padding:4px">OOS</div>
+          <div style="flex:1"></div>
+          <div style="background:rgba(80,216,240,0.1);border:1px solid rgba(80,216,240,0.3);border-radius:4px;padding:3px 10px;font-size:10px;color:#50d8f0">RUN</div>
+        </div>
+        <div style="background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:8px;margin-bottom:6px">
+          <div style="display:grid;grid-template-columns:120px 1fr 1fr 1fr 1fr;gap:6px;align-items:center">
+            <div style="color:#555;font-size:9px"></div>
+            <div style="color:#555;font-size:9px;text-align:center">WIN RATE</div>
+            <div style="color:#555;font-size:9px;text-align:center">PROFIT F.</div>
+            <div style="color:#555;font-size:9px;text-align:center">AVG R</div>
+            <div style="color:#555;font-size:9px;text-align:center">TRADES</div>
+            <div style="color:#50d8f0;font-size:9px;letter-spacing:0.06em">IN-SAMPLE</div>
+            <div style="color:#e0e0e0;font-size:12px;font-weight:bold;text-align:center">62.4%</div>
+            <div style="color:#e0e0e0;font-size:12px;font-weight:bold;text-align:center">1.84</div>
+            <div style="color:#4caf50;font-size:12px;font-weight:bold;text-align:center">+0.38R</div>
+            <div style="color:#e0e0e0;font-size:12px;font-weight:bold;text-align:center">312</div>
+            <div style="color:#f5a623;font-size:9px;letter-spacing:0.06em">OUT-OF-SAMPLE</div>
+            <div style="color:#e0e0e0;font-size:12px;font-weight:bold;text-align:center">58.1%</div>
+            <div style="color:#e0e0e0;font-size:12px;font-weight:bold;text-align:center">1.61</div>
+            <div style="color:#4caf50;font-size:12px;font-weight:bold;text-align:center">+0.29R</div>
+            <div style="color:#e0e0e0;font-size:12px;font-weight:bold;text-align:center">187</div>
+            <div style="color:#555;font-size:9px">DELTA</div>
+            <div style="color:#e05353;font-size:11px;font-weight:bold;text-align:center">−4.3%</div>
+            <div style="color:#e05353;font-size:11px;font-weight:bold;text-align:center">−0.23</div>
+            <div style="color:#e05353;font-size:11px;font-weight:bold;text-align:center">−0.09R</div>
+            <div style="color:#555;font-size:11px;text-align:center">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Table with Delta Row</h3>
+      <p>IS and OOS as rows in a table, plus a delta row showing degradation per metric. Precise and compact.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="C" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-family:monospace;font-size:11px;padding:12px;background:#0a0a0a;border-radius:6px;color:#aaa">
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <div style="background:#111;border:1px solid #1e1e1e;border-radius:4px;padding:4px 8px;font-size:10px;color:#555">2017 → 2021</div>
+          <div style="color:#555;font-size:10px;padding:4px">IS</div>
+          <div style="background:#111;border:1px solid #1e1e1e;border-radius:4px;padding:4px 8px;font-size:10px;color:#555">2022 → 2024</div>
+          <div style="color:#555;font-size:10px;padding:4px">OOS</div>
+          <div style="flex:1"></div>
+          <div style="background:rgba(80,216,240,0.1);border:1px solid rgba(80,216,240,0.3);border-radius:4px;padding:3px 10px;font-size:10px;color:#50d8f0">RUN</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+          <div style="background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:8px">
+            <div style="color:#50d8f0;font-size:9px;margin-bottom:4px">IN-SAMPLE</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <div style="background:#0d0d0d;border-radius:4px;padding:3px 6px;font-size:10px;color:#e0e0e0">62.4% WR</div>
+              <div style="background:#0d0d0d;border-radius:4px;padding:3px 6px;font-size:10px;color:#e0e0e0">PF 1.84</div>
+              <div style="background:#0d0d0d;border-radius:4px;padding:3px 6px;font-size:10px;color:#4caf50">+0.38R</div>
+            </div>
+          </div>
+          <div style="background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:8px">
+            <div style="color:#f5a623;font-size:9px;margin-bottom:4px">OUT-OF-SAMPLE</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <div style="background:#0d0d0d;border-radius:4px;padding:3px 6px;font-size:10px;color:#e0e0e0">58.1% WR</div>
+              <div style="background:#0d0d0d;border-radius:4px;padding:3px 6px;font-size:10px;color:#e0e0e0">PF 1.61</div>
+              <div style="background:#0d0d0d;border-radius:4px;padding:3px 6px;font-size:10px;color:#4caf50">+0.29R</div>
+            </div>
+          </div>
+        </div>
+        <div style="background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:8px">
+          <div style="color:#555;font-size:9px;margin-bottom:6px">EQUITY CURVES</div>
+          <div style="display:flex;align-items:flex-end;gap:2px;height:40px">
+            <div style="flex:1;display:flex;align-items:flex-end;gap:1px">
+              <div style="width:6px;background:#50d8f033;border-radius:1px" style="height:60%"></div>
+              <div style="width:6px;height:70%;background:#50d8f044;border-radius:1px"></div>
+              <div style="width:6px;height:85%;background:#50d8f055;border-radius:1px"></div>
+              <div style="width:6px;height:90%;background:#50d8f066;border-radius:1px"></div>
+              <div style="width:6px;height:100%;background:#50d8f0;border-radius:1px"></div>
+            </div>
+            <div style="width:1px;height:100%;background:#333"></div>
+            <div style="flex:1;display:flex;align-items:flex-end;gap:1px">
+              <div style="width:6px;height:50%;background:#f5a62344;border-radius:1px"></div>
+              <div style="width:6px;height:55%;background:#f5a62355;border-radius:1px"></div>
+              <div style="width:6px;height:60%;background:#f5a62366;border-radius:1px"></div>
+              <div style="width:6px;height:58%;background:#f5a62377;border-radius:1px"></div>
+              <div style="width:6px;height:65%;background:#f5a623;border-radius:1px"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <div style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:2px;background:#50d8f0"></div><span style="font-size:8px;color:#555">IS curve</span></div>
+            <div style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:2px;background:#f5a623"></div><span style="font-size:8px;color:#555">OOS curve</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Cards + Dual Equity Curve</h3>
+      <p>Compact stat chips per period, plus both equity curves overlaid on one chart. Best for spotting if OOS equity curve diverges from IS.</p>
+    </div>
+  </div>
+
+</div>

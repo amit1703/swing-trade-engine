@@ -1,0 +1,247 @@
+<style>
+  .schemes { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px; }
+  .scheme-card {
+    flex: 1; min-width: 260px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+  .scheme-card:hover { transform: translateY(-2px); }
+  .scheme-card.selected { border-color: #F5A623 !important; }
+
+  .scheme-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 8px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .scheme-badge {
+    font-size: 9px; padding: 2px 7px; border-radius: 999px;
+    font-weight: 700; letter-spacing: 0.06em;
+  }
+
+  /* ── MOCK DASHBOARD WIDGET ── */
+  .mock-widget { font-family: 'IBM Plex Mono', monospace; overflow: hidden; }
+  .mock-topbar {
+    padding: 6px 10px; font-size: 9px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .mock-table { width: 100%; border-collapse: collapse; }
+  .mock-table th {
+    padding: 4px 8px; font-size: 8px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase; text-align: right;
+  }
+  .mock-table th:first-child { text-align: left; }
+  .mock-table td {
+    padding: 5px 8px; font-size: 10px; text-align: right;
+  }
+  .mock-table td:first-child { text-align: left; }
+  .mock-regime {
+    padding: 6px 10px; font-size: 9px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .mock-dot { width: 6px; height: 6px; border-radius: 50%; background: #00c87a; }
+  .mock-score-bar {
+    flex: 1; height: 3px; border-radius: 2px; overflow: hidden;
+  }
+  .mock-score-fill { height: 100%; width: 73%; background: #00c87a; border-radius: 2px; }
+  .mock-footer {
+    padding: 4px 10px; font-size: 8px; letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+</style>
+
+<h2>Color Scheme — Which feels right?</h2>
+<p class="subtitle">Same layout, three different palettes. Accent, green, and red stay the same.</p>
+
+<div class="schemes">
+
+  <!-- A: Pure Charcoal -->
+  <div class="scheme-card" data-choice="a" onclick="toggleSelect(this)" style="border-color:#2a2a2a">
+    <div class="scheme-label" style="background:#111; color:#e0e0e0;">
+      A — Pure Charcoal
+      <span class="scheme-badge" style="background:rgba(255,255,255,0.07); color:#888">neutral grey</span>
+    </div>
+    <div class="mock-widget" style="background:#0d0d0d;">
+      <div class="mock-topbar" style="background:#111; border-bottom:1px solid #222; color:#888;">
+        SCANNER <span style="color:#F5A623">▶ Run Scan</span>
+      </div>
+      <div class="mock-regime" style="border-bottom:1px solid #1e1e1e; color:#888;">
+        <div class="mock-dot"></div>
+        <span style="color:#00c87a">AGGRESSIVE</span>
+        <div class="mock-score-bar" style="background:#222">
+          <div class="mock-score-fill"></div>
+        </div>
+        <span style="color:#888">73</span>
+      </div>
+      <table class="mock-table" style="background:#0d0d0d">
+        <thead style="background:#111; border-bottom:1px solid #222">
+          <tr>
+            <th style="color:#555">TICKER</th>
+            <th style="color:#F5A623">SCORE ▼</th>
+            <th style="color:#555">ENTRY</th>
+            <th style="color:#555">R:R</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-left:3px solid #F5A623; background:rgba(245,166,35,0.05)">
+            <td style="color:#F5A623; font-weight:700">NVDA<span style="color:#4a9eff; font-size:8px; margin-left:4px">●</span></td>
+            <td style="color:#00c87a">91</td>
+            <td style="color:#ccc">$874.20</td>
+            <td style="color:#00c87a">3.2×</td>
+          </tr>
+          <tr style="border-left:3px solid transparent; border-bottom:1px solid #1e1e1e">
+            <td style="color:#ccc; font-weight:700">AAPL</td>
+            <td style="color:#00c87a">84</td>
+            <td style="color:#ccc">$189.50</td>
+            <td style="color:#00c87a">2.4×</td>
+          </tr>
+          <tr style="border-left:3px solid transparent; border-bottom:1px solid #1e1e1e">
+            <td style="color:#ccc; font-weight:700">MSFT</td>
+            <td style="color:#F5A623">74</td>
+            <td style="color:#ccc">$415.00</td>
+            <td style="color:#888">1.8×</td>
+          </tr>
+          <tr style="border-left:3px solid transparent;">
+            <td style="color:#ccc; font-weight:700">META</td>
+            <td style="color:#F5A623">71</td>
+            <td style="color:#ccc">$512.30</td>
+            <td style="color:#00c87a">2.1×</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="mock-footer" style="color:#444; background:#111; border-top:1px solid #1e1e1e">
+        4 setups · last scan 2 min ago
+      </div>
+    </div>
+  </div>
+
+  <!-- B: Warm Ash -->
+  <div class="scheme-card" data-choice="b" onclick="toggleSelect(this)" style="border-color:#2c2925">
+    <div class="scheme-label" style="background:#141210; color:#d8d0c8;">
+      B — Warm Ash
+      <span class="scheme-badge" style="background:rgba(255,255,255,0.07); color:#888">subtle warm</span>
+    </div>
+    <div class="mock-widget" style="background:#0f0e0c;">
+      <div class="mock-topbar" style="background:#141210; border-bottom:1px solid #262320; color:#7a7068;">
+        SCANNER <span style="color:#F5A623">▶ Run Scan</span>
+      </div>
+      <div class="mock-regime" style="border-bottom:1px solid #201e1b; color:#7a7068;">
+        <div class="mock-dot"></div>
+        <span style="color:#00c87a">AGGRESSIVE</span>
+        <div class="mock-score-bar" style="background:#242220">
+          <div class="mock-score-fill"></div>
+        </div>
+        <span style="color:#7a7068">73</span>
+      </div>
+      <table class="mock-table" style="background:#0f0e0c">
+        <thead style="background:#141210; border-bottom:1px solid #262320">
+          <tr>
+            <th style="color:#5a5248">TICKER</th>
+            <th style="color:#F5A623">SCORE ▼</th>
+            <th style="color:#5a5248">ENTRY</th>
+            <th style="color:#5a5248">R:R</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-left:3px solid #F5A623; background:rgba(245,166,35,0.05)">
+            <td style="color:#F5A623; font-weight:700">NVDA<span style="color:#4a9eff; font-size:8px; margin-left:4px">●</span></td>
+            <td style="color:#00c87a">91</td>
+            <td style="color:#cfc8c0">$874.20</td>
+            <td style="color:#00c87a">3.2×</td>
+          </tr>
+          <tr style="border-left:3px solid transparent; border-bottom:1px solid #201e1b">
+            <td style="color:#cfc8c0; font-weight:700">AAPL</td>
+            <td style="color:#00c87a">84</td>
+            <td style="color:#cfc8c0">$189.50</td>
+            <td style="color:#00c87a">2.4×</td>
+          </tr>
+          <tr style="border-left:3px solid transparent; border-bottom:1px solid #201e1b">
+            <td style="color:#cfc8c0; font-weight:700">MSFT</td>
+            <td style="color:#F5A623">74</td>
+            <td style="color:#cfc8c0">$415.00</td>
+            <td style="color:#7a7068">1.8×</td>
+          </tr>
+          <tr style="border-left:3px solid transparent;">
+            <td style="color:#cfc8c0; font-weight:700">META</td>
+            <td style="color:#F5A623">71</td>
+            <td style="color:#cfc8c0">$512.30</td>
+            <td style="color:#00c87a">2.1×</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="mock-footer" style="color:#3d3a36; background:#141210; border-top:1px solid #201e1b">
+        4 setups · last scan 2 min ago
+      </div>
+    </div>
+  </div>
+
+  <!-- C: Steel (current desaturated) -->
+  <div class="scheme-card" data-choice="c" onclick="toggleSelect(this)" style="border-color:#252a30">
+    <div class="scheme-label" style="background:#131618; color:#c8cdd6;">
+      C — Cool Steel
+      <span class="scheme-badge" style="background:rgba(255,255,255,0.07); color:#888">desaturated blue</span>
+    </div>
+    <div class="mock-widget" style="background:#0d1014;">
+      <div class="mock-topbar" style="background:#131618; border-bottom:1px solid #1f2428; color:#525e6a;">
+        SCANNER <span style="color:#F5A623">▶ Run Scan</span>
+      </div>
+      <div class="mock-regime" style="border-bottom:1px solid #1a1f24; color:#525e6a;">
+        <div class="mock-dot"></div>
+        <span style="color:#00c87a">AGGRESSIVE</span>
+        <div class="mock-score-bar" style="background:#1f2428">
+          <div class="mock-score-fill"></div>
+        </div>
+        <span style="color:#525e6a">73</span>
+      </div>
+      <table class="mock-table" style="background:#0d1014">
+        <thead style="background:#131618; border-bottom:1px solid #1f2428">
+          <tr>
+            <th style="color:#40505e">TICKER</th>
+            <th style="color:#F5A623">SCORE ▼</th>
+            <th style="color:#40505e">ENTRY</th>
+            <th style="color:#40505e">R:R</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-left:3px solid #F5A623; background:rgba(245,166,35,0.05)">
+            <td style="color:#F5A623; font-weight:700">NVDA<span style="color:#4a9eff; font-size:8px; margin-left:4px">●</span></td>
+            <td style="color:#00c87a">91</td>
+            <td style="color:#c0c8d0">$874.20</td>
+            <td style="color:#00c87a">3.2×</td>
+          </tr>
+          <tr style="border-left:3px solid transparent; border-bottom:1px solid #1a1f24">
+            <td style="color:#c0c8d0; font-weight:700">AAPL</td>
+            <td style="color:#00c87a">84</td>
+            <td style="color:#c0c8d0">$189.50</td>
+            <td style="color:#00c87a">2.4×</td>
+          </tr>
+          <tr style="border-left:3px solid transparent; border-bottom:1px solid #1a1f24">
+            <td style="color:#c0c8d0; font-weight:700">MSFT</td>
+            <td style="color:#F5A623">74</td>
+            <td style="color:#c0c8d0">$415.00</td>
+            <td style="color:#525e6a">1.8×</td>
+          </tr>
+          <tr style="border-left:3px solid transparent;">
+            <td style="color:#c0c8d0; font-weight:700">META</td>
+            <td style="color:#F5A623">71</td>
+            <td style="color:#c0c8d0">$512.30</td>
+            <td style="color:#00c87a">2.1×</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="mock-footer" style="color:#2e3840; background:#131618; border-top:1px solid #1a1f24">
+        4 setups · last scan 2 min ago
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:16px; padding:10px 14px; border-radius:8px; background:rgba(255,255,255,0.04); font-size:12px; color:#888; line-height:1.6;">
+  All three keep: amber accent <span style="color:#F5A623">■</span>, green for go <span style="color:#00c87a">■</span>, red for halt <span style="color:#ff2d55">■</span>.<br>
+  Only the backgrounds, borders, and muted text colors change.
+</div>

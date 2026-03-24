@@ -1,0 +1,134 @@
+<h2>Proposed Mobile Layout</h2>
+<p class="subtitle">Here's what the redesigned phone view will look like. Review each section, then confirm below.</p>
+
+<div style="display:flex;gap:24px;flex-wrap:wrap;justify-content:center;margin-bottom:24px">
+
+  <!-- Phone 1: Scanner page -->
+  <div style="text-align:center">
+    <div class="label" style="margin-bottom:8px">Scanner page</div>
+    <div style="width:200px;height:400px;background:#000;border-radius:20px;border:2px solid #333;overflow:hidden;display:flex;flex-direction:column;font-family:monospace;position:relative">
+      <!-- TopBar -->
+      <div style="background:#111;padding:8px 10px;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <span style="font-size:9px;color:#e0e0e0;font-weight:700;letter-spacing:0.1em">SCANNER</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <div style="background:#00c87a22;border:1px solid #00c87a44;border-radius:4px;padding:2px 6px;font-size:7px;color:#00c87a">AGG 73</div>
+          <div style="background:#50d8f022;border:1px solid #50d8f044;border-radius:4px;padding:2px 6px;font-size:7px;color:#50d8f0">▶ SCAN</div>
+        </div>
+      </div>
+      <!-- Chart area -->
+      <div style="background:#0d0d0d;flex:0 0 130px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #1e1e1e">
+        <span style="font-size:8px;color:#333">[ chart ]</span>
+      </div>
+      <!-- Table header -->
+      <div style="background:#111;padding:4px 8px;display:flex;gap:0;border-bottom:1px solid #1e1e1e;flex-shrink:0">
+        <span style="flex:1.5;font-size:7px;color:#555;text-transform:uppercase">Ticker</span>
+        <span style="flex:1;font-size:7px;color:#555;text-transform:uppercase;text-align:right">Scr</span>
+        <span style="flex:1;font-size:7px;color:#555;text-transform:uppercase;text-align:right">Entry</span>
+        <span style="flex:1;font-size:7px;color:#555;text-transform:uppercase;text-align:right">R:R</span>
+      </div>
+      <!-- Table rows -->
+      <div style="flex:1;overflow:hidden">
+        <div style="padding:4px 8px;display:flex;border-bottom:1px solid #1e1e1e;border-left:3px solid #50d8f055">
+          <span style="flex:1.5;font-size:8px;color:#50d8f0;font-weight:700">NVDA●</span>
+          <span style="flex:1;font-size:8px;color:#00c87a;text-align:right">91</span>
+          <span style="flex:1;font-size:8px;color:#e0e0e0;text-align:right">$874</span>
+          <span style="flex:1;font-size:8px;color:#00c87a;text-align:right">3.2×</span>
+        </div>
+        <div style="padding:4px 8px;display:flex;border-bottom:1px solid #1e1e1e">
+          <span style="flex:1.5;font-size:8px;color:#e0e0e0;font-weight:700">AAPL</span>
+          <span style="flex:1;font-size:8px;color:#50d8f0;text-align:right">84</span>
+          <span style="flex:1;font-size:8px;color:#e0e0e0;text-align:right">$189</span>
+          <span style="flex:1;font-size:8px;color:#00c87a;text-align:right">2.4×</span>
+        </div>
+        <div style="padding:4px 8px;display:flex;border-bottom:1px solid #1e1e1e">
+          <span style="flex:1.5;font-size:8px;color:#e0e0e0;font-weight:700">MSFT</span>
+          <span style="flex:1;font-size:8px;color:#555;text-align:right">74</span>
+          <span style="flex:1;font-size:8px;color:#e0e0e0;text-align:right">$415</span>
+          <span style="flex:1;font-size:8px;color:#555;text-align:right">1.8×</span>
+        </div>
+      </div>
+      <!-- Bottom Nav -->
+      <div style="background:#111;border-top:1px solid #1e1e1e;display:flex;flex-shrink:0">
+        <div style="flex:1;padding:6px 2px;text-align:center">
+          <div style="font-size:12px">⬜</div>
+          <div style="font-size:6px;color:#50d8f0;margin-top:1px">Scanner</div>
+        </div>
+        <div style="flex:1;padding:6px 2px;text-align:center">
+          <div style="font-size:12px">⬜</div>
+          <div style="font-size:6px;color:#555;margin-top:1px">WL</div>
+        </div>
+        <div style="flex:1;padding:6px 2px;text-align:center">
+          <div style="font-size:12px">⬜</div>
+          <div style="font-size:6px;color:#555;margin-top:1px">Favs</div>
+        </div>
+        <div style="flex:1;padding:6px 2px;text-align:center">
+          <div style="font-size:12px">⬜</div>
+          <div style="font-size:6px;color:#555;margin-top:1px">Port</div>
+        </div>
+        <div style="flex:1;padding:6px 2px;text-align:center">
+          <div style="font-size:12px">⬜</div>
+          <div style="font-size:6px;color:#555;margin-top:1px">More</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phone 2: Signal sheet open -->
+  <div style="text-align:center">
+    <div class="label" style="margin-bottom:8px">After tapping a row</div>
+    <div style="width:200px;height:400px;background:#000;border-radius:20px;border:2px solid #333;overflow:hidden;display:flex;flex-direction:column;font-family:monospace;position:relative">
+      <!-- Dimmed background -->
+      <div style="position:absolute;inset:0;background:rgba(0,0,0,0.6);z-index:1"></div>
+      <!-- Bottom sheet -->
+      <div style="position:absolute;bottom:0;left:0;right:0;background:#131313;border-radius:14px 14px 0 0;border-top:1px solid #222;z-index:2;padding:12px 10px">
+        <!-- Handle -->
+        <div style="width:32px;height:3px;background:#333;border-radius:2px;margin:0 auto 10px"></div>
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div>
+            <div style="font-size:16px;font-weight:700;color:#e0e0e0;letter-spacing:-0.01em">NVDA</div>
+            <div style="font-size:8px;color:#555;margin-top:1px">VCP</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="width:36px;height:36px;border-radius:50%;background:conic-gradient(#00c87a 328deg,#1e1e1e 0);display:flex;align-items:center;justify-content:center">
+              <div style="width:26px;height:26px;border-radius:50%;background:#131313;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#00c87a">91</div>
+            </div>
+            <div style="font-size:14px;color:#555;cursor:pointer">✕</div>
+          </div>
+        </div>
+        <!-- Signals mini -->
+        <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between"><span style="font-size:8px;color:#555">Relative Strength</span><span style="font-size:8px;color:#00c87a;font-weight:700">RS+18</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="font-size:8px;color:#555">Entry</span><span style="font-size:8px;color:#e0e0e0;font-weight:700">$874.20</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="font-size:8px;color:#555">Stop</span><span style="font-size:8px;color:#ff2d55;font-weight:700">$834.00</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="font-size:8px;color:#555">R:R</span><span style="font-size:8px;color:#00c87a;font-weight:700">3.2×</span></div>
+        </div>
+        <!-- Verdict -->
+        <div style="background:#00c87a18;border:1px solid #00c87a33;border-radius:6px;padding:6px 8px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:7px;color:#555;text-transform:uppercase;letter-spacing:0.08em">AI Verdict</span>
+          <span style="font-size:8px;color:#00c87a;font-weight:700">TRADE CANDIDATE</span>
+        </div>
+        <!-- TV link -->
+        <div style="margin-top:8px;background:#50d8f010;border:1px solid #50d8f025;border-radius:6px;padding:5px;text-align:center;font-size:8px;color:#50d8f0;font-weight:700">OPEN IN TRADINGVIEW →</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>Looks good — build it</h3>
+      <p>Bottom tab nav + slide-up signal sheet + full-width content layout</p>
+    </div>
+  </div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)">
+    <div class="letter">↩</div>
+    <div class="content">
+      <h3>Change something</h3>
+      <p>Tell me what you'd like different in the terminal</p>
+    </div>
+  </div>
+</div>
