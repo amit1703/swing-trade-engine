@@ -1259,9 +1259,10 @@ async def _run_scan(
 
         if not regime["is_bullish"]:
             log.info(
-                "Regime DEFENSIVE (score=%d < %d) — VCP disabled; "
-                "Pullback/Base/ResBreakout/Options still active (scoring penalises regime)%s",
+                "Regime DEFENSIVE (score=%d < %d) — all engines active; "
+                "scoring applies regime penalty (0 pts) and lower score gate (%d)%s",
                 regime["regime_score"], REGIME_SELECTIVE_THRESHOLD,
+                MIN_SETUP_SCORE_DEFENSIVE,
                 "  [force=True]" if force else "",
             )
 
@@ -1407,9 +1408,9 @@ async def _run_scan(
                 # Detect trendline early (used by VCP follow-up, near-breakout, and pullback)
                 tl = await loop.run_in_executor(None, detect_trendline, ticker, df)
 
-                # ── Engine 2: VCP (SELECTIVE/AGGRESSIVE only) ────────────────────
+                # ── Engine 2: VCP (all regimes) ──────────────────────────────────
                 vcp = None
-                if regime["is_bullish"] or force:
+                if True:
                     vcp = await loop.run_in_executor(
                         None, scan_vcp, ticker, df, zones, spy_3m_return,
                         rs_ratio, rs_52w_high, rs_blue_dot, rs_score
