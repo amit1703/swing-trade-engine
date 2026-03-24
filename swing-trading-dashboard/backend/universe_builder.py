@@ -25,11 +25,17 @@ import yfinance as yf
 # Module-level constants
 # ---------------------------------------------------------------------------
 
+from constants import (
+    UNIVERSE_MIN_PRICE as DEFAULT_MIN_PRICE,
+    UNIVERSE_MIN_AVG_VOLUME as DEFAULT_MIN_AVG_VOLUME,
+    UNIVERSE_MIN_DOLLAR_VOL as _DEFAULT_MIN_DOLLAR_VOL,
+    RS_RANK_CACHE_FILE,
+    UNIVERSE_RS_FLOOR,
+)
+
 UNIVERSE_FILE = "active_universe.json"
 SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 SEC_USER_AGENT = "SwingTradingDashboard admin@example.com"
-DEFAULT_MIN_PRICE = 10.0
-DEFAULT_MIN_AVG_VOLUME = 500_000
 BATCH_SIZE = 250        # larger batches → fewer sleeps → ~2min vs ~8min for 5000 tickers
 BATCH_DELAY = 1.0       # reduced from 2.0s
 SECTOR_BATCH_SIZE = 50
@@ -378,11 +384,43 @@ def build_sector_map(
     return sector_map
 
 
+def _apply_rs_prefilter(
+    tickers: list,
+    rs_cache_file: str,
+    rs_floor: float,
+    max_age_days: int = 7,
+) -> list:
+    """
+    Exclude tickers with RS rank < rs_floor using the persisted RS cache.
+    Returns the full ticker list unchanged if cache is missing or too old.
+    """
+    try:
+        if not os.path.exists(rs_cache_file):
+            return tickers
+        with open(rs_cache_file, "r", encoding="utf-8") as fh:
+            cache = json.load(fh)
+        computed_at = datetime.fromisoformat(cache["_meta"]["computed_at"])
+        age_days = (datetime.utcnow() - computed_at).total_seconds() / 86400
+        if age_days > max_age_days:
+            logger.info("RS pre-filter: cache is %.1f days old (> %d) — skipping", age_days, max_age_days)
+            return tickers
+        original_count = len(tickers)
+        kept = [t for t in tickers if cache.get(t, rs_floor) >= rs_floor]
+        logger.info(
+            "RS pre-filter: %d → %d tickers (removed %d with RS < %.0f)",
+            original_count, len(kept), original_count - len(kept), rs_floor,
+        )
+        return kept
+    except Exception as exc:
+        logger.warning("RS pre-filter failed (%s) — skipping", exc)
+        return tickers
+
+
 def build_universe(
     min_price: float = DEFAULT_MIN_PRICE,
     min_avg_volume: int = DEFAULT_MIN_AVG_VOLUME,
     min_atr_pct: float = 0.0,
-    min_dollar_volume: float = 0.0,
+    min_dollar_volume: float = _DEFAULT_MIN_DOLLAR_VOL,
 ) -> dict:
     """Orchestrate the full universe-building pipeline.
 
@@ -409,6 +447,9 @@ def build_universe(
 
     # Step 3 — price / volume filter
     filtered = filter_price_volume(candidates, min_price, min_avg_volume, min_atr_pct, min_dollar_volume)
+
+    # RS pre-filter (uses cached rank map to exclude laggards early)
+    filtered = _apply_rs_prefilter(filtered, RS_RANK_CACHE_FILE, UNIVERSE_RS_FLOOR)
 
     # Step 4 — sector map
     sectors = build_sector_map(filtered)

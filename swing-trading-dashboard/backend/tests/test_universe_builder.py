@@ -470,7 +470,7 @@ class TestFilterPriceVolumeDollarVolumeGate:
         """min_dollar_volume=0.0 (default) → gate skipped entirely."""
         mock_dl.return_value = self._make_flat_df(price=10.0, avg_vol=1_000_000)
         result = filter_price_volume(
-            ["ANY"], min_avg_volume=500_000, min_dollar_volume=0.0
+            ["ANY"], min_price=10.0, min_avg_volume=500_000, min_dollar_volume=0.0
         )
         assert result == ["ANY"]
 
@@ -496,3 +496,76 @@ class TestBuildUniverseMetadataFields:
         assert meta["ticker_count"] == len(result["tickers"])
         assert "min_dollar_volume" in meta["filters"]
         assert meta["filters"]["min_dollar_volume"] == 25_000_000
+
+
+# ── Tighter defaults tests ────────────────────────────────────────────────────
+import json
+from datetime import datetime
+from unittest.mock import patch, MagicMock
+from universe_builder import build_universe, _apply_rs_prefilter
+from constants import UNIVERSE_MIN_PRICE, UNIVERSE_MIN_AVG_VOLUME, UNIVERSE_MIN_DOLLAR_VOL, UNIVERSE_RS_FLOOR
+
+def test_universe_min_price_is_12():
+    assert UNIVERSE_MIN_PRICE == 12.0
+
+def test_universe_min_volume_is_1m():
+    assert UNIVERSE_MIN_AVG_VOLUME == 1_000_000
+
+def test_universe_min_dollar_vol_is_25m():
+    assert UNIVERSE_MIN_DOLLAR_VOL == 25_000_000
+
+def test_rs_prefilter_removes_low_rs_tickers(tmp_path):
+    cache_file = tmp_path / "rs_rank_cache.json"
+    rs_data = {
+        "_meta": {
+            "computed_at": datetime.utcnow().isoformat(),
+            "logic_version": "v3",
+            "ticker_count": 3,
+        },
+        "AAPL": 80.0,   # good
+        "NVDA": 20.0,   # below UNIVERSE_RS_FLOOR (35)
+        "MSFT": 50.0,   # good
+    }
+    cache_file.write_text(json.dumps(rs_data))
+
+    result = _apply_rs_prefilter(
+        ["AAPL", "NVDA", "MSFT", "UNKNOWN"],
+        rs_cache_file=str(cache_file),
+        rs_floor=UNIVERSE_RS_FLOOR,
+        max_age_days=7,
+    )
+    assert "AAPL" in result
+    assert "MSFT" in result
+    assert "NVDA" not in result
+    assert "UNKNOWN" in result   # no RS data → kept (safe fallback)
+
+def test_rs_prefilter_skips_when_cache_too_old(tmp_path):
+    cache_file = tmp_path / "rs_rank_cache.json"
+    rs_data = {
+        "_meta": {
+            "computed_at": "2020-01-01T00:00:00",  # very old
+            "logic_version": "v3",
+            "ticker_count": 2,
+        },
+        "NVDA": 10.0,  # would be filtered — but cache is too old
+    }
+    cache_file.write_text(json.dumps(rs_data))
+
+    result = _apply_rs_prefilter(
+        ["NVDA", "AAPL"],
+        rs_cache_file=str(cache_file),
+        rs_floor=35,
+        max_age_days=7,
+    )
+    assert "NVDA" in result   # cache ignored → ticker kept
+    assert "AAPL" in result
+
+def test_rs_prefilter_skips_when_no_cache(tmp_path):
+    result = _apply_rs_prefilter(
+        ["AAPL", "NVDA"],
+        rs_cache_file=str(tmp_path / "nonexistent.json"),
+        rs_floor=35,
+        max_age_days=7,
+    )
+    assert "AAPL" in result
+    assert "NVDA" in result
