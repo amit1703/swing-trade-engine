@@ -1540,24 +1540,9 @@ async def _run_scan(
                     )
                     return
 
-                # ── Task 8: RS Rank gate ──────────────────────────────────────────
-                # Bypass if:  rank map empty (SPY fetch failed)
-                #             regime is DEFENSIVE (Engines 2&3 already off; scoring gate
-                #             handles quality — applying RS gate here would kill all WL/Base)
-                #             force=True (dev mode, see everything)
-                #             ticker is a discovery candidate (RS 60-70, near-high, vol surge)
-                if _rs_rank_map and regime["is_bullish"] and not force:
-                    _ticker_rs_rank = _rs_rank_map.get(ticker)
-                    if _ticker_rs_rank is None or _ticker_rs_rank < RS_RANK_MIN_PERCENTILE:
-                        if ticker not in _discovery_tickers:
-                            log.debug(
-                                "Skipped %s: RS rank %.1f < %.0f (threshold)",
-                                ticker,
-                                _ticker_rs_rank if _ticker_rs_rank is not None else 0.0,
-                                RS_RANK_MIN_PERCENTILE,
-                            )
-                            return
-                        # discovery candidate — bypass RS gate, fall through to engines
+                # ── Task 8: RS Rank gate — DISABLED (show all setups every regime) ──
+                # RS rank gate removed: every ticker runs through engines regardless
+                # of RS rank so breakout setups are never silently dropped.
 
                 # ── Centralized Indicator Engine (Task 6) ────────────────────────
                 ind: Optional[TickerIndicators] = await loop.run_in_executor(
@@ -1946,17 +1931,12 @@ async def _run_scan(
         except Exception as exc:
             log.warning("Sector clustering failed: %s", exc)
 
-        # ── Task 9: Unified scoring — score, filter, and sort ────────────────
-        # Dev / God-mode (force=True): lower threshold to 50 so raw engine
-        # findings reach the frontend despite a DEFENSIVE regime penalty of 0.
-        # Production (force=False): strict 70 threshold unchanged.
+        # ── Task 9: Unified scoring — score and sort (no score cap) ─────────
+        # Score gate removed: all setups shown regardless of score or regime.
+        # Scoring still runs so the score column is populated and rows are
+        # sorted by score descending.
         pre_score_count = len(collected_setups)
-        if force:
-            _score_threshold = 50
-        elif regime.get("regime") == "DEFENSIVE":
-            _score_threshold = MIN_SETUP_SCORE_DEFENSIVE
-        else:
-            _score_threshold = MIN_SETUP_SCORE
+        _score_threshold = 0
         try:
             collected_setups = score_and_filter_setups(
                 collected_setups,
