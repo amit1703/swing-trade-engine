@@ -151,12 +151,14 @@ def _rs_cache_age_seconds(cache: dict) -> float:
 
 
 def _rs_cache_valid(cache: Optional[dict]) -> bool:
-    """True if cache exists, is fresh (< TTL), and has matching logic version."""
+    """True if cache exists, is fresh (< TTL), has matching logic version, and is non-empty."""
     if cache is None:
         return False
     meta = cache.get("_meta", {})
     if meta.get("logic_version") != RS_LOGIC_VERSION:
         return False
+    if meta.get("ticker_count", 0) == 0:
+        return False  # empty cache from a failed scan — force recompute
     return _rs_cache_age_seconds(cache) < RS_RANK_CACHE_TTL
 
 
