@@ -115,6 +115,10 @@ from constants import (
     BACKTEST_DIAG_END_DATE,
     BACKTEST_V4_TRAIL_MULT,
     BACKTEST_DIAG_CACHE_FILE,
+    # Worker queue sizing
+    SCAN_COMPUTE_WORKERS,
+    SCAN_IO_WORKERS,
+    SCAN_QUEUE_MULTIPLIER,
 )
 from database import (
     complete_scan_run,
@@ -833,6 +837,70 @@ def _batch_download_sync(tickers_batch: List[str]) -> Dict[str, pd.DataFrame]:
         return {}
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# Worker queue phases
+# ────────────────────────────────────────────────────────────────────────────
+
+def _effective_compute_workers() -> int:
+    """Cap compute workers at cpu_count×2 to avoid GIL-bound thread over-subscription."""
+    import os as _os
+    cpu = _os.cpu_count() or 4
+    return min(SCAN_COMPUTE_WORKERS, cpu * 2)
+
+
+async def _run_io_phase(
+    survivors: List[str],
+    cache_store,                 # CacheStore instance
+    semaphore: asyncio.Semaphore,
+    workers: int = SCAN_IO_WORKERS,
+) -> None:
+    """
+    Parallel incremental fetch for Pass 1 survivors.
+    Uses a bounded queue (workers × SCAN_QUEUE_MULTIPLIER) to limit memory pressure.
+    """
+    if not survivors:
+        return
+    await cache_store.bulk_fetch_incremental(survivors, semaphore, workers=workers)
+
+
+async def _run_compute_phase(
+    survivors: List[str],
+    process_fn,                  # async callable(ticker, idx, **kwargs)
+    workers: Optional[int] = None,
+    **process_kwargs,
+) -> None:
+    """
+    Bounded worker pool for Pass 2 (indicators + engines).
+    Replaces asyncio.gather(*[_process(t,i) for ...]).
+    """
+    if not survivors:
+        return
+
+    n_workers = workers if workers is not None else _effective_compute_workers()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=n_workers * SCAN_QUEUE_MULTIPLIER)
+
+    async def _worker():
+        while True:
+            item = await queue.get()
+            if item is None:
+                queue.task_done()
+                break
+            ticker, idx = item
+            try:
+                await process_fn(ticker, idx, **process_kwargs)
+            except Exception as exc:
+                log.error("Compute worker error for %s: %s", ticker, exc)
+            finally:
+                queue.task_done()
+
+    worker_tasks = [asyncio.create_task(_worker()) for _ in range(n_workers)]
+    for i, ticker in enumerate(survivors):
+        await queue.put((ticker, i))
+    for _ in worker_tasks:
+        await queue.put(None)
+    await asyncio.gather(*worker_tasks)
+
+
 async def _fetch(
     ticker: str,
     retry_count: int = 0,
@@ -1081,11 +1149,14 @@ async def _run_scan(
         _scan_state["rebuilding_universe"] = True
         loop = asyncio.get_running_loop()
         try:
-            universe_dict = await loop.run_in_executor(
-                None,
-                lambda: build_universe(
-                    min_atr_pct=MIN_ATR_PCT,
+            universe_dict = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: build_universe(
+                        min_atr_pct=MIN_ATR_PCT,
+                    ),
                 ),
+                timeout=1200,  # 20-minute hard cap — prevents scan from hanging indefinitely
             )
             if universe_dict["tickers"]:
                 save_universe(universe_dict, UNIVERSE_FILE)
@@ -1107,6 +1178,13 @@ async def _run_scan(
                 )
             else:
                 log.warning("Universe rebuild returned 0 tickers — keeping existing universe")
+                _scan_state["rebuilding_universe"] = False
+        except asyncio.TimeoutError:
+            log.error(
+                "Universe rebuild timed out after 20 min — proceeding with existing %d-ticker list",
+                len(tickers),
+            )
+            _scan_state["rebuilding_universe"] = False
         except Exception:
             log.exception("Universe rebuild failed — proceeding with existing universe")
             _scan_state["rebuilding_universe"] = False
