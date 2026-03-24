@@ -297,8 +297,8 @@ SECTOR_OUT_OF_TOP_FACTOR = 0.4  # sectors outside top 8 → 40% of sector points
 # Discovery layer — RS 60-70 emerging leaders bypass the RS >= 70 gate
 DISCOVERY_RS_MIN        = 60    # lower RS bound (inclusive) for discovery candidates
 DISCOVERY_RS_MAX        = 70    # upper RS bound (exclusive; 70 = regular gate floor)
-DISCOVERY_52WK_HIGH_PCT = 0.03  # close must be within 3% of 52-week high
-DISCOVERY_VOL_RATIO     = 1.5   # 5-day avg vol must be >= 1.5x 50-day avg
+DISCOVERY_52WK_HIGH_PCT = 0.05  # close must be within 5% of 52-week high
+DISCOVERY_VOL_RATIO     = 1.5   # 5-bar avg vol must be >= 1.5x 20-day avg
 DISCOVERY_MAX_PCT       = 0.10  # cap discovery candidates at 10% of universe size
 
 # ── V4 Backtest Diagnostics ───────────────────────────────────────────────────
@@ -397,10 +397,3 @@ UNIVERSE_MIN_AVG_VOLUME      = 1_000_000
 UNIVERSE_MIN_DOLLAR_VOL      = 25_000_000
 UNIVERSE_RS_FLOOR            = 35
 
-# ──────────────────────────────────────────────────────────────────────────
-# Discovery layer
-# ──────────────────────────────────────────────────────────────────────────
-DISCOVERY_RS_MIN             = 60
-DISCOVERY_RS_MAX             = 70
-DISCOVERY_52WK_HIGH_PCT      = 0.05   # within 5% of 52-week high
-DISCOVERY_VOL_RATIO          = 1.5    # 5-bar avg vol ≥ 1.5× 20-day avg
