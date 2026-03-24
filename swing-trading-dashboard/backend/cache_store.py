@@ -234,6 +234,7 @@ class CacheStore:
         for _ in worker_tasks:
             await queue.put(None)
         await asyncio.gather(*worker_tasks)
+        self._flush_metadata()
 
     async def _batch_download_with_fallback(
         self,
