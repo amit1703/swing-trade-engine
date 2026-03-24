@@ -1540,18 +1540,20 @@ async def _run_scan(
                     )
                     return
 
-                # ── Task 8: RS Rank gate (lowered to 50, no regime condition) ────
-                # Threshold lowered from 70 → 50 so breakout stocks (high RS by
-                # definition) always pass. Gate applies every regime to keep scan
-                # fast. Discovery candidates and empty-map bypass unchanged.
+                # ── Task 8: RS Rank gate ──────────────────────────────────────────
+                # Restored to RS_RANK_MIN_PERCENTILE (70). The missing-BRK issue
+                # was the empty RS rank cache bug (fixed in scoring.py), not this
+                # threshold. Stocks approaching a breakout have RS > 70 by nature.
+                # Bypass: empty map (SPY fail), force mode, discovery candidates.
                 if _rs_rank_map and not force:
                     _ticker_rs_rank = _rs_rank_map.get(ticker)
-                    if _ticker_rs_rank is None or _ticker_rs_rank < 50:
+                    if _ticker_rs_rank is None or _ticker_rs_rank < RS_RANK_MIN_PERCENTILE:
                         if ticker not in _discovery_tickers:
                             log.debug(
-                                "Skipped %s: RS rank %.1f < 50 (threshold)",
+                                "Skipped %s: RS rank %.1f < %.0f (threshold)",
                                 ticker,
                                 _ticker_rs_rank if _ticker_rs_rank is not None else 0.0,
+                                RS_RANK_MIN_PERCENTILE,
                             )
                             return
 
