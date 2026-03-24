@@ -408,7 +408,7 @@ class CacheStore:
         since: Optional[date],
     ) -> Optional[pd.DataFrame]:
         """Synchronous yfinance fetch — runs in executor."""
-        kwargs = dict(interval="1d", auto_adjust=False, progress=False)
+        kwargs = dict(interval="1d", auto_adjust=False)
         if since is None:
             kwargs["period"] = "1y"
         else:
