@@ -5,7 +5,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import numpy as np
 import pandas as pd
 import pytest
+import scoring
 from scoring import compute_rs_rank_map, compute_top_sectors
+
+
+@pytest.fixture(autouse=True)
+def _no_rs_disk_cache(tmp_path, monkeypatch):
+    """Redirect RS_RANK_CACHE_FILE to a fresh temp file for every test."""
+    monkeypatch.setattr(scoring, "RS_RANK_CACHE_FILE", str(tmp_path / "rs_rank_cache.json"))
 
 
 def _make_cache_entry(close_vals):

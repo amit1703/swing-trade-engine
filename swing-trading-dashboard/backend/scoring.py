@@ -20,8 +20,10 @@ score_and_filter_setups(setups, rs_rank_map, regime, top_sectors, min_score)
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+from datetime import datetime
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -32,6 +34,8 @@ from constants import (
     MIN_SETUP_SCORE,
     RS_RANK_MIN_PERCENTILE_AGGRESSIVE,
     RS_RANK_MIN_PERCENTILE_SELECTIVE,
+    RS_RANK_CACHE_FILE,
+    RS_RANK_CACHE_TTL,
     RS_TIER1_MULTIPLIER,
     RS_TIER1_THRESHOLD,
     SCORE_SELECTIVE_REGIME_FACTOR,
@@ -120,6 +124,70 @@ def _spy_close_array(spy_df: pd.DataFrame) -> Optional[np.ndarray]:
     return _extract_close(spy_df)
 
 
+# ── RS rank cache persistence ─────────────────────────────────────────────────
+
+RS_LOGIC_VERSION = "v3"   # increment when O'Neil weights, periods, or formula changes
+
+
+def _load_rs_cache() -> Optional[dict]:
+    """Load and return the RS rank cache dict, or None if missing/unreadable."""
+    try:
+        if not os.path.exists(RS_RANK_CACHE_FILE):
+            return None
+        with open(RS_RANK_CACHE_FILE, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return None
+
+
+def _rs_cache_age_seconds(cache: dict) -> float:
+    """Return age of cache in seconds, or infinity if unparseable."""
+    try:
+        computed_at = cache["_meta"]["computed_at"]
+        dt = datetime.fromisoformat(computed_at)
+        return (datetime.utcnow() - dt).total_seconds()
+    except Exception:
+        return float("inf")
+
+
+def _rs_cache_valid(cache: Optional[dict]) -> bool:
+    """True if cache exists, is fresh (< TTL), and has matching logic version."""
+    if cache is None:
+        return False
+    meta = cache.get("_meta", {})
+    if meta.get("logic_version") != RS_LOGIC_VERSION:
+        return False
+    return _rs_cache_age_seconds(cache) < RS_RANK_CACHE_TTL
+
+
+def _save_rs_cache(rank_map: Dict[str, float]) -> None:
+    """Atomically persist rank_map to RS_RANK_CACHE_FILE."""
+    import tempfile as _tf
+    payload = {
+        "_meta": {
+            "computed_at":   datetime.utcnow().isoformat(),
+            "logic_version": RS_LOGIC_VERSION,
+            "ticker_count":  len(rank_map),
+        },
+        **rank_map,
+    }
+    cache_path = os.path.abspath(RS_RANK_CACHE_FILE)
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    fd, tmp = _tf.mkstemp(dir=os.path.dirname(cache_path), suffix=".json")
+    os.close(fd)
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+        os.replace(tmp, cache_path)
+    except Exception as exc:
+        import logging as _log
+        _log.getLogger(__name__).warning("Could not save RS cache: %s", exc)
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 8 — RS Percentile Ranking
 # ─────────────────────────────────────────────────────────────────────────────
@@ -150,6 +218,11 @@ def compute_rs_rank_map(
     -------
     dict  ticker → percentile rank  (0.0 – 100.0)
     """
+    # ── Cache check ────────────────────────────────────────────────────────
+    _cache = _load_rs_cache()
+    if _rs_cache_valid(_cache):
+        return {k: v for k, v in _cache.items() if not k.startswith("_")}
+
     if spy_df is None or spy_df.empty:
         return {}
 
@@ -175,7 +248,9 @@ def compute_rs_rank_map(
 
     if len(raw_scores) < 2:
         # With 0 or 1 ticker, percentile is meaningless — return as-is (all 50)
-        return {t: 50.0 for t in raw_scores}
+        rank_map = {t: 50.0 for t in raw_scores}
+        _save_rs_cache(rank_map)
+        return rank_map
 
     sorted_scores = sorted(raw_scores.values())
     n = len(sorted_scores)
@@ -185,6 +260,7 @@ def compute_rs_rank_map(
         below = sum(1 for s in sorted_scores if s < score)
         rank_map[ticker] = round(below / n * 100, 1)
 
+    _save_rs_cache(rank_map)
     return rank_map
 
 
