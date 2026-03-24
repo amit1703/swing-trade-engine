@@ -45,6 +45,7 @@ import math
 from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 
+import aiosqlite
 import numpy as np
 import pandas as pd
 import yfinance as yf
