@@ -357,3 +357,50 @@ ATR_ENTRY_EXTENDED_THRESHOLD: float = 0.40  # frozen: V5 trial-0=0.394, Phase2 r
 # "ema20" = dynamic EMA20-based trail (Phase 1 initial stop → Phase 2 EMA20 trail)
 # "atr"   = legacy fixed ATR multiplier trail (A/B fallback)
 TRAIL_MODE: str = "ema20"
+
+# ──────────────────────────────────────────────────────────────────────────
+# Scanner disk cache
+# ──────────────────────────────────────────────────────────────────────────
+SCAN_CACHE_DIR                = "data/scan_cache"
+PRICE_CACHE_FRESH_DAYS        = 2        # skip incremental if ≤ N biz days old
+PRICE_CACHE_MAX_STALE_DAYS    = 5        # attempt update; exclude if update fails
+SCAN_CACHE_METADATA_FILE      = "data/scan_cache/metadata.json"
+
+# ──────────────────────────────────────────────────────────────────────────
+# RS rank cache
+# ──────────────────────────────────────────────────────────────────────────
+RS_RANK_CACHE_TTL               = 86400  # 1 day in seconds
+RS_RANK_CACHE_FILE              = "cache/rs_rank_cache.json"
+RS_RANK_CACHE_REFRESH_THRESHOLD = 72000  # 20 h: refresh before Pass 1 if older
+
+# ──────────────────────────────────────────────────────────────────────────
+# Pass 1 thresholds
+# ──────────────────────────────────────────────────────────────────────────
+PASS1_MIN_PRICE              = 12.0
+PASS1_MIN_AVG_VOLUME         = 1_000_000
+PASS1_MIN_DOLLAR_VOLUME      = 25_000_000
+PASS1_MIN_RS_RANK            = 45
+PASS1_MAX_SURVIVORS          = 400
+
+# ──────────────────────────────────────────────────────────────────────────
+# Worker pools
+# ──────────────────────────────────────────────────────────────────────────
+SCAN_IO_WORKERS              = 48
+SCAN_COMPUTE_WORKERS         = 32
+SCAN_QUEUE_MULTIPLIER        = 2
+
+# ──────────────────────────────────────────────────────────────────────────
+# Universe builder (tightened defaults)
+# ──────────────────────────────────────────────────────────────────────────
+UNIVERSE_MIN_PRICE           = 12.0
+UNIVERSE_MIN_AVG_VOLUME      = 1_000_000
+UNIVERSE_MIN_DOLLAR_VOL      = 25_000_000
+UNIVERSE_RS_FLOOR            = 35
+
+# ──────────────────────────────────────────────────────────────────────────
+# Discovery layer
+# ──────────────────────────────────────────────────────────────────────────
+DISCOVERY_RS_MIN             = 60
+DISCOVERY_RS_MAX             = 70
+DISCOVERY_52WK_HIGH_PCT      = 0.05   # within 5% of 52-week high
+DISCOVERY_VOL_RATIO          = 1.5    # 5-bar avg vol ≥ 1.5× 20-day avg
