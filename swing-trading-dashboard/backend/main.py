@@ -1168,7 +1168,7 @@ async def _run_scan(
                 try:
                     batch_data = await asyncio.wait_for(
                         loop.run_in_executor(None, lambda b=batch: _batch_download_sync(b)),
-                        timeout=120,
+                        timeout=30,
                     )
                     for t, df in batch_data.items():
                         _ticker_cache[t] = (time.time(), df)
@@ -1177,7 +1177,12 @@ async def _run_scan(
                         b_idx + 1, len(prefetch_batches), len(batch_data), len(batch),
                     )
                 except asyncio.TimeoutError:
-                    log.warning("Pre-fetch batch %d/%d timed out after 120s — skipping", b_idx + 1, len(prefetch_batches))
+                    log.warning(
+                        "Pre-fetch batch %d/%d timed out — abandoning bulk prefetch, "
+                        "per-ticker fetch will handle remaining tickers during scan",
+                        b_idx + 1, len(prefetch_batches),
+                    )
+                    break  # bail immediately — if one batch hangs, the rest will too
                 except Exception as exc:
                     log.warning("Pre-fetch batch %d failed: %s", b_idx + 1, exc)
             _scan_state["prefetching"] = False
