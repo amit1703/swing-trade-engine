@@ -37,7 +37,7 @@ class BandPaneRenderer {
       if (bandH < 0.5) return
 
       const w = mediaSize.width
-      const isPivot = source === 'pivot'
+      const isPivot = source === 'pivot' || source === 'watchlist_pivot'
       const isRes   = type === 'RESISTANCE'
 
       ctx.save()

@@ -231,7 +231,7 @@ export default function TradingChart({ ticker, chartData, loading, setups = [], 
           srPrimitivesList.push(prim)
         } catch (e) {
           // Fallback: draw two price lines if primitive API unavailable
-          const isPivot = zone.source === 'pivot'
+          const isPivot = zone.source === 'pivot' || zone.source === 'watchlist_pivot'
           const c = isPivot
             ? (zone.type === 'RESISTANCE' ? '#FF8C00' : '#00E5FF')
             : (zone.type === 'RESISTANCE' ? COLORS.halt : COLORS.go)
