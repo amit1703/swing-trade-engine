@@ -126,6 +126,7 @@ from constants import (
     PASS1_MIN_RS_RANK,
     PASS1_MAX_SURVIVORS,
     SCAN_CACHE_DIR,
+    RS_RANK_CACHE_REFRESH_THRESHOLD,
 )
 from database import (
     complete_scan_run,
@@ -400,6 +401,10 @@ _earnings_cache_lock = threading.Lock()
 _last_rs_rank_map: Dict[str, float] = {}
 _last_top_sectors: List[str] = []
 
+# ── Disk-persisted OHLCV cache (scanner's own — separate from WFO price_cache) ─
+from cache_store import CacheStore as _CacheStore
+_cache_store: _CacheStore = _CacheStore(cache_dir=SCAN_CACHE_DIR)
+
 _scan_state: Dict = {
     "in_progress": False,
     "progress": 0,
@@ -428,11 +433,18 @@ _scan_state: Dict = {
             "process_s": 0.0,
             "db_s": 0.0,
             "total_s": 0.0,
+            "pass1_filter_s": 0.0,
+            "fetch_s": 0.0,
+            "rs_cache_s": 0.0,
+            "pass2_s": 0.0,
         },
         "filtered": {
             "liquidity": 0,
             "earnings": 0,
         },
+        "pass1_survivors": 0,
+        "pass1_thresholds": {},
+        "cache_hit_rate": 0.0,
     },
     "dry_run_setups": None,
 }
@@ -726,6 +738,8 @@ async def lifespan(app: FastAPI):
     _semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     await init_db(DB_PATH)
     log.info("SQLite DB initialised at %s", DB_PATH)
+    _cache_store.preload_index()
+    log.info("Scan cache index preloaded")
 
     # ── APScheduler: scan at 7:30 AM ET, email at 8:00 AM ET ────────────────
     _scheduler = BackgroundScheduler(timezone="America/New_York")
@@ -1252,11 +1266,18 @@ async def _run_scan(
                 "process_s": 0.0,
                 "db_s": 0.0,
                 "total_s": 0.0,
+                "pass1_filter_s": 0.0,
+                "fetch_s": 0.0,
+                "rs_cache_s": 0.0,
+                "pass2_s": 0.0,
             },
             "filtered": {
                 "liquidity": 0,
                 "earnings": 0,
             },
+            "pass1_survivors": 0,
+            "pass1_thresholds": {},
+            "cache_hit_rate": 0.0,
         },
         dry_run_setups=None,
     )
@@ -1352,66 +1373,55 @@ async def _run_scan(
         log.info("SPY fetch completed  [%.1fs]", spy_fetch_time)
         _scan_state["engine_stats"]["timing"]["spy_fetch_s"] = round(spy_fetch_time, 2)
 
-        # ── Bulk pre-fetch all ticker data (single HTTP request per batch) ──
-        # yf.download(200 tickers) is ~10× faster than 200 individual calls.
-        # Results go straight into _ticker_cache so _fetch() calls below hit cache.
-        uncached = [
-            t for t in tickers
-            if t not in _ticker_cache
-            or time.time() - _ticker_cache[t][0] >= CACHE_TTL_SUCCESS
-        ]
-        prefetch_start = time.time()
-        if uncached:
-            prefetch_batches = [
-                uncached[i: i + BULK_DOWNLOAD_BATCH_SIZE]
-                for i in range(0, len(uncached), BULK_DOWNLOAD_BATCH_SIZE)
-            ]
-            _scan_state["prefetching"] = True
-            log.info(
-                "Pre-fetching %d/%d tickers in %d batches…",
-                len(uncached), len(tickers), len(prefetch_batches),
-            )
-            for b_idx, batch in enumerate(prefetch_batches):
-                try:
-                    batch_data = await asyncio.wait_for(
-                        loop.run_in_executor(None, lambda b=batch: _batch_download_sync(b)),
-                        timeout=30,
-                    )
-                    for t, df in batch_data.items():
-                        _ticker_cache[t] = (time.time(), df)
-                    log.info(
-                        "Pre-fetch %d/%d: %d/%d tickers OK",
-                        b_idx + 1, len(prefetch_batches), len(batch_data), len(batch),
-                    )
-                except asyncio.TimeoutError:
-                    log.warning(
-                        "Pre-fetch batch %d/%d timed out — abandoning bulk prefetch, "
-                        "per-ticker fetch will handle remaining tickers during scan",
-                        b_idx + 1, len(prefetch_batches),
-                    )
-                    break  # bail immediately — if one batch hangs, the rest will too
-                except Exception as exc:
-                    log.warning("Pre-fetch batch %d failed: %s", b_idx + 1, exc)
-            _scan_state["prefetching"] = False
-            log.info("Pre-fetch complete — %d tickers in cache", len(_ticker_cache))
-        else:
-            log.info("Pre-fetch skipped — all %d tickers already cached", len(tickers))
-        prefetch_time = time.time() - prefetch_start
-        _scan_state["engine_stats"]["timing"]["prefetch_s"] = round(prefetch_time, 2)
-        log.info("Bulk prefetch phase  [%.1fs]", prefetch_time)
-
-        # ── Compute universe breadth from prefetch cache ──────────────────
-        breadth_pct, hl_ratio = compute_universe_breadth(_ticker_cache, tickers)
+        # ── Compute universe breadth from cache store metadata ────────────
+        _breadth_start = time.time()
+        breadth_pct, hl_ratio = _compute_breadth_from_metadata(tickers, _cache_store)
         log.info(
-            "Breadth: %.1f%% above SMA50  H/L ratio: %.2f",
-            breadth_pct * 100, hl_ratio,
+            "Breadth from metadata: %.1f%% above SMA50  H/L: %.2f  [%.2fs]",
+            breadth_pct * 100, hl_ratio, time.time() - _breadth_start,
         )
 
-        # ── Task 8 & 10: RS rank map + top sectors (pre-computed for all tickers) ──
+        # ── RS rank cache: refresh if near-stale (>20h) before Pass 1 ────
+        _rs_cache_start = time.time()
+        from scoring import _load_rs_cache as _lrc, _rs_cache_age_seconds, _rs_cache_valid
+        _raw_rs_cache = _lrc()
+        if _raw_rs_cache and _rs_cache_age_seconds(_raw_rs_cache) > RS_RANK_CACHE_REFRESH_THRESHOLD:
+            log.info("RS cache is >20h old — refreshing before Pass 1")
+            compute_rs_rank_map(_ticker_cache, tickers, spy_df_full, sample_size=len(tickers))
+            _raw_rs_cache = _lrc()   # reload the freshly written file
+        _scan_state["engine_stats"]["timing"]["rs_cache_s"] = round(time.time() - _rs_cache_start, 2)
+        _rs_for_pass1 = {k: v for k, v in (_raw_rs_cache or {}).items() if not k.startswith("_")}
+
+        # ── PASS 1: fast metadata filter ──────────────────────────────────
+        _pass1_start = time.time()
+        _survivors, _discovery_tickers = _pass1_filter(tickers, _cache_store, _rs_for_pass1)
+        _pass1_time = round(time.time() - _pass1_start, 2)
+        _scan_state["engine_stats"]["timing"]["pass1_filter_s"] = _pass1_time
+        _scan_state["engine_stats"]["pass1_survivors"] = len(_survivors)
+        log.info(
+            "Pass 1 complete: %d → %d survivors  [%.2fs]",
+            len(tickers), len(_survivors), _pass1_time,
+        )
+
+        # ── I/O phase: incremental fetch for survivors only ───────────────
+        _fetch_start = time.time()
+        await _run_io_phase(_survivors, _cache_store, semaphore or _semaphore)
+        _fetch_time = round(time.time() - _fetch_start, 2)
+        _scan_state["engine_stats"]["timing"]["fetch_s"] = _fetch_time
+        log.info("Incremental fetch complete  [%.1fs]", _fetch_time)
+
+        # Populate _ticker_cache from _cache_store for downstream compatibility
+        _now = time.time()
+        for _t in _survivors:
+            _df = _cache_store.get(_t)
+            if _df is not None:
+                _ticker_cache[_t] = (_now, _df)
+
+        # ── RS rank map + top sectors (post-I/O, using freshly fetched data) ──
         rs_rank_start = time.time()
-        _rs_rank_map = compute_rs_rank_map(_ticker_cache, tickers, spy_df_full, sample_size=len(tickers))
+        _rs_rank_map = compute_rs_rank_map(_ticker_cache, _survivors, spy_df_full, sample_size=len(_survivors))
         _top_sectors = compute_top_sectors(
-            _ticker_cache, tickers, SECTORS, spy_df_full, top_n=TOP_SECTORS_N
+            _ticker_cache, _survivors, SECTORS, spy_df_full, top_n=TOP_SECTORS_N
         )
         global _last_rs_rank_map, _last_top_sectors
         _last_rs_rank_map = _rs_rank_map
@@ -1425,9 +1435,6 @@ async def _run_scan(
                 "RS rank map is empty (SPY data unavailable?) — "
                 "RS rank gate will be bypassed for all tickers this scan"
             )
-
-        # ── Discovery layer: RS 60-70 emerging leaders ────────────────────────
-        _discovery_tickers = _build_discovery_tickers(tickers, _rs_rank_map, _ticker_cache)
         if _discovery_tickers:
             log.info(
                 "Discovery layer: %d candidate(s) (RS 60-70, near-high, vol expansion)",
@@ -1908,8 +1915,11 @@ async def _run_scan(
             finally:
                 _scan_state["progress"] = idx + 1
 
-        # Gather all ticker tasks; semaphore handles concurrency internally
-        await asyncio.gather(*[_process(t, i) for i, t in enumerate(tickers)])
+        # ── PASS 2: bounded compute worker pool ───────────────────────────
+        _pass2_start = time.time()
+        await _run_compute_phase(_survivors, _process)
+        _scan_state["engine_stats"]["timing"]["pass2_s"] = round(time.time() - _pass2_start, 2)
+        _scan_state["engine_stats"]["cache_hit_rate"] = _cache_store.cache_hit_rate()
 
         # ── Tag discovery candidates in collected setups ───────────────────────
         if _discovery_tickers:
