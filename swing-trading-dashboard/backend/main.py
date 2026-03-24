@@ -119,6 +119,13 @@ from constants import (
     SCAN_COMPUTE_WORKERS,
     SCAN_IO_WORKERS,
     SCAN_QUEUE_MULTIPLIER,
+    # Pass 1 filter thresholds
+    PASS1_MIN_PRICE,
+    PASS1_MIN_AVG_VOLUME,
+    PASS1_MIN_DOLLAR_VOLUME,
+    PASS1_MIN_RS_RANK,
+    PASS1_MAX_SURVIVORS,
+    SCAN_CACHE_DIR,
 )
 from database import (
     complete_scan_run,
@@ -899,6 +906,127 @@ async def _run_compute_phase(
     for _ in worker_tasks:
         await queue.put(None)
     await asyncio.gather(*worker_tasks)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Pass 1 — fast metadata filter
+# ────────────────────────────────────────────────────────────────────────────
+
+def _compute_breadth_from_metadata(
+    active_universe: List[str],
+    cache_store,
+) -> tuple:
+    """
+    Compute breadth (% above SMA50) and H/L ratio from full-universe metadata.
+    Replaces compute_universe_breadth() for the regime breadth component.
+    Uses the full universe — not just Pass 1 survivors.
+    Returns (breadth_pct, hl_ratio) — defaults (0.5, 0.5) on empty metadata.
+    """
+    above = 0
+    near_high = 0
+    total = 0
+    for ticker in active_universe:
+        meta = cache_store.get_meta(ticker)
+        if not meta:
+            continue
+        total += 1
+        if meta.get("above_sma50"):
+            above += 1
+        lc  = meta.get("last_close", 0)
+        h52 = meta.get("high_52w", 0)
+        if h52 > 0 and lc / h52 >= 0.95:
+            near_high += 1
+    if total == 0:
+        return 0.5, 0.5
+    return above / total, near_high / total
+
+
+def _identify_discovery_candidates(
+    active_universe: List[str],
+    cache_store,
+    rs_cache: dict,
+) -> set:
+    """
+    Identify RS 60–70 tickers near 52-week high with volume expansion.
+    These bypass the Pass 1 RS floor gate.
+    """
+    candidates = set()
+    for ticker in active_universe:
+        rs = rs_cache.get(ticker)
+        if rs is None or not (DISCOVERY_RS_MIN <= rs < DISCOVERY_RS_MAX):
+            continue
+        meta = cache_store.get_meta(ticker)
+        if not meta:
+            continue
+        lc  = meta.get("last_close", 0)
+        h52 = meta.get("high_52w", 0)
+        vr  = meta.get("vol_ratio_5d", 0)
+        near_high = h52 > 0 and lc / h52 >= (1 - DISCOVERY_52WK_HIGH_PCT)
+        vol_surge = vr >= DISCOVERY_VOL_RATIO
+        if near_high and vol_surge:
+            candidates.add(ticker)
+    return candidates
+
+
+def _pass1_filter(
+    active_universe: List[str],
+    cache_store,
+    rs_cache: dict,
+) -> tuple:
+    """
+    Fast metadata-only filter. Returns (survivors, discovery_set).
+
+    Filters (in order, cheapest first):
+      1. Metadata exists
+      2. Not excluded-stale (> PRICE_CACHE_MAX_STALE_DAYS biz days)
+      3. Price floor  (PASS1_MIN_PRICE)
+      4. Volume floor (PASS1_MIN_AVG_VOLUME, PASS1_MIN_DOLLAR_VOLUME)
+      5. RS pre-filter (PASS1_MIN_RS_RANK) — bypassed for discovery candidates
+    Then adaptive tightening if survivors > PASS1_MAX_SURVIVORS.
+    """
+    discovery = _identify_discovery_candidates(active_universe, cache_store, rs_cache)
+
+    def _apply_filters(universe, rs_floor):
+        result = []
+        for ticker in universe:
+            is_discovery = ticker in discovery
+            meta = cache_store.get_meta(ticker)
+            if meta is None:
+                continue
+            if cache_store.is_excluded(ticker):
+                continue
+            if meta.get("last_close", 0) < PASS1_MIN_PRICE:
+                continue
+            if (meta.get("avg_vol_20d", 0) < PASS1_MIN_AVG_VOLUME or
+                    meta.get("dollar_vol", 0) < PASS1_MIN_DOLLAR_VOLUME):
+                continue
+            rs = rs_cache.get(ticker)
+            if rs is not None and not is_discovery and rs < rs_floor:
+                continue
+            result.append(ticker)
+        return result
+
+    survivors = _apply_filters(active_universe, PASS1_MIN_RS_RANK)
+
+    if len(survivors) > PASS1_MAX_SURVIVORS:
+        for rs_step, dv_mult in [(50, 1.0), (50, 1.6), (55, 1.6)]:
+            new_survivors = [
+                t for t in survivors
+                if t in discovery
+                or (
+                    (rs_cache.get(t) or 0) >= rs_step
+                    and (cache_store.get_meta(t) or {}).get("dollar_vol", 0) >= PASS1_MIN_DOLLAR_VOLUME * dv_mult
+                )
+            ]
+            log.info(
+                "Pass 1 adaptive tighten: RS≥%d dollar_vol×%.1f → %d survivors",
+                rs_step, dv_mult, len(new_survivors),
+            )
+            survivors = new_survivors
+            if len(survivors) <= PASS1_MAX_SURVIVORS:
+                break
+
+    return survivors, discovery
 
 
 async def _fetch(
