@@ -3345,6 +3345,40 @@ async def get_chart_data(ticker: str):
     except Exception as exc:
         log.warning("RS line chart calculation failed for %s: %s", sym, exc)
 
+    # Inject WATCHLIST pivot resistance into zones if Engine 1 missed it.
+    # scan_res_breakout_near finds confirmed pivot highs independently;
+    # those levels are not saved to sr_zones, so the chart would show no line.
+    try:
+        async with aiosqlite.connect(DB_PATH, timeout=10) as _wdb:
+            _wdb.row_factory = aiosqlite.Row
+            async with _wdb.execute(
+                """SELECT metadata FROM scan_setups
+                   WHERE ticker=? AND setup_type='WATCHLIST'
+                   ORDER BY scan_timestamp DESC LIMIT 3""",
+                (sym,),
+            ) as _wcur:
+                wl_rows = await _wcur.fetchall()
+        for _wr in wl_rows:
+            _meta = json.loads(_wr["metadata"] or "{}")
+            _rl = _meta.get("resistance_level")
+            if not _rl or not isinstance(_rl, (int, float)) or _rl <= 0:
+                continue
+            _already = any(abs(z["level"] - _rl) / _rl < 0.015 for z in zones)
+            if _already:
+                continue
+            _atr_w = last_atr if last_atr else _rl * 0.005
+            zones.append({
+                "level": round(_rl, 2),
+                "upper": round(_rl + 0.1 * _atr_w, 2),
+                "lower": round(_rl - 0.1 * _atr_w, 2),
+                "type": "RESISTANCE",
+                "source": "watchlist_pivot",
+                "is_primary": bool(last_close and abs(_rl - last_close) / last_close <= 0.05),
+            })
+            break  # one resistance injection is enough
+    except Exception as _wexc:
+        log.warning("Watchlist zone injection failed for %s: %s", sym, _wexc)
+
     return {
         "ticker": sym,
         "candles": candles,
