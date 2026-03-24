@@ -363,7 +363,7 @@ async def batch_save_setups(db_path: str, scan_timestamp: str, setups: List[Dict
         for setup in setups
     ]
 
-    async with aiosqlite.connect(db_path) as db:
+    async with aiosqlite.connect(db_path, timeout=30) as db:
         await db.executemany(
             """INSERT INTO scan_setups
                (scan_timestamp, ticker, setup_type, entry, stop_loss, take_profit, rr, setup_date, metadata)
@@ -378,7 +378,7 @@ async def save_sr_zones(
 ) -> None:
     if not zones:
         return
-    async with aiosqlite.connect(db_path) as db:
+    async with aiosqlite.connect(db_path, timeout=30) as db:
         await db.executemany(
             """INSERT INTO sr_zones (scan_timestamp, ticker, level, zone_upper, zone_lower, zone_type, source)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
