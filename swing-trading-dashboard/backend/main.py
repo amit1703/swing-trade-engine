@@ -1028,6 +1028,7 @@ def _pass1_filter(
             new_survivors = [
                 t for t in survivors
                 if t in discovery
+                or cache_store.get_meta(t) is None  # no metadata: can't filter, keep for I/O phase
                 or (
                     (rs_cache.get(t) or 0) >= rs_step
                     and (cache_store.get_meta(t) or {}).get("dollar_vol", 0) >= PASS1_MIN_DOLLAR_VOLUME * dv_mult
@@ -2056,12 +2057,12 @@ async def _run_scan(
         log.info(
             "✔ Scan complete  VCP=%d  Pullbacks=%d  Base=%d  ResBreakout=%d  Options=%d  HTF=%d  LCE=%d  "
             "Processed=%d/%d  filtered(liq=%d  earn=%d)  "
-            "Total=%.1fs  [regime=%.1fs  spy=%.1fs  prefetch=%.1fs  process=%.1fs  db=%.1fs]",
+            "Total=%.1fs  [regime=%.1fs  spy=%.1fs  fetch=%.1fs  process=%.1fs  db=%.1fs]",
             vcp_count, pb_count, base_count, res_count, opt_count, htf_count, lce_count,
             processed_tickers, len(tickers),
             liquidity_filtered, earnings_filtered,
             total_scan_elapsed,
-            regime_time, spy_fetch_time, prefetch_time, process_time, db_save_time,
+            regime_time, spy_fetch_time, _fetch_time, process_time, db_save_time,
         )
 
     except Exception as exc:
