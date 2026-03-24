@@ -161,7 +161,9 @@ CACHE_TTL_FAILURE = 900    # Seconds to cache a failed fetch — retry sooner (1
 PIVOT_LOOKBACK_DAYS       = 252    # 1 full trading year — captures macro bases
 PIVOT_TOUCH_MARGIN_PCT    = 0.020  # 2.0% — catches real double-tops (was 1.5%)
 PIVOT_MIN_SEPARATION_DAYS = 21     # minimum bars (~1 month) between two matching highs — ensures pivots are distinct tests, not the same swing
-PIVOT_MIN_TOUCHES         = 2      # minimum pivots to form a valid zone
+PIVOT_MIN_TOUCHES         = 2      # minimum pivots to form a valid multi-touch zone
+PIVOT_SINGLE_MIN_DROP_PCT = 0.20   # single-pivot zone: stock must drop ≥20% from that high → evidence sellers defended hard
+PIVOT_SINGLE_DROP_WINDOW  = 60     # bars to look ahead for the drop after a single pivot high
 
 # ── Market Regime Scoring Weights (Task 2) ─────────────────────────────────
 REGIME_WEIGHT_EMA20    = 20   # SPY close > EMA20

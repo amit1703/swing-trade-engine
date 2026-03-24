@@ -28,6 +28,8 @@ from constants import (
     PIVOT_LOOKBACK_DAYS,
     PIVOT_MIN_SEPARATION_DAYS,
     PIVOT_MIN_TOUCHES,
+    PIVOT_SINGLE_DROP_WINDOW,
+    PIVOT_SINGLE_MIN_DROP_PCT,
     PIVOT_TOUCH_MARGIN_PCT,
 )
 
@@ -319,7 +321,54 @@ def _find_pivot_resistance(
             }
         )
 
-    # Sort by nearest overhead first; keep at most 2 — the most immediately
-    # relevant resistance levels above the current price.
+    # ── Significant single-pivot zones ──────────────────────────────────────
+    # A pivot with no matching second touch still qualifies as resistance if
+    # the stock dropped >= PIVOT_SINGLE_MIN_DROP_PCT from it within
+    # PIVOT_SINGLE_DROP_WINDOW bars — evidence that sellers defended hard
+    # at that level even on a single visit (e.g. prior all-time high spike).
+    lows_arr = lookback["Low"].values.astype(float)
+    for members in clusters.values():
+        if len(members) != 1:
+            continue  # already handled by multi-touch path above
+        idx = members[0]
+        pivot_high = float(pivot_highs[idx])
+        bar_idx = int(pivot_idx_arr[idx])
+
+        # Only overhead resistance
+        if pivot_high < current_price * 0.97:
+            continue
+
+        # Skip if this level is already covered by a multi-touch zone (within 2%)
+        already_covered = any(
+            abs(z["level"] - pivot_high) / pivot_high <= PIVOT_TOUCH_MARGIN_PCT
+            for z in zones
+        )
+        if already_covered:
+            continue
+
+        # Look ahead: did stock drop >= PIVOT_SINGLE_MIN_DROP_PCT from this high?
+        window_end = min(bar_idx + 1 + PIVOT_SINGLE_DROP_WINDOW, len(lows_arr))
+        future_lows = lows_arr[bar_idx + 1: window_end]
+        if len(future_lows) == 0:
+            continue  # pivot is at the very end of the lookback window
+
+        drop_pct = (pivot_high - float(np.min(future_lows))) / pivot_high
+        if drop_pct < PIVOT_SINGLE_MIN_DROP_PCT:
+            continue
+
+        upper = pivot_high + 0.1 * daily_atr
+        lower = pivot_high - 0.1 * daily_atr
+        pct_diff = abs(pivot_high - current_price) / current_price if current_price > 0 else 1.0
+        zones.append({
+            "level": round(pivot_high, 2),
+            "upper": round(upper, 2),
+            "lower": round(lower, 2),
+            "type": "RESISTANCE",
+            "atr": round(daily_atr, 2),
+            "is_primary": pct_diff <= 0.03,
+            "source": "pivot_single",
+        })
+
+    # Sort by nearest overhead first; keep at most 3
     zones.sort(key=lambda z: z["level"] - current_price)
-    return zones[:2]
+    return zones[:3]
