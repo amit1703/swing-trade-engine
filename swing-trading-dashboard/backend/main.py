@@ -1540,9 +1540,20 @@ async def _run_scan(
                     )
                     return
 
-                # ── Task 8: RS Rank gate — DISABLED (show all setups every regime) ──
-                # RS rank gate removed: every ticker runs through engines regardless
-                # of RS rank so breakout setups are never silently dropped.
+                # ── Task 8: RS Rank gate (lowered to 50, no regime condition) ────
+                # Threshold lowered from 70 → 50 so breakout stocks (high RS by
+                # definition) always pass. Gate applies every regime to keep scan
+                # fast. Discovery candidates and empty-map bypass unchanged.
+                if _rs_rank_map and not force:
+                    _ticker_rs_rank = _rs_rank_map.get(ticker)
+                    if _ticker_rs_rank is None or _ticker_rs_rank < 50:
+                        if ticker not in _discovery_tickers:
+                            log.debug(
+                                "Skipped %s: RS rank %.1f < 50 (threshold)",
+                                ticker,
+                                _ticker_rs_rank if _ticker_rs_rank is not None else 0.0,
+                            )
+                            return
 
                 # ── Centralized Indicator Engine (Task 6) ────────────────────────
                 ind: Optional[TickerIndicators] = await loop.run_in_executor(
