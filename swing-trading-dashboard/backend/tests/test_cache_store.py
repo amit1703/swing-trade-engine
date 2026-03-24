@@ -163,3 +163,138 @@ def test_cache_hit_rate_after_memory_hit(tmp_path):
     cs.get("AAPL")  # memory hit again
     # After 2 gets (both memory hits after put), hit rate > 0
     assert cs.cache_hit_rate() >= 0.0
+
+
+# ── Incremental fetch tests ───────────────────────────────────────────────────
+from unittest.mock import patch, MagicMock
+
+def _make_yf_return(rows: int, start_price: float = 110.0) -> pd.DataFrame:
+    """Simulated yfinance .history() return (fresh bars)."""
+    end   = pd.Timestamp.today().normalize()
+    dates = pd.bdate_range(end=end, periods=rows)
+    prices = [start_price + i * 0.1 for i in range(rows)]
+    return pd.DataFrame({
+        "Open": prices, "High": prices, "Low": prices,
+        "Close": prices, "Adj Close": prices, "Volume": [3_000_000] * rows,
+    }, index=dates)
+
+def test_fetch_incremental_returns_existing_when_fresh(tmp_path):
+    cs  = CacheStore(cache_dir=str(tmp_path))
+    df  = _make_df(252)           # ends today → already fresh
+    cs.put("AAPL", df)
+
+    with patch("cache_store.yf.Ticker") as mock_yf:
+        result = asyncio.run(cs.fetch_incremental("AAPL", asyncio.Semaphore(5)))
+
+    mock_yf.assert_not_called()
+    assert result is not None
+    assert len(result) == len(df)
+
+def test_fetch_incremental_appends_new_rows(tmp_path):
+    cs  = CacheStore(cache_dir=str(tmp_path))
+    old = _make_df_old(252, days_ago=5)   # ends 5 calendar days ago
+    cs.put("AAPL", old)
+    new_bars = _make_yf_return(3)         # 3 new bars to append
+
+    with patch("cache_store.yf.Ticker") as mock_yf:
+        mock_ticker          = MagicMock()
+        mock_yf.return_value = mock_ticker
+        mock_ticker.history.return_value = new_bars
+
+        result = asyncio.run(cs.fetch_incremental("AAPL", asyncio.Semaphore(5)))
+
+    assert result is not None
+    assert len(result) >= len(old)        # at least as many rows
+    # Last date should be today
+    assert result.index[-1].date() == date.today()
+
+def test_fetch_incremental_no_duplicates_after_append(tmp_path):
+    cs  = CacheStore(cache_dir=str(tmp_path))
+    old = _make_df_old(252, days_ago=3)
+    cs.put("AAPL", old)
+    # Return overlap: yfinance returns 2 bars including the last existing date
+    overlap = _make_yf_return(2)
+
+    with patch("cache_store.yf.Ticker") as mock_yf:
+        mock_yf.return_value.history.return_value = overlap
+        result = asyncio.run(cs.fetch_incremental("AAPL", asyncio.Semaphore(5)))
+
+    assert result is not None
+    assert not result.index.duplicated().any(), "index must have no duplicates"
+
+def test_fetch_incremental_handles_corrupt_parquet(tmp_path):
+    cs   = CacheStore(cache_dir=str(tmp_path))
+    # Write corrupt file
+    shard = tmp_path / "A"
+    shard.mkdir(parents=True)
+    (shard / "AAPL.parquet").write_bytes(b"garbage")
+
+    new_bars = _make_yf_return(252)
+    with patch("cache_store.yf.Ticker") as mock_yf:
+        mock_yf.return_value.history.return_value = new_bars
+        result = asyncio.run(cs.fetch_incremental("AAPL", asyncio.Semaphore(5)))
+
+    # Should fall back to full download
+    assert result is not None
+    assert len(result) >= 10
+
+def test_fetch_incremental_returns_stale_cache_on_network_failure(tmp_path):
+    cs  = CacheStore(cache_dir=str(tmp_path))
+    old = _make_df_old(252, days_ago=10)   # 10 calendar days → always > PRICE_CACHE_FRESH_DAYS
+    cs.put("AAPL", old)
+
+    with patch("cache_store.yf.Ticker") as mock_yf:
+        mock_yf.return_value.history.side_effect = Exception("network error")
+        result = asyncio.run(cs.fetch_incremental("AAPL", asyncio.Semaphore(5)))
+
+    assert result is not None           # returns stale cache, does not raise
+    meta = cs.get_meta("AAPL")
+    assert meta["stale"] is True
+
+def test_fetch_incremental_returns_none_when_no_cache_and_network_fails(tmp_path):
+    cs = CacheStore(cache_dir=str(tmp_path))
+
+    with patch("cache_store.yf.Ticker") as mock_yf:
+        mock_yf.return_value.history.side_effect = Exception("network error")
+        result = asyncio.run(cs.fetch_incremental("AAPL", asyncio.Semaphore(5)))
+
+    assert result is None
+
+def test_batch_download_with_fallback_retries_smaller_batches(tmp_path):
+    cs = CacheStore(cache_dir=str(tmp_path))
+
+    call_sizes = []
+    def fake_download(tickers, **kwargs):
+        call_sizes.append(len(tickers))
+        if len(tickers) == 100:
+            raise Exception("batch too large")
+        # Return empty dict for sub-batches (simulates partial failure)
+        return {}
+
+    tickers = [f"T{i:03d}" for i in range(100)]
+    with patch("cache_store.yf") as mock_yf:
+        mock_yf.download.side_effect = fake_download
+        mock_yf.Ticker.return_value.history.return_value = pd.DataFrame()
+        asyncio.run(cs._batch_download_with_fallback(tickers, asyncio.Semaphore(10)))
+
+    # First call was 100 (failed), then should try smaller batches
+    assert 100 in call_sizes
+    assert any(s < 100 for s in call_sizes)
+
+def test_bulk_fetch_incremental_processes_all_tickers(tmp_path):
+    cs = CacheStore(cache_dir=str(tmp_path))
+    tickers = ["AAPL", "NVDA", "MSFT"]
+
+    # Pre-populate with fresh data so no network call needed
+    for t in tickers:
+        cs.put(t, _make_df(252))
+
+    fetched = []
+    original_fetch = cs.fetch_incremental
+    async def tracking_fetch(ticker, sem):
+        fetched.append(ticker)
+        return await original_fetch(ticker, sem)
+
+    cs.fetch_incremental = tracking_fetch
+    asyncio.run(cs.bulk_fetch_incremental(tickers, asyncio.Semaphore(5), workers=2))
+    assert sorted(fetched) == sorted(tickers)
