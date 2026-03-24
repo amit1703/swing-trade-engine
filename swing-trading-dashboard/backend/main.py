@@ -863,10 +863,14 @@ def _batch_download_sync(tickers_batch: List[str]) -> Dict[str, pd.DataFrame]:
 # ────────────────────────────────────────────────────────────────────────────
 
 def _effective_compute_workers() -> int:
-    """Cap compute workers at cpu_count×2 to avoid GIL-bound thread over-subscription."""
-    import os as _os
-    cpu = _os.cpu_count() or 4
-    return min(SCAN_COMPUTE_WORKERS, cpu * 2)
+    """Return the number of async compute workers for Pass 2.
+
+    These are asyncio coroutines, NOT threads — cpu_count-based caps do not
+    apply here. GIL contention is in the ThreadPoolExecutor (handled by Python
+    internally). A high worker count lets the event loop overlap I/O waits
+    across all survivors, matching the old asyncio.gather() behaviour.
+    """
+    return SCAN_COMPUTE_WORKERS
 
 
 async def _run_io_phase(
