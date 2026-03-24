@@ -251,9 +251,9 @@ def _find_pivot_resistance(
         return []
 
     highs = lookback["High"].values.astype(float)
-    # order=15: pivot must be the highest bar in a 30-bar window (~6 weeks).
-    # This suppresses micro-fluctuations and surfaces only major swing highs.
-    pivot_idx_arr = argrelextrema(highs, np.greater, order=15)[0]
+    # order=20: pivot must be the highest bar in a 40-bar window (~2 months).
+    # Raised from 15 — surfaces only genuine swing highs, not noise peaks.
+    pivot_idx_arr = argrelextrema(highs, np.greater, order=20)[0]
 
     if len(pivot_idx_arr) < PIVOT_MIN_TOUCHES:
         return []

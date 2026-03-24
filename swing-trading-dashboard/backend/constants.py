@@ -160,7 +160,7 @@ CACHE_TTL_SUCCESS = 14400  # Seconds to cache a successful fetch (4 hours)
 CACHE_TTL_FAILURE = 900    # Seconds to cache a failed fetch — retry sooner (15 min)
 PIVOT_LOOKBACK_DAYS       = 252    # 1 full trading year — captures macro bases
 PIVOT_TOUCH_MARGIN_PCT    = 0.020  # 2.0% — catches real double-tops (was 1.5%)
-PIVOT_MIN_SEPARATION_DAYS = 7      # minimum bars between two matching highs
+PIVOT_MIN_SEPARATION_DAYS = 21     # minimum bars (~1 month) between two matching highs — ensures pivots are distinct tests, not the same swing
 PIVOT_MIN_TOUCHES         = 2      # minimum pivots to form a valid zone
 
 # ── Market Regime Scoring Weights (Task 2) ─────────────────────────────────
