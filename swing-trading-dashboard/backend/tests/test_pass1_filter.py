@@ -121,13 +121,21 @@ def test_pass1_drops_excluded_stale_ticker(tmp_path):
     assert "STALE" not in survivors
 
 
-def test_pass1_drops_ticker_with_no_metadata(tmp_path):
+def test_pass1_passes_through_ticker_with_no_metadata(tmp_path):
+    """Tickers with no metadata are let through to the I/O phase (cold start / new universe additions)."""
     cs = _cs_with_meta(tmp_path, {
         "KNOWN": _meta(),
     })
     survivors, _ = _pass1_filter(["KNOWN", "UNKNOWN"], cs, {})
-    assert "UNKNOWN" not in survivors
+    assert "UNKNOWN" in survivors   # no metadata → pass through, not dropped
     assert "KNOWN" in survivors
+
+
+def test_pass1_cold_start_passes_all_tickers(tmp_path):
+    """When cache is completely empty (first VPS deploy), all tickers survive Pass 1."""
+    cs = _cs_with_meta(tmp_path, {})
+    survivors, _ = _pass1_filter(["AAPL", "NVDA", "MSFT"], cs, {})
+    assert set(survivors) == {"AAPL", "NVDA", "MSFT"}
 
 
 def test_pass1_keeps_discovery_candidate_below_rs_floor(tmp_path):

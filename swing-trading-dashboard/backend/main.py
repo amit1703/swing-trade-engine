@@ -1006,6 +1006,7 @@ def _pass1_filter(
             is_discovery = ticker in discovery
             meta = cache_store.get_meta(ticker)
             if meta is None:
+                result.append(ticker)   # cold start / new ticker — let I/O phase fetch it
                 continue
             if cache_store.is_excluded(ticker):
                 continue
