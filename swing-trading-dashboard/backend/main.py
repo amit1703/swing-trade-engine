@@ -809,6 +809,7 @@ def _batch_download_sync(tickers_batch: List[str]) -> Dict[str, pd.DataFrame]:
             group_by="ticker",
             progress=False,
             threads=True,
+            timeout=60,
         )
         result: Dict[str, pd.DataFrame] = {}
         top_level = raw.columns.get_level_values(0).unique().tolist()
@@ -1165,8 +1166,9 @@ async def _run_scan(
             )
             for b_idx, batch in enumerate(prefetch_batches):
                 try:
-                    batch_data = await loop.run_in_executor(
-                        None, lambda b=batch: _batch_download_sync(b)
+                    batch_data = await asyncio.wait_for(
+                        loop.run_in_executor(None, lambda b=batch: _batch_download_sync(b)),
+                        timeout=120,
                     )
                     for t, df in batch_data.items():
                         _ticker_cache[t] = (time.time(), df)
@@ -1174,6 +1176,8 @@ async def _run_scan(
                         "Pre-fetch %d/%d: %d/%d tickers OK",
                         b_idx + 1, len(prefetch_batches), len(batch_data), len(batch),
                     )
+                except asyncio.TimeoutError:
+                    log.warning("Pre-fetch batch %d/%d timed out after 120s — skipping", b_idx + 1, len(prefetch_batches))
                 except Exception as exc:
                     log.warning("Pre-fetch batch %d failed: %s", b_idx + 1, exc)
             _scan_state["prefetching"] = False

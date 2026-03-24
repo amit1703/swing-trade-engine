@@ -73,6 +73,7 @@ PB_MIN_TREND_BARS = 10   # hard floor only — scoring handles quality above thi
 # ──────────────────────────────────────────────────────────────────────────
 
 ATR_STOP_MULTIPLIER = 1.278  # Optuna v4 best (trial #951); was 1.360 (v3)
+PB_ATR_STOP_MULTIPLIER = 0.5  # Pullback-specific stop: just below candle low + small ATR buffer (global 1.278 is too wide for EMA-test entries)
 ENTRY_PRICE_MULTIPLIER = 1.001  # 0.1% above current price for entry orders
 MIN_RISK_REWARD_RATIO = 1.0  # Minimum acceptable R:R ratio for setups
 TARGET_RR             = 4.346   # Optuna trial #433 tp_multiple (converged, CV=0.017)
@@ -236,7 +237,7 @@ EARNINGS_CACHE_TTL_HOURS  = 24            # refresh cache entries older than thi
 # Bulk Download (Task 5)
 # ──────────────────────────────────────────────────────────────────────────
 
-BULK_DOWNLOAD_BATCH_SIZE = 200            # tickers per yf.download() call
+BULK_DOWNLOAD_BATCH_SIZE = 100            # tickers per yf.download() call (reduced from 200 — smaller batches are less likely to hang)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Walk-Forward Validation (WFO)

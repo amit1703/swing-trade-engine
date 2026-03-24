@@ -29,7 +29,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
-from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT, ATR_STOP_MULTIPLIER, PB_MIN_TREND_BARS, SUPPORT_MAX_EXTENSION_ATR
+from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT, ATR_STOP_MULTIPLIER, PB_ATR_STOP_MULTIPLIER, PB_MIN_TREND_BARS, SUPPORT_MAX_EXTENSION_ATR
 from zone_utils import nearest_resistance_target
 
 # RS gate: reject stocks that persistently underperform SPY.
@@ -309,9 +309,9 @@ def scan_pullback(
         # ── Risk math ────────────────────────────────────────────────────
         entry = round(lh * 1.001, 2)
 
-        # Stop: min(candle low, zone bottom) − ATR_STOP_MULTIPLIER × ATR
-        stop_base = min(ll, nearest_sup["lower"])
-        stop_loss = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
+        # Stop: just below candle low with small ATR buffer (PB_ATR_STOP_MULTIPLIER=0.5)
+        # Using candle low only (not zone lower) to avoid excessively wide stops on EMA-test entries
+        stop_loss = round(ll - PB_ATR_STOP_MULTIPLIER * latr, 2)
 
         risk = entry - stop_loss
         if risk <= 0 or risk > entry * 0.15:
@@ -496,8 +496,7 @@ def scan_relaxed_pullback(
         if support_level >= lc:
             return None
 
-        stop_base = min(ll, nearest_sup["lower"])
-        stop_loss = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
+        stop_loss = round(ll - PB_ATR_STOP_MULTIPLIER * latr, 2)
         risk = entry - stop_loss
 
         if risk <= 0 or risk > entry * 0.15:
@@ -792,8 +791,7 @@ def scan_pullback_approaching(
         support_level = nearest_sup["level"]  # already guaranteed < lc
 
         entry     = round(lh * 1.001, 2)
-        stop_base = min(ll, nearest_sup["lower"])
-        stop_loss = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
+        stop_loss = round(ll - PB_ATR_STOP_MULTIPLIER * latr, 2)
         risk      = entry - stop_loss
         if risk <= 0 or risk > entry * 0.15:
             return None
@@ -957,8 +955,7 @@ def scan_pullback_scored(
         if nearest_sup["level"] >= lc:
             return None, 0.0
 
-        stop_base = min(ll, nearest_sup["lower"])
-        stop_loss = round(stop_base - ATR_STOP_MULTIPLIER * latr, 2)
+        stop_loss = round(ll - PB_ATR_STOP_MULTIPLIER * latr, 2)
         risk      = entry - stop_loss
 
         if risk <= 0 or risk > entry * 0.15:
