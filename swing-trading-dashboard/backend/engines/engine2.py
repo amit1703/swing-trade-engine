@@ -835,7 +835,7 @@ def scan_vcp(
             return None
 
         avg_vol        = vol_sma_scalar
-        is_vol_surge   = lvol >= 1.5 * avg_vol      # ≥150 % of 50-day avg
+        is_vol_surge   = bool(lvol >= 1.5 * avg_vol)  # ≥150 % of 50-day avg (cast to Python bool — numpy.bool_ is not JSON-serializable)
         volume_ratio   = round(lvol / avg_vol, 2)
 
         # ── Shared: Stock 3-month relative strength ────────────────────────

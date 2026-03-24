@@ -10,6 +10,13 @@ from typing import Dict, List, Optional
 import aiosqlite
 
 
+def _json_default(obj):
+    """Fallback serializer for numpy scalars that slip into setup/zone dicts."""
+    if hasattr(obj, "item"):   # numpy scalar → Python native
+        return obj.item()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 # ---------------------------------------------------------------------------
 # Schema
 # ---------------------------------------------------------------------------
@@ -312,7 +319,7 @@ async def save_regime(db_path: str, scan_timestamp: str, regime: Dict) -> None:
 async def save_setup(db_path: str, scan_timestamp: str, setup: Dict) -> None:
     # Extra fields (cci, resistance_level, etc.) go into JSON metadata
     meta_keys = {"ticker", "setup_type", "entry", "stop_loss", "take_profit", "rr", "setup_date"}
-    metadata = json.dumps({k: v for k, v in setup.items() if k not in meta_keys})
+    metadata = json.dumps({k: v for k, v in setup.items() if k not in meta_keys}, default=_json_default)
 
     async with aiosqlite.connect(db_path) as db:
         await db.execute(
