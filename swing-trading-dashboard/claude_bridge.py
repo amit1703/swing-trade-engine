@@ -1,7 +1,11 @@
+import os
 import wexpect as pexpect
 from openai import OpenAI
 
-client = OpenAI(api_key="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")  # משתמש ב-OPENAI_API_KEY מהמערכת
+_api_key = os.environ.get("OPENAI_API_KEY")
+if not _api_key:
+    raise EnvironmentError("OPENAI_API_KEY environment variable is not set.")
+client = OpenAI(api_key=_api_key)
 
 PROJECT_CONTEXT = """
 You are supervising Claude Code while it develops a stock trading scanner.
@@ -86,10 +90,10 @@ while True:
             continue
         print("Claude:", output)
 
-        if "?" in output or "should" in output.lower() or "choose" in output.lower():
+        if looks_like_question(output):
 
             response = client.chat.completions.create(
-                model="gpt-5",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": PROJECT_CONTEXT},
                     {"role": "user", "content": output}
