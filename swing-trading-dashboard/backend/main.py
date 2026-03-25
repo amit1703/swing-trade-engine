@@ -152,6 +152,7 @@ from database import (
     save_scan_run,
     save_setup,
     batch_save_setups,
+    batch_save_sr_zones,
     save_sr_zones,
     add_trade,
     get_trades,
@@ -451,8 +452,13 @@ _scan_state: Dict = {
             "pass2_s": 0.0,
         },
         "filtered": {
-            "liquidity": 0,
-            "earnings": 0,
+            "liquidity":        0,
+            "earnings":         0,
+            "insufficient_data": 0,
+            "vitality":         0,
+            "rs_rank_gate":     0,
+            "rs_score_gate":    0,
+            "ind_failed":       0,
         },
         "pass1_survivors": 0,
         "pass1_thresholds": {},
@@ -1168,7 +1174,14 @@ def _pass1_filter(
             if len(survivors) <= PASS1_MAX_SURVIVORS:
                 break
 
-    return survivors, discovery
+    thresholds = {
+        "vol_thr":   _vol_thr,
+        "prox_thr":  _prox_thr,
+        "rs_floor":  rs_floor,
+        "rs_source": "warm" if rs_cache else "cold",
+        "cnt":       dict(_cnt),
+    }
+    return survivors, discovery, thresholds
 
 
 async def _fetch(
@@ -1400,8 +1413,13 @@ async def _run_scan(
                 "pass2_s": 0.0,
             },
             "filtered": {
-                "liquidity": 0,
-                "earnings": 0,
+                "liquidity":        0,
+                "earnings":         0,
+                "insufficient_data": 0,
+                "vitality":         0,
+                "rs_rank_gate":     0,
+                "rs_score_gate":    0,
+                "ind_failed":       0,
             },
             "pass1_survivors": 0,
             "pass1_thresholds": {},
@@ -1533,10 +1551,11 @@ async def _run_scan(
 
         # ── PASS 1: fast metadata filter ──────────────────────────────────
         _pass1_start = time.time()
-        _survivors, _discovery_tickers = _pass1_filter(tickers, _cache_store, _rs_for_pass1)
+        _survivors, _discovery_tickers, _p1_thresholds = _pass1_filter(tickers, _cache_store, _rs_for_pass1)
         _pass1_time = round(time.time() - _pass1_start, 2)
         _scan_state["engine_stats"]["timing"]["pass1_filter_s"] = _pass1_time
         _scan_state["engine_stats"]["pass1_survivors"] = len(_survivors)
+        _scan_state["engine_stats"]["pass1_thresholds"] = _p1_thresholds
         log.info(
             "Pass 1 complete: %d → %d survivors  [%.2fs]",
             len(tickers), len(_survivors), _pass1_time,
@@ -1569,7 +1588,23 @@ async def _run_scan(
             "RS rank map: %d tickers ranked  top_sectors=%s  [%.1fs]",
             len(_rs_rank_map), _top_sectors, time.time() - rs_rank_start,
         )
-        if not _rs_rank_map:
+        if _rs_rank_map:
+            _rs_vals = sorted(_rs_rank_map.values())
+            _n = len(_rs_vals)
+            _rs_mean   = sum(_rs_vals) / _n
+            _rs_median = _rs_vals[_n // 2]
+            _rs_p25    = _rs_vals[_n // 4]
+            _rs_p75    = _rs_vals[_n * 3 // 4]
+            _rs_below60 = sum(1 for v in _rs_vals if v < 60)
+            _rs_below70 = sum(1 for v in _rs_vals if v < 70)
+            log.info(
+                "RS distribution: mean=%.1f  median=%.1f  P25=%.1f  P75=%.1f  "
+                "below60=%d (%.0f%%)  below70=%d (%.0f%%)",
+                _rs_mean, _rs_median, _rs_p25, _rs_p75,
+                _rs_below60, _rs_below60 / _n * 100,
+                _rs_below70, _rs_below70 / _n * 100,
+            )
+        else:
             log.warning(
                 "RS rank map is empty (SPY data unavailable?) — "
                 "RS rank gate will be bypassed for all tickers this scan"
@@ -1627,6 +1662,7 @@ async def _run_scan(
         # ── Per-ticker processing ─────────────────────────────────────────
         # Collect setups instead of saving individually for batch optimization
         collected_setups: List[Dict] = []
+        collected_zones: Dict[str, List[Dict]] = {}   # ticker → zones, batch-saved after loop
         dropped_tickers: List[str] = []  # Track tickers that failed all retries
         vcp_count = 0
         pb_count = 0
@@ -1649,6 +1685,7 @@ async def _run_scan(
                 if df is None or len(df) < MIN_CANDLES_FOR_ANALYSIS:
                     if df is None:
                         dropped_tickers.append(ticker)  # Record as dropped
+                    _scan_state["engine_stats"]["filtered"]["insufficient_data"] += 1
                     log.debug("Skipped %s: insufficient data", ticker)
                     return
 
@@ -1659,17 +1696,20 @@ async def _run_scan(
                 # Check for empty Close column or all-NaN values
                 close_col = "Adj Close" if "Adj Close" in df.columns else "Close"
                 if close_col not in df.columns:
+                    _scan_state["engine_stats"]["filtered"]["insufficient_data"] += 1
                     log.debug("Skipped %s: no valid price data", ticker)
                     return
                 close_series = df[close_col]
                 if isinstance(close_series, pd.DataFrame):
                     close_series = close_series.iloc[:, 0]
                 if close_series.isna().all():
+                    _scan_state["engine_stats"]["filtered"]["insufficient_data"] += 1
                     log.debug("Skipped %s: all-NaN price data", ticker)
                     return
 
                 # ── Price Action Vitality — skip zombie / buyout-flatline stocks ──
                 if not is_price_vital(df):
+                    _scan_state["engine_stats"]["filtered"]["vitality"] += 1
                     log.debug(
                         "Skipped %s: flatline/zombie stock "
                         "(10-day H-L range < 2%% of high)",
@@ -1686,6 +1726,7 @@ async def _run_scan(
                     _ticker_rs_rank = _rs_rank_map.get(ticker)
                     if _ticker_rs_rank is None or _ticker_rs_rank < RS_RANK_MIN_PERCENTILE:
                         if ticker not in _discovery_tickers:
+                            _scan_state["engine_stats"]["filtered"]["rs_rank_gate"] += 1
                             log.debug(
                                 "Skipped %s: RS rank %.1f < %.0f (threshold)",
                                 ticker,
@@ -1694,11 +1735,24 @@ async def _run_scan(
                             )
                             return
 
+                # ── Earnings Blackout — checked BEFORE compute_indicators ─────────
+                # Earnings check needs only _earnings_cache (loaded before the loop).
+                # Moving it here avoids a full compute_indicators call for blackout tickers.
+                blackout = await loop.run_in_executor(
+                    None, _check_earnings_blackout_sync, ticker
+                )
+                if blackout:
+                    earnings_filtered += 1
+                    _scan_state["engine_stats"]["filtered"]["earnings"] += 1
+                    log.debug("Skipped %s: earnings within %d days", ticker, EARNINGS_BLACKOUT_DAYS)
+                    return
+
                 # ── Centralized Indicator Engine (Task 6) ────────────────────────
                 ind: Optional[TickerIndicators] = await loop.run_in_executor(
                     None, compute_indicators, df, spy_df_full
                 )
                 if ind is None:
+                    _scan_state["engine_stats"]["filtered"]["ind_failed"] += 1
                     log.debug("Skipped %s: insufficient data for indicators", ticker)
                     return
 
@@ -1715,16 +1769,6 @@ async def _run_scan(
                     )
                     return
 
-                # ── Earnings Blackout (Task 1) ────────────────────────────────────
-                blackout = await loop.run_in_executor(
-                    None, _check_earnings_blackout_sync, ticker
-                )
-                if blackout:
-                    earnings_filtered += 1
-                    _scan_state["engine_stats"]["filtered"]["earnings"] += 1
-                    log.debug("Skipped %s: earnings within %d days", ticker, EARNINGS_BLACKOUT_DAYS)
-                    return
-
                 # ── Use pre-computed RS values from indicator engine ───────────────
                 rs_ratio    = ind.rs_ratio
                 rs_52w_high = ind.rs_52w_high
@@ -1736,6 +1780,7 @@ async def _run_scan(
                 # Live scanner must apply the same gate to stay consistent.
                 # Bypassed in force/dev mode so everything is visible for debugging.
                 if not force and rs_score < _LIVE_PARAMS.rs_threshold:
+                    _scan_state["engine_stats"]["filtered"]["rs_score_gate"] += 1
                     log.debug(
                         "Skipped %s: rs_score=%.4f < rs_threshold=%.4f",
                         ticker, rs_score, _LIVE_PARAMS.rs_threshold,
@@ -1750,10 +1795,7 @@ async def _run_scan(
                     log.warning("S/R zone calculation failed for %s: %s", ticker, exc)
 
                 if zones:
-                    if not dry_run:
-                        await save_sr_zones(DB_PATH, scan_ts, ticker, zones)
-                    # engine_stats increments are safe: asyncio coroutine — no await
-                    # between read and write, so no interleaving with other tickers.
+                    collected_zones[ticker] = zones   # batch-saved after processing loop
                     _scan_state["engine_stats"]["e1"]["zones_saved"] += 1
 
                 # Detect trendline early (used by VCP follow-up, near-breakout, and pullback)
@@ -2020,10 +2062,13 @@ async def _run_scan(
                         log.warning("LCE check failed for %s: %s", ticker, lce_exc)
 
                 # Engine 7: Options Catalyst (not gated by market regime)
+                # Wrapped with IO semaphore: options chain fetch is a live HTTP call
+                # and must be rate-limited like all other yfinance requests.
                 try:
-                    opt = await loop.run_in_executor(
-                        None, scan_options_catalyst, ticker, df
-                    )
+                    async with _semaphore:
+                        opt = await loop.run_in_executor(
+                            None, scan_options_catalyst, ticker, df
+                        )
                     if opt:
                         try:
                             opt["entry"]      = float(opt.get("entry", 0.0))
@@ -2066,13 +2111,16 @@ async def _run_scan(
 
         process_time = time.time() - process_start_time
         _scan_state["engine_stats"]["timing"]["process_s"] = round(process_time, 2)
+        _f = _scan_state["engine_stats"]["filtered"]
         log.info(
-            "Per-ticker processing completed  [%.1fs]  vcp=%d  pb=%d  base=%d  res=%d  opt=%d  HTF=%d  LCE=%d  "
-            "total_setups=%d  filtered(liq=%d  earn=%d)",
+            "Per-ticker processing completed  [%.1fs]  "
+            "setups: vcp=%d pb=%d base=%d res=%d opt=%d HTF=%d LCE=%d total=%d  |  "
+            "rejected: data=%d vital=%d rs_rank=%d earn=%d ind=%d liq=%d rs_score=%d",
             process_time,
             vcp_count, pb_count, base_count, res_count, opt_count, htf_count, lce_count,
             len(collected_setups),
-            liquidity_filtered, earnings_filtered,
+            _f["insufficient_data"], _f["vitality"], _f["rs_rank_gate"],
+            _f["earnings"], _f["ind_failed"], _f["liquidity"], _f["rs_score_gate"],
         )
 
         # ── Sector Clustering — inject hot_sector flag before saving ─────────
@@ -2106,6 +2154,13 @@ async def _run_scan(
             )
         except Exception as exc:
             log.warning("Setup scoring failed (keeping all setups): %s", exc)
+
+        # ── Batch Save S/R Zones (replaces per-ticker saves inside _process) ──
+        if collected_zones and not dry_run:
+            zone_tickers = len(collected_zones)
+            zone_total   = sum(len(z) for z in collected_zones.values())
+            await batch_save_sr_zones(DB_PATH, scan_ts, collected_zones)
+            log.info("Batch saved %d zones (%d tickers) to database", zone_total, zone_tickers)
 
         # ── Batch Save All Setups (5-10x faster than individual saves) ──────
         db_save_time = 0.0

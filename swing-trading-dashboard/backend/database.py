@@ -390,6 +390,33 @@ async def save_sr_zones(
         await db.commit()
 
 
+async def batch_save_sr_zones(
+    db_path: str, scan_timestamp: str, zones_by_ticker: Dict[str, List[Dict]]
+) -> None:
+    """Save S/R zones for all tickers in a single DB transaction.
+
+    Replaces per-ticker save_sr_zones() calls during the processing loop,
+    eliminating SQLite contention from concurrent writes.
+    zones_by_ticker: { ticker: [zone_dict, ...] }
+    """
+    if not zones_by_ticker:
+        return
+    rows = [
+        (scan_timestamp, ticker, z["level"], z["upper"], z["lower"], z["type"], z.get("source", "kde"))
+        for ticker, zones in zones_by_ticker.items()
+        for z in zones
+    ]
+    if not rows:
+        return
+    async with aiosqlite.connect(db_path, timeout=30) as db:
+        await db.executemany(
+            """INSERT INTO sr_zones (scan_timestamp, ticker, level, zone_upper, zone_lower, zone_type, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            rows,
+        )
+        await db.commit()
+
+
 # ---------------------------------------------------------------------------
 # Read helpers
 # ---------------------------------------------------------------------------
