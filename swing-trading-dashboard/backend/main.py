@@ -43,7 +43,7 @@ import uuid
 from contextlib import asynccontextmanager
 import math
 from datetime import date, datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiosqlite
 import numpy as np
@@ -468,6 +468,12 @@ _scan_state: Dict = {
 }
 _semaphore: Optional[asyncio.Semaphore] = None
 _ticker_cache: dict = {}  # ticker → (timestamp: float, df: Optional[pd.DataFrame])
+
+# ── Indicator cache (in-memory, session-scoped) ────────────────────────────
+# Key: (ticker, last_date, row_count) — invalidates automatically when new
+# data arrives. Never persisted; safe fallback = recompute on any miss.
+_indicator_cache: Dict[Tuple, Any] = {}
+_indicator_cache_stats: Dict[str, int] = {"hits": 0, "misses": 0}
 
 # ── JSON encoder for numpy types ─────────────────────────────────────────────
 class _NumpyEncoder(json.JSONEncoder):
@@ -1747,9 +1753,18 @@ async def _run_scan(
                     return
 
                 # ── Centralized Indicator Engine (Task 6) ────────────────────────
-                ind: Optional[TickerIndicators] = await loop.run_in_executor(
-                    None, compute_indicators, df, spy_df_full
-                )
+                # Cache by (ticker, last_date, row_count) — invalidates the moment
+                # new data arrives. Falls back to recompute on any miss (zero risk).
+                _ic_last_date = df.index[-1] if len(df) > 0 else None
+                _ic_key = (ticker, _ic_last_date, len(df))
+                ind = _indicator_cache.get(_ic_key)
+                if ind is not None:
+                    _indicator_cache_stats["hits"] += 1
+                else:
+                    ind = await loop.run_in_executor(None, compute_indicators, df, spy_df_full)
+                    if ind is not None:
+                        _indicator_cache[_ic_key] = ind
+                    _indicator_cache_stats["misses"] += 1
                 if ind is None:
                     _scan_state["engine_stats"]["filtered"]["ind_failed"] += 1
                     log.debug("Skipped %s: insufficient data for indicators", ticker)
@@ -2248,6 +2263,15 @@ async def _run_scan(
             liquidity_filtered, earnings_filtered,
             total_scan_elapsed,
             regime_time, spy_fetch_time, _fetch_time, process_time, db_save_time,
+        )
+        _ic_total = _indicator_cache_stats["hits"] + _indicator_cache_stats["misses"]
+        _ic_rate  = (_indicator_cache_stats["hits"] / _ic_total * 100) if _ic_total > 0 else 0.0
+        log.info(
+            "Indicator cache: hits=%d  misses=%d  hit_rate=%.1f%%  size=%d",
+            _indicator_cache_stats["hits"],
+            _indicator_cache_stats["misses"],
+            _ic_rate,
+            len(_indicator_cache),
         )
 
     except Exception as exc:
