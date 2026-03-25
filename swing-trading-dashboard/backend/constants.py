@@ -106,9 +106,9 @@ VCP_ATR_CONTRACTION_THRESHOLD = 0.6  # ATR today < ATR20_avg × 0.6 confirms com
 # Phase 3 — RS Ranking & Unified Scoring (Tasks 8, 9, 10)
 # ──────────────────────────────────────────────────────────────────────────
 
-RS_RANK_MIN_PERCENTILE_AGGRESSIVE = 65   # AGGRESSIVE regime RS hard floor
-RS_RANK_MIN_PERCENTILE_SELECTIVE  = 70   # SELECTIVE regime RS hard floor (unchanged)
-RS_RANK_MIN_PERCENTILE  = 70    # legacy alias — kept for backtest/WFO compatibility
+RS_RANK_MIN_PERCENTILE_AGGRESSIVE = 0    # RS hard floor — disabled (show all setups, user decides)
+RS_RANK_MIN_PERCENTILE_SELECTIVE  = 0    # RS hard floor — disabled (show all setups, user decides)
+RS_RANK_MIN_PERCENTILE  = 0     # per-ticker RS gate — disabled; RS score still displayed for sorting
 TOP_SECTORS_N           = 8     # top N sectors by avg RS (raised from 5; scoring uses SECTOR_TIER1_N=5 for tier 1)
 # V5 note: Optuna diagnostics show a quality inflection near regime_score ≈ 59.
 # This is NOT enforced as a hard gate. Instead, SELECTIVE regime earns only
@@ -380,15 +380,15 @@ RS_RANK_CACHE_MIN_TICKERS       = 200    # reject caches with fewer tickers (deb
 PASS1_MIN_PRICE              = 12.0
 PASS1_MIN_AVG_VOLUME         = 1_000_000
 PASS1_MIN_DOLLAR_VOLUME      = 25_000_000
-PASS1_MIN_RS_RANK            = 45     # RS floor when cache is invalid / unavailable
-PASS1_MIN_RS_RANK_WARM       = 60     # RS floor when a valid, representative cache exists (avoids fetching clear RS misses)
+PASS1_MIN_RS_RANK            = 0      # RS floor — disabled (show all setups regardless of RS rank)
+PASS1_MIN_RS_RANK_WARM       = 0      # RS floor — disabled (show all setups regardless of RS rank)
 PASS1_MIN_52W_HIGH_PCT       = 0.65   # above-SMA50 tickers: close must be >= 65% of 52-week high
 # Below-SMA50 conditional: allow if near recent highs AND a quality signal is present
 # (captures pullbacks-to-SMA50, VCP coils, and early-stage bases; filters clear downtrends)
 # Fixed fallback values (used when <20 below-SMA50 tickers have metadata):
 PASS1_BELOW_SMA50_MIN_52W_PCT = 0.75  # within 25% of 52w high — not a deep drawdown
 PASS1_BELOW_SMA50_VOL_RATIO   = 1.20  # 5-day vol >= 1.2x 20-day avg — shows buying interest
-PASS1_BELOW_SMA50_MIN_RS      = 60    # strong RS rank — outperforming despite MA lag
+PASS1_BELOW_SMA50_MIN_RS      = 0     # RS requirement for below-SMA50 — disabled (show all setups)
 # Adaptive threshold configuration (percentile-based, computed from live universe distribution):
 PASS1_BELOW_SMA50_VOL_PERCENTILE  = 70    # use Nth percentile of universe vol_ratio_5d
 PASS1_BELOW_SMA50_VOL_FLOOR       = 1.00  # adaptive vol threshold lower bound
