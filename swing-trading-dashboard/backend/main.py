@@ -1946,9 +1946,10 @@ async def _run_scan(
                 except Exception as base_exc:
                     log.warning("Base pattern check failed for %s: %s", ticker, base_exc)
 
-                # Engine 6: Resistance breakout (always runs — scoring handles regime quality)
+                # Engine 6: Resistance breakout (always runs — Donchian+pivot fallback works
+                # without KDE zones; passing empty zones is valid and handled gracefully)
                 _brk_regime_ok = True
-                if zones and _brk_regime_ok:
+                if _brk_regime_ok:
                     try:
                         res_brk = await loop.run_in_executor(
                             None, scan_resistance_breakout, ticker, df, zones, False, _LIVE_PARAMS
