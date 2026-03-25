@@ -124,6 +124,18 @@ from constants import (
     PASS1_MIN_AVG_VOLUME,
     PASS1_MIN_DOLLAR_VOLUME,
     PASS1_MIN_RS_RANK,
+    PASS1_MIN_RS_RANK_WARM,
+    PASS1_MIN_52W_HIGH_PCT,
+    PASS1_BELOW_SMA50_MIN_52W_PCT,
+    PASS1_BELOW_SMA50_VOL_RATIO,
+    PASS1_BELOW_SMA50_MIN_RS,
+    PASS1_BELOW_SMA50_VOL_PERCENTILE,
+    PASS1_BELOW_SMA50_VOL_FLOOR,
+    PASS1_BELOW_SMA50_VOL_CEIL,
+    PASS1_BELOW_SMA50_PROX_PERCENTILE,
+    PASS1_BELOW_SMA50_PROX_FLOOR,
+    PASS1_BELOW_SMA50_PROX_CEIL,
+    PASS1_BELOW_SMA50_MIN_SAMPLE,
     PASS1_MAX_SURVIVORS,
     SCAN_CACHE_DIR,
     RS_RANK_CACHE_REFRESH_THRESHOLD,
@@ -986,6 +998,69 @@ def _identify_discovery_candidates(
     return candidates
 
 
+def _compute_below_sma50_thresholds(
+    active_universe: List[str],
+    cache_store,
+) -> tuple:
+    """
+    Compute adaptive Pass 1 thresholds from the current universe distribution.
+
+    Returns (vol_thr, prox_thr) where:
+      vol_thr  = Nth percentile of vol_ratio_5d across ALL tickers with metadata,
+                 clamped to [PASS1_BELOW_SMA50_VOL_FLOOR, PASS1_BELOW_SMA50_VOL_CEIL].
+      prox_thr = Nth percentile of (last_close / high_52w) across BELOW-SMA50 tickers,
+                 clamped to [PASS1_BELOW_SMA50_PROX_FLOOR, PASS1_BELOW_SMA50_PROX_CEIL].
+
+    Falls back to fixed constants when fewer than PASS1_BELOW_SMA50_MIN_SAMPLE tickers
+    are available in either distribution.
+    """
+    vol_vals  = []   # all tickers with metadata
+    prox_vals = []   # below-SMA50 tickers only
+
+    for ticker in active_universe:
+        meta = cache_store.get_meta(ticker)
+        if meta is None:
+            continue
+        vr = meta.get("vol_ratio_5d")
+        if vr is not None:
+            vol_vals.append(vr)
+        lc  = meta.get("last_close", 0)
+        h52 = meta.get("high_52w",   0)
+        if not meta.get("above_sma50", True) and h52 > 0 and lc > 0:
+            prox_vals.append(lc / h52)
+
+    # Vol threshold — Nth percentile of full universe
+    if len(vol_vals) >= PASS1_BELOW_SMA50_MIN_SAMPLE:
+        import statistics as _stats
+        sorted_vol = sorted(vol_vals)
+        idx = int(len(sorted_vol) * PASS1_BELOW_SMA50_VOL_PERCENTILE / 100)
+        raw_vol = sorted_vol[min(idx, len(sorted_vol) - 1)]
+        vol_thr = max(PASS1_BELOW_SMA50_VOL_FLOOR, min(PASS1_BELOW_SMA50_VOL_CEIL, raw_vol))
+    else:
+        raw_vol = None
+        vol_thr = PASS1_BELOW_SMA50_VOL_RATIO   # fixed fallback
+
+    # Proximity threshold — Nth percentile of below-SMA50 distribution
+    if len(prox_vals) >= PASS1_BELOW_SMA50_MIN_SAMPLE:
+        sorted_prox = sorted(prox_vals)
+        idx = int(len(sorted_prox) * PASS1_BELOW_SMA50_PROX_PERCENTILE / 100)
+        raw_prox = sorted_prox[min(idx, len(sorted_prox) - 1)]
+        prox_thr = max(PASS1_BELOW_SMA50_PROX_FLOOR, min(PASS1_BELOW_SMA50_PROX_CEIL, raw_prox))
+    else:
+        raw_prox = None
+        prox_thr = PASS1_BELOW_SMA50_MIN_52W_PCT   # fixed fallback
+
+    log.info(
+        "Pass 1 adaptive thresholds: vol_thr=%.3f (P%d of %d tickers, raw=%s) | "
+        "prox_thr=%.3f (P%d of %d below-SMA50 tickers, raw=%s)",
+        vol_thr,  PASS1_BELOW_SMA50_VOL_PERCENTILE,  len(vol_vals),
+        f"{raw_vol:.3f}"  if raw_vol  is not None else "fixed",
+        prox_thr, PASS1_BELOW_SMA50_PROX_PERCENTILE, len(prox_vals),
+        f"{raw_prox:.3f}" if raw_prox is not None else "fixed",
+    )
+    return vol_thr, prox_thr
+
+
 def _pass1_filter(
     active_universe: List[str],
     cache_store,
@@ -994,52 +1069,99 @@ def _pass1_filter(
     """
     Fast metadata-only filter. Returns (survivors, discovery_set).
 
-    Filters (in order, cheapest first):
-      1. Metadata exists
-      2. Not excluded-stale (> PRICE_CACHE_MAX_STALE_DAYS biz days)
-      3. Price floor  (PASS1_MIN_PRICE)
-      4. Volume floor (PASS1_MIN_AVG_VOLUME, PASS1_MIN_DOLLAR_VOLUME)
-      5. RS pre-filter (PASS1_MIN_RS_RANK) — bypassed for discovery candidates
+    Filters applied in order (cheapest first) when metadata is present:
+      1. Not excluded-stale (> PRICE_CACHE_MAX_STALE_DAYS biz days)
+      2. Price floor              (PASS1_MIN_PRICE)
+      3. Volume / dollar-vol     (PASS1_MIN_AVG_VOLUME, PASS1_MIN_DOLLAR_VOLUME)
+      4. Above 50-day SMA        (PASS1_REQUIRE_ABOVE_SMA50) — all setup types need uptrend
+      5. 52-week high proximity  (PASS1_MIN_52W_HIGH_PCT)    — skip deep drawdown stocks
+      6. RS pre-filter           (PASS1_MIN_RS_RANK_WARM when valid cache, else PASS1_MIN_RS_RANK)
+    Tickers with no metadata pass through unconditionally (cold start / new entries).
     Then adaptive tightening if survivors > PASS1_MAX_SURVIVORS.
     """
     discovery = _identify_discovery_candidates(active_universe, cache_store, rs_cache)
 
-    def _apply_filters(universe, rs_floor):
+    # Use a higher RS floor when a representative cache is available.
+    # This avoids fetching tickers that will clearly fail RS_RANK_MIN_PERCENTILE (70) later.
+    rs_floor = PASS1_MIN_RS_RANK_WARM if rs_cache else PASS1_MIN_RS_RANK
+
+    # Compute adaptive below-SMA50 thresholds from the current universe distribution.
+    # Falls back to fixed constants when insufficient metadata is available.
+    _vol_thr, _prox_thr = _compute_below_sma50_thresholds(active_universe, cache_store)
+
+    # Counters for log summary
+    _cnt = {"cold": 0, "excl": 0, "price": 0, "vol": 0, "sma50": 0, "prox52": 0, "rs": 0, "pass": 0}
+
+    def _apply_filters(universe):
         result = []
         for ticker in universe:
-            is_discovery = ticker in discovery
+            is_disc = ticker in discovery
             meta = cache_store.get_meta(ticker)
             if meta is None:
-                result.append(ticker)   # cold start / new ticker — let I/O phase fetch it
+                _cnt["cold"] += 1
+                result.append(ticker)       # cold start / new ticker — let I/O phase decide
                 continue
             if cache_store.is_excluded(ticker):
+                _cnt["excl"] += 1
                 continue
             if meta.get("last_close", 0) < PASS1_MIN_PRICE:
+                _cnt["price"] += 1
                 continue
-            if (meta.get("avg_vol_20d", 0) < PASS1_MIN_AVG_VOLUME or
-                    meta.get("dollar_vol", 0) < PASS1_MIN_DOLLAR_VOLUME):
+            if (meta.get("avg_vol_20d", 0) < PASS1_MIN_AVG_VOLUME
+                    or meta.get("dollar_vol", 0) < PASS1_MIN_DOLLAR_VOLUME):
+                _cnt["vol"] += 1
                 continue
+            lc  = meta.get("last_close", 0)
+            h52 = meta.get("high_52w",   0)
+            vr  = meta.get("vol_ratio_5d", 0)
+            if not is_disc:
+                if meta.get("above_sma50", True):
+                    # Uptrend confirmed — only reject deep drawdowns (avoids stocks whose SMA50
+                    # is elevated from a distant bull run while the stock is now far off highs)
+                    if h52 > 0 and lc / h52 < PASS1_MIN_52W_HIGH_PCT:
+                        _cnt["prox52"] += 1
+                        continue
+                else:
+                    # Below SMA50 — allow ONLY if: near recent highs (adaptive prox threshold)
+                    # AND a quality signal is present (volume expansion OR strong RS).
+                    # This preserves pullback-to-SMA50, VCP coils, and early-stage bases
+                    # while filtering clear downtrends (deep drawdown with no buying interest).
+                    # Thresholds are adaptive (percentile-based) — see _compute_below_sma50_thresholds().
+                    near_high = h52 > 0 and lc / h52 >= _prox_thr
+                    vol_ok    = vr  >= _vol_thr
+                    rs_below  = rs_cache.get(ticker)
+                    rs_ok     = rs_below is not None and rs_below >= PASS1_BELOW_SMA50_MIN_RS
+                    if not (near_high and (vol_ok or rs_ok)):
+                        _cnt["sma50"] += 1
+                        continue
             rs = rs_cache.get(ticker)
-            if rs is not None and not is_discovery and rs < rs_floor:
+            if rs is not None and not is_disc and rs < rs_floor:
+                _cnt["rs"] += 1
                 continue
+            _cnt["pass"] += 1
             result.append(ticker)
         return result
 
-    survivors = _apply_filters(active_universe, PASS1_MIN_RS_RANK)
+    survivors = _apply_filters(active_universe)
+    log.info(
+        "Pass 1 filter breakdown: cold=%d excl=%d price=%d vol=%d sma50=%d prox52=%d rs=%d pass=%d",
+        _cnt["cold"], _cnt["excl"], _cnt["price"], _cnt["vol"],
+        _cnt["sma50"], _cnt["prox52"], _cnt["rs"], _cnt["pass"],
+    )
 
     if len(survivors) > PASS1_MAX_SURVIVORS:
         for rs_step, dv_mult in [(50, 1.0), (50, 1.6), (55, 1.6)]:
             new_survivors = [
                 t for t in survivors
                 if t in discovery
-                or cache_store.get_meta(t) is None  # no metadata: can't filter, keep for I/O phase
+                or cache_store.get_meta(t) is None  # no metadata: keep for I/O phase
                 or (
                     (rs_cache.get(t) or 0) >= rs_step
                     and (cache_store.get_meta(t) or {}).get("dollar_vol", 0) >= PASS1_MIN_DOLLAR_VOLUME * dv_mult
                 )
             ]
             log.info(
-                "Pass 1 adaptive tighten: RS≥%d dollar_vol×%.1f → %d survivors",
+                "Pass 1 adaptive tighten: RS>=%d dollar_vol*%.1f -> %d survivors",
                 rs_step, dv_mult, len(new_survivors),
             )
             survivors = new_survivors
@@ -1396,7 +1518,18 @@ async def _run_scan(
             compute_rs_rank_map(_ticker_cache, tickers, spy_df_full, sample_size=len(tickers))
             _raw_rs_cache = _lrc()   # reload the freshly written file
         _scan_state["engine_stats"]["timing"]["rs_cache_s"] = round(time.time() - _rs_cache_start, 2)
-        _rs_for_pass1 = {k: v for k, v in (_raw_rs_cache or {}).items() if not k.startswith("_")}
+        # Only use the RS cache for Pass 1 if it is representative (≥ RS_RANK_CACHE_MIN_TICKERS).
+        # An incomplete cache (e.g. from a debug run with 3 tickers) would silently
+        # mis-classify all real tickers as having no RS data while {A,B,C} get spurious ranks.
+        if _rs_cache_valid(_raw_rs_cache):
+            _rs_for_pass1 = {k: v for k, v in _raw_rs_cache.items() if not k.startswith("_")}
+            log.info("Pass 1 RS: using cached map (%d tickers)", len(_rs_for_pass1))
+        else:
+            _rs_for_pass1 = {}
+            log.warning(
+                "Pass 1 RS: cache invalid or too small — RS filter bypassed for this scan "
+                "(cache will be recomputed post-I/O)"
+            )
 
         # ── PASS 1: fast metadata filter ──────────────────────────────────
         _pass1_start = time.time()

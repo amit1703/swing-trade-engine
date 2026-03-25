@@ -35,6 +35,7 @@ from constants import (
     RS_RANK_MIN_PERCENTILE_AGGRESSIVE,
     RS_RANK_MIN_PERCENTILE_SELECTIVE,
     RS_RANK_CACHE_FILE,
+    RS_RANK_CACHE_MIN_TICKERS,
     RS_RANK_CACHE_TTL,
     RS_TIER1_MULTIPLIER,
     RS_TIER1_THRESHOLD,
@@ -151,19 +152,28 @@ def _rs_cache_age_seconds(cache: dict) -> float:
 
 
 def _rs_cache_valid(cache: Optional[dict]) -> bool:
-    """True if cache exists, is fresh (< TTL), has matching logic version, and is non-empty."""
+    """True if cache exists, is fresh (< TTL), has matching logic version, and is representative."""
     if cache is None:
         return False
     meta = cache.get("_meta", {})
     if meta.get("logic_version") != RS_LOGIC_VERSION:
         return False
-    if meta.get("ticker_count", 0) == 0:
-        return False  # empty cache from a failed scan — force recompute
+    count = meta.get("ticker_count", 0)
+    if count < RS_RANK_CACHE_MIN_TICKERS:
+        return False  # too few tickers — debug/test run produced an incomplete map
     return _rs_cache_age_seconds(cache) < RS_RANK_CACHE_TTL
 
 
 def _save_rs_cache(rank_map: Dict[str, float]) -> None:
     """Atomically persist rank_map to RS_RANK_CACHE_FILE."""
+    import logging as _log
+    if len(rank_map) < RS_RANK_CACHE_MIN_TICKERS:
+        _log.getLogger(__name__).warning(
+            "RS cache NOT saved — only %d tickers (minimum %d). "
+            "This was likely a test/debug run. Cache will be recomputed next scan.",
+            len(rank_map), RS_RANK_CACHE_MIN_TICKERS,
+        )
+        return
     import tempfile as _tf
     payload = {
         "_meta": {

@@ -372,6 +372,7 @@ SCAN_CACHE_METADATA_FILE      = "data/scan_cache/metadata.json"
 RS_RANK_CACHE_TTL               = 86400  # 1 day in seconds
 RS_RANK_CACHE_FILE              = "cache/rs_rank_cache.json"
 RS_RANK_CACHE_REFRESH_THRESHOLD = 72000  # 20 h: refresh before Pass 1 if older
+RS_RANK_CACHE_MIN_TICKERS       = 200    # reject caches with fewer tickers (debug/test runs produce incomplete maps)
 
 # ──────────────────────────────────────────────────────────────────────────
 # Pass 1 thresholds
@@ -379,7 +380,23 @@ RS_RANK_CACHE_REFRESH_THRESHOLD = 72000  # 20 h: refresh before Pass 1 if older
 PASS1_MIN_PRICE              = 12.0
 PASS1_MIN_AVG_VOLUME         = 1_000_000
 PASS1_MIN_DOLLAR_VOLUME      = 25_000_000
-PASS1_MIN_RS_RANK            = 45
+PASS1_MIN_RS_RANK            = 45     # RS floor when cache is invalid / unavailable
+PASS1_MIN_RS_RANK_WARM       = 60     # RS floor when a valid, representative cache exists (avoids fetching clear RS misses)
+PASS1_MIN_52W_HIGH_PCT       = 0.65   # above-SMA50 tickers: close must be >= 65% of 52-week high
+# Below-SMA50 conditional: allow if near recent highs AND a quality signal is present
+# (captures pullbacks-to-SMA50, VCP coils, and early-stage bases; filters clear downtrends)
+# Fixed fallback values (used when <20 below-SMA50 tickers have metadata):
+PASS1_BELOW_SMA50_MIN_52W_PCT = 0.75  # within 25% of 52w high — not a deep drawdown
+PASS1_BELOW_SMA50_VOL_RATIO   = 1.20  # 5-day vol >= 1.2x 20-day avg — shows buying interest
+PASS1_BELOW_SMA50_MIN_RS      = 60    # strong RS rank — outperforming despite MA lag
+# Adaptive threshold configuration (percentile-based, computed from live universe distribution):
+PASS1_BELOW_SMA50_VOL_PERCENTILE  = 70    # use Nth percentile of universe vol_ratio_5d
+PASS1_BELOW_SMA50_VOL_FLOOR       = 1.00  # adaptive vol threshold lower bound
+PASS1_BELOW_SMA50_VOL_CEIL        = 1.50  # adaptive vol threshold upper bound
+PASS1_BELOW_SMA50_PROX_PERCENTILE = 70    # use Nth percentile of below-SMA50 proximity
+PASS1_BELOW_SMA50_PROX_FLOOR      = 0.70  # adaptive prox threshold lower bound
+PASS1_BELOW_SMA50_PROX_CEIL       = 0.85  # adaptive prox threshold upper bound
+PASS1_BELOW_SMA50_MIN_SAMPLE      = 20    # minimum below-SMA50 tickers to compute adaptive thresholds
 PASS1_MAX_SURVIVORS          = 400
 
 # ──────────────────────────────────────────────────────────────────────────

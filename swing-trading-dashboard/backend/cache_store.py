@@ -162,10 +162,13 @@ class CacheStore:
                 # Already fresh — no network call
                 if ticker not in self._mem:
                     self._mem[ticker] = existing
+                log.debug("[cache_store] %s: cache hit (fresh, %d biz days old)", ticker, biz_days_old)
                 return existing
+            log.debug("[cache_store] %s: cache hit (incremental, %d biz days old — fetching delta)", ticker, biz_days_old)
         else:
             last_date = None
             biz_days_old = 999
+            log.debug("[cache_store] %s: cache miss (cold start — full 1y download)", ticker)
 
         # Fetch missing days from yfinance
         loop = asyncio.get_running_loop()
