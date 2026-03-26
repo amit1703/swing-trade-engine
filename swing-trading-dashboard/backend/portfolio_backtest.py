@@ -704,17 +704,15 @@ async def run_portfolio_backtest_universe(
         current_regime = regime_label_dict.get(_spy_date, "DEFENSIVE")
         regime_score   = float(regime_score_dict.get(_spy_date, 0.0))
 
-        # Do NOT hard-skip DEFENSIVE days — this mismatches the live scanner.
-        # The live scanner runs all engines regardless of regime (comment:
-        # "always runs — scoring handles regime quality").  DEFENSIVE costs
-        # 15 pts in compute_setup_score(), which combined with min_score=70
-        # naturally filters most DEFENSIVE signals.  Hard-skipping prevents
-        # any trade entry in DEFENSIVE even for high-quality setups that
-        # would score ≥70, understating backtest trade count and biasing
-        # results toward high-regime periods only.
-        #
-        # VCP (Engine 2) is the one exception: the live scanner gates it on
-        # `is_bullish`, which is False in DEFENSIVE, so we exclude it here.
+        # SELECTIVE regime: no new entries — data shows -0.82R avg loss across 15 trades
+        # (vs +0.15R in AGGRESSIVE).  Scoring naturally reduces quality in SELECTIVE
+        # but not enough to offset the edge loss.  Hard gate here mirrors the
+        # practical trading decision: sit out choppy/uncertain market conditions.
+        if current_regime == "SELECTIVE":
+            continue
+
+        # VCP (Engine 2) is gated on `is_bullish` in the live scanner, which is
+        # False in DEFENSIVE, so we exclude it here to match live behaviour.
         _setup_types_today = [
             s for s in config.setup_types
             if not (s == "VCP" and current_regime == "DEFENSIVE")
