@@ -4068,7 +4068,7 @@ async def run_backtest_diagnostics(
             raw_trades = await run_portfolio_backtest_universe(
                 tickers,
                 config,
-                params=BacktestParams(),
+                params=None,  # legacy mode — no rs_threshold/score_threshold gates not present in live scanner
                 progress_cb=_progress,
                 sectors=SECTORS,
                 score_collector=score_collector,
