@@ -139,6 +139,8 @@ from constants import (
     PASS1_MAX_SURVIVORS,
     SCAN_CACHE_DIR,
     RS_RANK_CACHE_REFRESH_THRESHOLD,
+    CCI_THRESHOLD,
+    BRK_VOL_MULT,
 )
 from database import (
     complete_scan_run,
@@ -1384,6 +1386,11 @@ async def _run_scan(
     global _scan_state
     scan_start_time = time.time()
 
+    log.info("--- ENGINE SANITY CHECK ---")
+    log.info("Market Regime Score  : (computing...)")
+    log.info("Active CCI Threshold : %.1f", CCI_THRESHOLD)
+    log.info("Active Vol Multiplier: %.2f", BRK_VOL_MULT)
+    log.info("---------------------------")
     log.info("▶ Scan started  ts=%s  tickers=%d", scan_ts, len(tickers))
     _scan_state.update(
         in_progress=True,
@@ -1630,7 +1637,16 @@ async def _run_scan(
         if not dry_run:
             await save_regime(DB_PATH, scan_ts, regime)
         log.info(
-            "Engine 0: %s  score=%d  (SPY=%.2f  EMA20=%.2f  SMA50=%.2f)  "
+            "--- ENGINE SANITY CHECK ---  "
+            "Market Regime Score: %.3f (%s)  "
+            "Active CCI Threshold: %.1f  "
+            "Active Vol Multiplier: %.2f  "
+            "---------------------------",
+            regime["regime_score"], regime["regime"],
+            CCI_THRESHOLD, BRK_VOL_MULT,
+        )
+        log.info(
+            "Engine 0: %s  score=%.3f  (SPY=%.2f  EMA20=%.2f  SMA50=%.2f)  "
             "breadth=%.1f%%  VIX=%.1f  [%.1fs]",
             regime["regime"],
             regime["regime_score"],
