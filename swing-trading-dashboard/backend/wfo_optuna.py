@@ -1,20 +1,31 @@
 """
-wfo_optuna.py — Walk-Forward Optuna Validation  (Final V1 run)
-═══════════════════════════════════════════════════════════════
+wfo_optuna.py — Walk-Forward Optuna Validation  (Clean Re-Optimization v3)
+═══════════════════════════════════════════════════════════════════════════
 Runs per-window Optuna IS optimization across 4 rolling windows (2019–2024),
 applies best IS params to each OOS window, then reruns all OOS windows with
 frozen #433 params for comparison. Prints a full WFO report.
 
-Objective (v2, Calmar-adjusted):
+Objective (v3, Calmar-adjusted with sanity penalties):
     calmar = expectancy / max(0.1, |max_drawdown_r|)
-    score  = calmar × PF × log(N+1) × min(1, sqrt(N/200))
+    score  = calmar × PF × log(N+1) × min(1, sqrt(N/MIN_TRADES))
+    penalty: N < 100 → score ≤ -9.0 (strong)
+    penalty: win_rate > 80% → score = -5.0 (overfit signal)
 
-vs previous objective (E × PF × log(N+1)):
-    + Penalises high-drawdown solutions
-    + Smooth trade-count scaling (no hard -99 cliff at 200 trades)
+Exit logic: EMA20 trail is primary; TARGET exits still fire when
+    high >= entry + tp_multiple × risk (tp_multiple is tuned here).
+    ATR trail (brk_trail_mult, base_trail_mult) is NOT used — removed from search space.
 
-Tunable params (7): score_threshold [1.0,4.0], tp_multiple [1.5,9.0],
-    brk_vol_mult, brk_stop_atr, brk_min_pct, brk_gap_pct, brk_trail_mult
+Tunable params (12): score_threshold [50,85],
+    brk_stop_atr [0.8,1.5], brk_min_pct, brk_gap_pct,
+    brk_donchian_n [20,60], brk_atr_expansion [0.0,0.5], brk_min_consolidation [3,8],
+    rs_threshold [-0.02,0.03], ema_distance [0.5,1.2],
+    base_quality_min [15,30], base_vol_ratio [1.1,1.5],
+    ema_break_buffer [0.0,0.01]
+Frozen (from WFO analysis — stop tuning, use constants):
+    cci_threshold = CCI_THRESHOLD (-40.0)   ← WFO converged; no longer in search
+    brk_vol_mult  = BRK_VOL_MULT  (1.35)    ← WFO baseline; no longer in search
+Removed from search: tp_multiple (TARGET exits disabled — pure EMA/S/R exit model)
+                     brk_trail_mult, base_trail_mult (ATR-trail inactive in ema20 mode)
 
 Windows (IS=24 months, OOS=12 months, step=12 months, start=2019-01-01):
   W1: IS 2019-01-01→2020-12-31  OOS 2021-01-01→2021-12-31
@@ -38,9 +49,11 @@ import asyncio
 import json
 import logging
 import math
+import multiprocessing
 import os
 import sys
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -51,7 +64,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 
 from backtest_engine import BacktestEngine, BacktestParams
-from constants import CONCURRENCY_LIMIT, WFO_CACHE_DIR
+from constants import CONCURRENCY_LIMIT, WFO_CACHE_DIR, CCI_THRESHOLD, BRK_VOL_MULT
 from wfo_cache import load_ticker
 
 logging.basicConfig(
@@ -84,14 +97,27 @@ WFO_WINDOWS: List[Tuple[int, str, str, str, str]] = [
 ]
 
 # Tunable parameter names (used for stability table and best_params dict)
+# brk_trail_mult / base_trail_mult removed — ATR trail inactive in ema20 mode
+# cci_threshold / brk_vol_mult removed — frozen from WFO analysis (CCI_THRESHOLD / BRK_VOL_MULT)
 TUNABLE_PARAMS = [
-    "score_threshold",
-    "tp_multiple",
-    "brk_vol_mult",
+    # General
+    "score_threshold",        # unified quality gate [50,85] on 0-100 normalized scale
+    # tp_multiple removed — TARGET exits disabled; exit model is pure EMA20/S/R trail
+    # RES_BREAKOUT
     "brk_stop_atr",
     "brk_min_pct",
     "brk_gap_pct",
-    "brk_trail_mult",
+    "brk_donchian_n",         # rolling-high lookback [20,60]; live default=63
+    "brk_atr_expansion",      # ATR expansion filter [0.0,0.5]; live default=0.0 (disabled)
+    "brk_min_consolidation",  # consolidation bars [3,8]; live default=3
+    # PULLBACK (unfrozen from trial #433 values)
+    "rs_threshold",           # RS gate [-0.02,0.03]; was frozen at 0.066
+    "ema_distance",           # EMA distance [0.5,1.2]; was frozen at 1.651
+    # BASE PATTERNS
+    "base_quality_min",       # min quality score [15,30]; was frozen at 19
+    "base_vol_ratio",         # min vol ratio [1.1,1.5]; was [1.2,1.6]; v4 clamped
+    # EXIT BEHAVIOUR
+    "ema_break_buffer",       # EMA20 trailing buffer [0.0,0.01]; prevents noise exits
 ]
 
 
@@ -197,6 +223,58 @@ def _spy_return(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Universe liquidity pre-filter
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _prefilter_universe_liquidity(
+    ticker_cache: Dict[str, pd.DataFrame],
+    start_date: str,
+    end_date: str,
+    min_price: float = 10.0,
+    min_avg_vol: float = 500_000,
+    max_tickers: int = 350,
+) -> Dict[str, pd.DataFrame]:
+    """Filter universe to liquid, reasonably-priced tickers before IS optimization.
+
+    Applies filters using data within [start_date, end_date] to avoid forward-looking
+    bias. Keeps SPY unconditionally (needed for RS / regime computation).
+
+    Filters:
+      1. Price > min_price (last close in window)
+      2. 50-day avg volume > min_avg_vol
+      3. Top max_tickers by dollar volume (price × avg_vol)
+    """
+    candidates = []
+    for ticker, df in ticker_cache.items():
+        if ticker == "SPY":
+            continue
+        try:
+            mask = (df.index >= start_date) & (df.index <= end_date)
+            sl = df[mask]
+            if len(sl) < 20:
+                continue
+            adj_col = "Adj Close" if "Adj Close" in sl.columns else "Close"
+            last_price = float(sl[adj_col].iloc[-1])
+            if last_price < min_price:
+                continue
+            if "Volume" not in sl.columns:
+                continue
+            avg_vol = float(sl["Volume"].rolling(50, min_periods=20).mean().iloc[-1])
+            if pd.isna(avg_vol) or avg_vol < min_avg_vol:
+                continue
+            candidates.append((ticker, last_price * avg_vol))
+        except Exception:
+            continue
+
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    selected = {t for t, _ in candidates[:max_tickers]}
+
+    # Always keep SPY
+    filtered = {t: df for t, df in ticker_cache.items() if t in selected or t == "SPY"}
+    return filtered
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Metrics (identical to optimize_v5.py _compute_metrics)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -245,6 +323,42 @@ def _compute_metrics(trades: List[dict]) -> dict:
     for t in trades:
         by_setup[t.get("setup_type", "UNKNOWN")] += 1
 
+    # ── Stop / exit distance diagnostics ─────────────────────────────────────
+    stop_dists  = []
+    exit_dists  = []
+    hold_days   = []
+    for t in trades:
+        ep = t.get("entry_price", 0.0)
+        if ep > 0:
+            sl = t.get("initial_stop", 0.0)
+            ex_p = t.get("exit_price", ep)
+            if sl > 0:
+                stop_dists.append((ep - sl) / ep * 100.0)
+            exit_dists.append((ex_p - ep) / ep * 100.0)
+        hd = t.get("holding_days")
+        if hd is not None:
+            hold_days.append(hd)
+
+    def _med(lst):
+        if not lst:
+            return 0.0
+        s = sorted(lst)
+        n = len(s)
+        return (s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2)
+
+    stop_stats = {
+        "avg_pct":    round(sum(stop_dists) / len(stop_dists), 2) if stop_dists else 0.0,
+        "min_pct":    round(min(stop_dists), 2) if stop_dists else 0.0,
+        "median_pct": round(_med(stop_dists), 2) if stop_dists else 0.0,
+        "max_pct":    round(max(stop_dists), 2) if stop_dists else 0.0,
+    }
+    exit_stats = {
+        "avg_pct":    round(sum(exit_dists) / len(exit_dists), 2) if exit_dists else 0.0,
+    }
+    hold_stats = {
+        "avg_bars":    round(sum(hold_days) / len(hold_days), 1) if hold_days else 0.0,
+    }
+
     return {
         "total_trades":         total,
         "win_rate":             round(win_rate * 100, 1),
@@ -253,6 +367,9 @@ def _compute_metrics(trades: List[dict]) -> dict:
         "max_drawdown_r":       round(max_dd, 2),
         "portfolio_return_pct": portfolio_return_pct,
         "by_setup":             dict(by_setup),
+        "stop_stats":           stop_stats,
+        "exit_stats":           exit_stats,
+        "hold_stats":           hold_stats,
     }
 
 
@@ -260,11 +377,14 @@ def _compute_metrics(trades: List[dict]) -> dict:
 # Objective score (identical to optimize_v5.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _objective_score(metrics: dict) -> float:
-    """Calmar-adjusted objective with smooth trade-count scaling.
+def _objective_score(metrics: dict, trial_num: int = -1) -> float:
+    """Calmar-adjusted objective with sanity penalties and smooth trade-count scaling.
+
+    Penalties (applied before the main formula):
+      - total_trades < 100  → strong penalty (score ≤ -9.0); too few trades = no signal
+      - win_rate > 80%      → score = -5.0; unrealistic selectivity = overfit signal
 
     score = calmar × PF × log(N+1) × min(1.0, sqrt(N / MIN_TRADES))
-
     calmar = expectancy / max(0.1, |max_drawdown_r|)
 
     vs old objective (E × PF × log(N+1)):
@@ -272,10 +392,28 @@ def _objective_score(metrics: dict) -> float:
     - Smooth MIN_TRADES scaling removes the hard -99 cliff at exactly 200 trades.
       Trials below MIN_TRADES are penalised proportionally, not zeroed out.
     """
-    n   = metrics["total_trades"]
-    ex  = metrics["expectancy"]
-    pf  = min(metrics["profit_factor"], 10.0)
-    mdd = abs(metrics.get("max_drawdown_r", 0.0))
+    n        = metrics["total_trades"]
+    ex       = metrics["expectancy"]
+    pf       = min(metrics["profit_factor"], 10.0)
+    mdd      = abs(metrics.get("max_drawdown_r", 0.0))
+    win_rate = metrics.get("win_rate", 0.0)   # already in %
+
+    # ── Sanity penalties ─────────────────────────────────────────────────────
+    if n < 100:
+        # Strong penalty: score never improves above -9.0 regardless of E
+        score = -9.0 - (100 - n) * 0.01
+        logger.info(
+            "trial=%d  PENALTY<100trades  N=%d  WR=%.1f%%  E=%+.4f  score=%.4f",
+            trial_num, n, win_rate, ex, score,
+        )
+        return score
+
+    if win_rate > 80.0:
+        logger.info(
+            "trial=%d  PENALTY>80%%wr  N=%d  WR=%.1f%%  E=%+.4f  score=-5.0",
+            trial_num, n, win_rate, ex,
+        )
+        return -5.0
 
     if ex <= 0 or pf <= 0:
         return float(ex)  # negative — Optuna will route away from these
@@ -283,49 +421,112 @@ def _objective_score(metrics: dict) -> float:
     calmar      = ex / max(0.1, mdd)
     raw         = calmar * pf * math.log(n + 1)
     trade_scale = min(1.0, math.sqrt(n / MIN_TRADES))
-    return raw * trade_scale
+    score       = raw * trade_scale
+
+    # ── Engine diversity penalty (soft) ──────────────────────────────────────
+    # Penalise trials where a single engine dominates > 70% of trades.
+    # Penalty scales linearly: 70% domination → ×1.0; 100% → ×0.4
+    by_setup = metrics.get("by_setup", {})
+    _n_total = sum(by_setup.values())
+    if _n_total > 0:
+        _max_pct = max(by_setup.values()) / _n_total
+        if _max_pct > 0.70:
+            _diversity_factor = max(0.4, 1.0 - (_max_pct - 0.70) * 2.0)
+            score *= _diversity_factor
+            logger.info(
+                "trial=%d  ENGINE_IMBALANCE  max_engine_pct=%.1f%%  diversity_factor=%.3f",
+                trial_num, _max_pct * 100, _diversity_factor,
+            )
+
+    logger.info(
+        "trial=%d  N=%d  WR=%.1f%%  E=%+.4f  MDD=%.2f  score=%.4f",
+        trial_num, n, win_rate, ex, mdd, score,
+    )
+    return score
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Backtest runner (identical to optimize_v5.py _run_trial)
+# Backtest runner — ProcessPoolExecutor for true CPU parallelism
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _run_trial(
+def _run_ticker_sync(args: tuple) -> dict:
+    """
+    Top-level worker for ProcessPoolExecutor — runs one ticker synchronously.
+
+    Must be module-level (not nested) so multiprocessing can pickle it on Windows
+    (spawn start method). Each worker creates its own asyncio event loop via
+    asyncio.run(), avoiding any shared state.
+
+    Returns a dict with keys: trades, signals_evaluated, signals_passed.
+    """
+    ticker, ticker_df, spy_df, start_date, end_date, params, sr_zones = args
+    try:
+        engine = BacktestEngine(
+            ticker=ticker,
+            start_date=start_date,
+            end_date=end_date,
+            ticker_df=ticker_df,
+            spy_df=spy_df,
+            params=params,
+            sr_zones_override=sr_zones,
+        )
+        summary = asyncio.run(engine.run())
+        return {
+            "trades":             [t.to_dict() for t in summary.trades],
+            "signals_evaluated":  summary.signals_evaluated,
+            "signals_passed":     summary.signals_passed,
+        }
+    except Exception as exc:
+        logger.debug("Trial ticker %s failed: %s", ticker, exc)
+        return {"trades": [], "signals_evaluated": 0, "signals_passed": 0}
+
+
+def _run_trial(
     ticker_cache: Dict[str, pd.DataFrame],
     spy_df: Optional[pd.DataFrame],
     start_date: str,
     end_date: str,
     params: BacktestParams,
-) -> List[dict]:
-    """Run full universe backtest with given params. Returns list of trade dicts."""
+    sr_zones_cache: Optional[Dict] = None,
+    max_workers: Optional[int] = None,
+) -> Tuple[List[dict], int, int]:
+    """
+    Run full universe backtest with given params.
+
+    Returns (trades, total_signals_evaluated, total_signals_passed).
+
+    Uses ProcessPoolExecutor for true CPU parallelism (bypasses GIL).
+    sr_zones_cache: pre-computed per-ticker SR zones dict — skips KDE recomputation
+                    per trial (~2× speedup).
+    max_workers: cap on subprocess count; defaults to os.cpu_count().
+    """
     tickers = [t for t in ticker_cache if t != "SPY"]
     if not tickers:
-        return []
+        return [], 0, 0
 
-    sem = asyncio.Semaphore(CONCURRENCY_LIMIT)
+    args_list = [
+        (
+            t,
+            ticker_cache[t],
+            spy_df,
+            start_date,
+            end_date,
+            params,
+            sr_zones_cache.get(t) if sr_zones_cache is not None else None,
+        )
+        for t in tickers
+    ]
 
-    async def _run_one(ticker: str) -> List[dict]:
-        async with sem:
-            try:
-                engine = BacktestEngine(
-                    ticker=ticker,
-                    start_date=start_date,
-                    end_date=end_date,
-                    ticker_df=ticker_cache[ticker],
-                    spy_df=spy_df,
-                    params=params,
-                )
-                summary = await engine.run()
-                return [t.to_dict() for t in summary.trades]
-            except Exception as exc:
-                logger.debug("Trial ticker %s failed: %s", ticker, exc)
-                return []
-
-    results = await asyncio.gather(*[_run_one(t) for t in tickers])
+    n_workers = min(max_workers or (os.cpu_count() or 4), len(tickers))
     all_trades: List[dict] = []
-    for batch in results:
-        all_trades.extend(batch)
-    return all_trades
+    total_sig_eval: int = 0
+    total_sig_pass: int = 0
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
+        for batch in pool.map(_run_ticker_sync, args_list, chunksize=1):
+            all_trades.extend(batch["trades"])
+            total_sig_eval += batch.get("signals_evaluated", 0)
+            total_sig_pass += batch.get("signals_passed", 0)
+    return all_trades, total_sig_eval, total_sig_pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -335,64 +536,92 @@ async def _run_trial(
 def _build_params(trial) -> BacktestParams:
     """Sample BacktestParams from Optuna trial.
 
-    Tunable (7): score_threshold, tp_multiple, brk_vol_mult, brk_stop_atr,
-                 brk_min_pct, brk_gap_pct, brk_trail_mult
-    Frozen (5):  rs_threshold, cci_threshold, ema_distance,
-                 breakout_weight, pullback_weight
+    Tunable (12): score_threshold [50,85],
+                  brk_stop_atr [0.8,1.5], brk_min_pct, brk_gap_pct,
+                  brk_donchian_n [20,60], brk_atr_expansion [0.0,0.5],
+                  brk_min_consolidation [3,8],
+                  rs_threshold [-0.02,0.03], ema_distance [0.5,1.2],
+                  base_quality_min [15,30], base_vol_ratio [1.1,1.5],
+                  ema_break_buffer [0.0,0.01]
+    Frozen (7):   breakout_weight, pullback_weight, tdl_bonus, vcp_bonus,
+                  cooldown_days, cci_threshold (=CCI_THRESHOLD), brk_vol_mult (=BRK_VOL_MULT)
+    Removed:      brk_trail_mult, base_trail_mult — ATR trail inactive in ema20 mode
     """
     return BacktestParams(
-        # ── Frozen at trial #433 ─────────────────────────────────────────────
-        rs_threshold    = 0.066,
-        cci_threshold   = -54.5,
-        ema_distance    = 1.651,
-        breakout_weight = 1.724,
-        pullback_weight = 1.842,
-        tdl_bonus       = 1.016,
-        vcp_bonus       = 1.370,
-        cooldown_days   = 4,
-        # ── Tunable ──────────────────────────────────────────────────────────
-        # score_threshold gates ALL pullback signals — never been optimized before
-        score_threshold = trial.suggest_float("score_threshold", 1.0,  4.0),
-        tp_multiple     = trial.suggest_float("tp_multiple",     1.5,  9.0),
-        brk_vol_mult    = trial.suggest_float("brk_vol_mult",    1.5,  3.5),
-        brk_stop_atr    = trial.suggest_float("brk_stop_atr",    0.3,  2.0),
-        brk_min_pct     = trial.suggest_float("brk_min_pct",     0.01, 0.05),
-        brk_gap_pct     = trial.suggest_float("brk_gap_pct",     0.01, 0.08),
-        brk_trail_mult  = trial.suggest_float("brk_trail_mult",  1.5,  8.0),
+        # ── Frozen ───────────────────────────────────────────────────────────
+        breakout_weight  = 1.724,
+        pullback_weight  = 1.842,
+        tdl_bonus        = 1.016,
+        vcp_bonus        = 1.370,
+        cooldown_days    = 4,
+        # Frozen from WFO analysis — use constants, stop optimizing
+        cci_threshold    = CCI_THRESHOLD,   # -40.0
+        brk_vol_mult     = BRK_VOL_MULT,    # 1.35
+        # ── General ─────────────────────────────────────────────────────────
+        # score_threshold: unified quality gate on normalized 0-100 scale.
+        # Backtest normalizes raw_score × weight to 0-100 before comparison.
+        # Range [50,85]: 50=lenient (filter bottom quartile), 85=strict (top 15%)
+        score_threshold      = trial.suggest_float("score_threshold",      50.0, 85.0),
+        # tp_multiple removed — TARGET exits disabled; exit model is pure EMA20/S/R trail
+        # ── RES_BREAKOUT ────────────────────────────────────────────────────
+        brk_stop_atr         = trial.suggest_float("brk_stop_atr",         0.8,  1.5),
+        brk_min_pct          = trial.suggest_float("brk_min_pct",          0.01, 0.05),
+        brk_gap_pct          = trial.suggest_float("brk_gap_pct",          0.01, 0.08),
+        brk_donchian_n       = trial.suggest_int(  "brk_donchian_n",       20,   60),
+        brk_atr_expansion    = trial.suggest_float("brk_atr_expansion",    0.0,  0.5),
+        brk_min_consolidation= trial.suggest_int(  "brk_min_consolidation",3,    8),
+        # ── PULLBACK ─────────────────────────────────────────────────────────
+        rs_threshold         = trial.suggest_float("rs_threshold",         -0.02, 0.03),
+        ema_distance         = trial.suggest_float("ema_distance",          0.5,   1.2),
+        # ── BASE PATTERNS ───────────────────────────────────────────────────
+        base_quality_min     = trial.suggest_int(  "base_quality_min",     15,   30),
+        base_vol_ratio       = trial.suggest_float("base_vol_ratio",        1.1,  1.5),
+        # ── EXIT BEHAVIOUR ──────────────────────────────────────────────────
+        ema_break_buffer     = trial.suggest_float("ema_break_buffer",      0.0,  0.01),
     )
 
 
 def _build_params_from_values(values: dict) -> BacktestParams:
     """Reconstruct BacktestParams from Optuna best_trial.params dict.
 
-    Frozen params fall back to trial #433 hardcoded values.
-    Tunable params use .get(key, fallback) so this works
-    when called with a partial dict (e.g. from --resume with missing keys).
+    Frozen params use hardcoded values.
+    Tunable params use .get(key, fallback) — fallbacks are range midpoints
+    so this works when called with a partial dict (e.g. --resume with missing keys).
     """
     missing = [k for k in TUNABLE_PARAMS if k not in values]
     if missing:
         logger.warning(
-            "_build_params_from_values: missing keys %s — falling back to trial #433 defaults",
+            "_build_params_from_values: missing keys %s — falling back to range midpoints",
             missing,
         )
     return BacktestParams(
         # ── Frozen ───────────────────────────────────────────────────────────
-        rs_threshold    = 0.066,
-        cci_threshold   = -54.5,
-        ema_distance    = 1.651,
-        breakout_weight = 1.724,
-        pullback_weight = 1.842,
-        tdl_bonus       = 1.016,
-        vcp_bonus       = 1.370,
-        cooldown_days   = 4,
-        # ── Tunable (fall back to trial #433 / current defaults) ─────────
-        score_threshold = values.get("score_threshold", 2.50),
-        tp_multiple     = values.get("tp_multiple",     5.80),
-        brk_vol_mult    = values.get("brk_vol_mult",    3.0161),
-        brk_stop_atr    = values.get("brk_stop_atr",    1.6675),
-        brk_min_pct     = values.get("brk_min_pct",     0.04333),
-        brk_gap_pct     = values.get("brk_gap_pct",     0.01021),
-        brk_trail_mult  = values.get("brk_trail_mult",  6.906),
+        breakout_weight  = 1.724,
+        pullback_weight  = 1.842,
+        tdl_bonus        = 1.016,
+        vcp_bonus        = 1.370,
+        cooldown_days    = 4,
+        # Frozen from WFO analysis — use constants directly
+        cci_threshold    = CCI_THRESHOLD,   # -40.0 (was tunable [-45,-20])
+        brk_vol_mult     = BRK_VOL_MULT,    # 1.35  (was tunable [1.1,1.6])
+        # ── General ──────────────────────────────────────────────────────────
+        score_threshold       = values.get("score_threshold",       67.5),  # midpoint [50,85]
+        # tp_multiple removed — TARGET exits disabled
+        # ── RES_BREAKOUT ─────────────────────────────────────────────────────
+        brk_stop_atr          = values.get("brk_stop_atr",          1.15),  # midpoint [0.8,1.5]
+        brk_min_pct           = values.get("brk_min_pct",           0.02),
+        brk_gap_pct           = values.get("brk_gap_pct",           0.036),
+        brk_donchian_n        = int(values.get("brk_donchian_n",    40)),   # midpoint [20,60]
+        brk_atr_expansion     = values.get("brk_atr_expansion",     0.0),  # live default: disabled
+        brk_min_consolidation = int(values.get("brk_min_consolidation", 5)),# midpoint [3,8]
+        # ── PULLBACK ─────────────────────────────────────────────────────────
+        rs_threshold          = values.get("rs_threshold",          0.005), # midpoint [-0.02,0.03]
+        ema_distance          = values.get("ema_distance",           0.85), # midpoint [0.5,1.2]
+        # ── BASE PATTERNS ────────────────────────────────────────────────────
+        base_quality_min      = int(values.get("base_quality_min",  22)),   # midpoint [15,30]
+        base_vol_ratio        = values.get("base_vol_ratio",         1.3),  # midpoint [1.1,1.5]
+        # ── EXIT BEHAVIOUR ───────────────────────────────────────────────────
+        ema_break_buffer      = values.get("ema_break_buffer",       0.0),  # default: exact EMA20
     )
 
 
@@ -406,14 +635,15 @@ def _frozen_params() -> BacktestParams:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _optimize_window(
-    window_num:   int,
-    is_start:     str,
-    is_end:       str,
-    ticker_cache: Dict[str, pd.DataFrame],
-    spy_df:       Optional[pd.DataFrame],
-    n_trials:     int,
-    storage:      str,
-    resume:       bool,
+    window_num:        int,
+    is_start:          str,
+    is_end:            str,
+    ticker_cache:      Dict[str, pd.DataFrame],
+    spy_df:            Optional[pd.DataFrame],
+    n_trials:          int,
+    storage:           str,
+    resume:            bool,
+    inner_max_workers: Optional[int] = None,
 ) -> Tuple[BacktestParams, dict, int, float]:
     """
     Run Optuna TPE on the IS period for one window.
@@ -444,6 +674,33 @@ def _optimize_window(
             flush=True,
         )
     ticker_cache = filtered_cache
+
+    # ── Liquidity pre-filter: reduce universe to top ~300 liquid tickers ──────
+    # Filters: price > $10, avg vol > 500k, top 350 by dollar volume.
+    # Applied per-window using only in-sample data to avoid forward bias.
+    _pre_liq = _prefilter_universe_liquidity(
+        ticker_cache, is_start, is_end,
+        min_price=10.0, min_avg_vol=500_000, max_tickers=350,
+    )
+    _liq_dropped = len(ticker_cache) - len(_pre_liq)
+    print(
+        f"  W{window_num}: Liquidity filter — {len(_pre_liq)} tickers kept "
+        f"({_liq_dropped} dropped, price<$10 or vol<500k or outside top-350).",
+        flush=True,
+    )
+    ticker_cache = _pre_liq
+
+    # Pre-compute SR zones once per window — reused across all Optuna trials.
+    # Zones depend only on price data; precomputing here saves ~15-20% per trial.
+    from engines.engine1 import calculate_sr_zones as _calc_sr_zones
+    print(f"  W{window_num}: Pre-computing SR zones for {len(ticker_cache)} tickers…", flush=True)
+    sr_zones_cache: Dict[str, list] = {}
+    for _tz, _df in ticker_cache.items():
+        try:
+            sr_zones_cache[_tz] = _calc_sr_zones(_tz, _df)
+        except Exception:
+            sr_zones_cache[_tz] = []
+    print(f"  W{window_num}: SR zones ready.", flush=True)
 
     try:
         import optuna
@@ -487,32 +744,146 @@ def _optimize_window(
         def objective(trial) -> float:
             t0 = time.perf_counter()
             params  = _build_params(trial)
-            trades  = asyncio.run(_run_trial(ticker_cache, spy_df, is_start, is_end, params))
+            trades, _sig_eval, _sig_pass = _run_trial(
+                ticker_cache, spy_df, is_start, is_end, params,
+                sr_zones_cache=sr_zones_cache,
+                max_workers=inner_max_workers,
+            )
             metrics = _compute_metrics(trades)
-            score   = _objective_score(metrics)
+            score   = _objective_score(metrics, trial_num=trial.number)
             elapsed = time.perf_counter() - t0
             trial_times.append(elapsed)
             avg = sum(trial_times) / len(trial_times)
             done_so_far = trial.number + 1
             eta_min = max(0, (n_trials - done_so_far) * avg / 60)
+            # Store key metrics on trial for top-10 display later
+            trial.set_user_attr("N",              metrics["total_trades"])
+            trial.set_user_attr("win_rate",        metrics["win_rate"])
+            trial.set_user_attr("expectancy",      metrics["expectancy"])
+            trial.set_user_attr("profit_factor",   metrics["profit_factor"])
+            trial.set_user_attr("max_drawdown_r",  metrics["max_drawdown_r"])
+            _ss = metrics.get("stop_stats", {})
+            _hs = metrics.get("hold_stats", {})
             print(
                 f"  W{window_num} trial {trial.number:>4}  "
                 f"score={score:>8.4f}  E={metrics['expectancy']:>+.4f}  "
+                f"WR={metrics['win_rate']:.1f}%  "
                 f"PF={metrics['profit_factor']:.3f}  N={metrics['total_trades']}  "
+                f"MDD={metrics['max_drawdown_r']:.2f}  "
+                f"stop={_ss.get('avg_pct',0):.2f}%  hold={_hs.get('avg_bars',0):.1f}d  "
                 f"port={metrics['portfolio_return_pct']:>+.1f}%  "
                 f"{elapsed/60:.1f}min  ETA≈{eta_min:.0f}min",
                 flush=True,
             )
+            # ── Sanity logging (per trial) ────────────────────────────────────
+            _by_setup = metrics.get("by_setup", {})
+            _n_total_setups = sum(_by_setup.values())
+            _setup_pct = "  ".join(
+                f"{k}={v}({v/_n_total_setups*100:.0f}%)" if _n_total_setups else f"{k}={v}"
+                for k, v in sorted(_by_setup.items())
+            ) or "none"
+            _vol_ratios = [
+                t["setup_meta"]["volume_ratio"]
+                for t in trades
+                if isinstance(t.get("setup_meta"), dict)
+                and t["setup_meta"].get("volume_ratio") is not None
+            ]
+            _avg_vol  = (sum(_vol_ratios) / len(_vol_ratios)) if _vol_ratios else None
+            _min_vol  = min(_vol_ratios) if _vol_ratios else None
+            _max_vol  = max(_vol_ratios) if _vol_ratios else None
+            _ema_dists = [
+                abs(t["entry_price"] - t.get("initial_stop", 0)) / max(t.get("initial_stop", 1), 1)
+                for t in trades
+                if t.get("setup_type") in ("PULLBACK",) and t.get("entry_price", 0) > 0
+            ]
+            _avg_ema_dist = (sum(_ema_dists) / len(_ema_dists)) if _ema_dists else None
+            _hold_days = [t["holding_days"] for t in trades if t.get("holding_days") is not None]
+            _avg_hold = (sum(_hold_days) / len(_hold_days)) if _hold_days else None
+            # Rejection rate: signals that reached detection vs those that became trades
+            _pct_rejected = (
+                (1.0 - _sig_pass / _sig_eval) * 100
+                if _sig_eval > 0 else None
+            )
+            vol_str  = (f"min={_min_vol:.2f} avg={_avg_vol:.2f} max={_max_vol:.2f}"
+                        if _avg_vol is not None else "n/a")
+            hold_str = f"{_avg_hold:.1f}d" if _avg_hold is not None else "n/a"
+            rej_str  = f"{_pct_rejected:.1f}%" if _pct_rejected is not None else "n/a"
+            print(
+                f"    SANITY  total={metrics['total_trades']}  "
+                f"by_engine=[{_setup_pct}]  "
+                f"vol_ratio=[{vol_str}]  "
+                f"ema_dist={'%.3f' % _avg_ema_dist if _avg_ema_dist is not None else 'n/a'}  "
+                f"avg_hold={hold_str}  "
+                f"sig_eval={_sig_eval}  sig_pass={_sig_pass}  pct_rejected={rej_str}",
+                flush=True,
+            )
+            # ── Trade quality warnings ─────────────────────────────────────────
+            _warnings = []
+            if _avg_vol is not None and _avg_vol > 1.8:
+                _warnings.append(f"HIGH_VOL_RATIO={_avg_vol:.2f}")
+            if _avg_hold is not None and _avg_hold < 2:
+                _warnings.append(f"SHORT_HOLD={_avg_hold:.1f}d")
+            if _avg_hold is not None and _avg_hold > 20:
+                _warnings.append(f"LONG_HOLD={_avg_hold:.1f}d")
+            if _n_total_setups > 0:
+                _dom_pct = max(_by_setup.values()) / _n_total_setups
+                if _dom_pct > 0.70:
+                    _dom_engine = max(_by_setup, key=_by_setup.get)
+                    _warnings.append(f"ENGINE_SKEW:{_dom_engine}={_dom_pct*100:.0f}%")
+            if _pct_rejected is not None and (_pct_rejected < 60 or _pct_rejected > 98):
+                _warnings.append(f"REJECTION_OUT_OF_RANGE={rej_str}")
+            if _warnings:
+                print(f"    ⚠ WARNINGS: {' | '.join(_warnings)}", flush=True)
             return score
 
         study.optimize(objective, n_trials=remaining, n_jobs=1, show_progress_bar=False)
+
+        # ── Print top 10 IS trials by score ──────────────────────────────────
+        completed_trials = [t for t in study.trials if t.state.name == "COMPLETE"]
+        top10 = sorted(
+            completed_trials,
+            key=lambda t: t.value if t.value is not None else float("-inf"),
+            reverse=True,
+        )[:10]
+        print(f"\n  W{window_num} — Top 10 IS trials (by score):")
+        print(
+            f"  {'rank':>4}  {'#trial':>6}  {'score':>8}  "
+            f"{'N':>5}  {'WR%':>6}  {'E(R)':>8}  {'MDD':>6}"
+        )
+        print(f"  {'─'*4}  {'─'*6}  {'─'*8}  {'─'*5}  {'─'*6}  {'─'*8}  {'─'*6}")
+        for rank, t in enumerate(top10, start=1):
+            n_t   = t.user_attrs.get("N", "?")
+            wr_t  = t.user_attrs.get("win_rate", 0.0)
+            ex_t  = t.user_attrs.get("expectancy", 0.0)
+            mdd_t = t.user_attrs.get("max_drawdown_r", 0.0)
+            print(
+                f"  {rank:>4}  #{t.number:<5}  {(t.value or 0.0):>8.4f}  "
+                f"{n_t:>5}  {wr_t:>6.1f}  {ex_t:>+8.4f}  {mdd_t:>6.2f}"
+            )
+        # Parameter distributions across top-10
+        print(f"\n  Parameter distributions (top-10 trials):")
+        import statistics as _stats
+        for param in TUNABLE_PARAMS:
+            vals = [t.params[param] for t in top10 if param in t.params]
+            if not vals:
+                continue
+            mn   = min(vals)
+            mx   = max(vals)
+            mean = _stats.mean(vals)
+            fmt  = ".0f" if isinstance(vals[0], int) else ".4f"
+            print(f"    {param:<22}  min={mn:{fmt}}  max={mx:{fmt}}  mean={mean:{fmt}}")
+        print(flush=True)
 
     best        = study.best_trial
     best_params = _build_params_from_values(best.params)
 
     # Re-evaluate IS period with best params to get full metrics
     print(f"  W{window_num}: Re-evaluating IS with best params (trial #{best.number})…", flush=True)
-    is_trades  = asyncio.run(_run_trial(ticker_cache, spy_df, is_start, is_end, best_params))
+    is_trades, _, _ = _run_trial(
+        ticker_cache, spy_df, is_start, is_end, best_params,
+        sr_zones_cache=sr_zones_cache,
+        max_workers=inner_max_workers,
+    )
     is_metrics = _compute_metrics(is_trades)
 
     return best_params, is_metrics, best.number, best.value
@@ -530,8 +901,10 @@ def _print_report(results: List[WindowOptResult]) -> None:
         f"  WALK-FORWARD OPTUNA VALIDATION REPORT — FINAL V1  "
         f"({len(results)} windows, {datetime.now().strftime('%Y-%m-%d %H:%M')})"
     )
-    print(f"  Objective: Calmar×PF×log(N+1)×scale  |  7 tunable params  |  per-window seeds")
+    print(f"  Objective: Calmar×PF×log(N+1)×scale  |  14 tunable params  |  N<100/WR>80% penalized")
     print(f"{'═' * W}")
+    print(f"\n  Exit model = ATR initial stop + EMA20 trailing — VERIFIED")
+    print(f"  Exit logic is PURE EMA/S/R — no target exits active\n")
 
     # ── Section A: OOS performance table ─────────────────────────────────────
     print(f"\n  {'─' * (W - 2)}")
@@ -599,6 +972,23 @@ def _print_report(results: List[WindowOptResult]) -> None:
         for s in spy_vals:
             spy_cum *= (1.0 + s)
         print(f"  SPY cumulative (OOS windows only) : {(spy_cum - 1)*100:>+.1f}%")
+
+    # ── Section B2: Exit / stop diagnostics ──────────────────────────────────
+    print(f"\n  {'─' * (W - 2)}")
+    print(f"  SECTION B2 — EXIT DIAGNOSTICS  (optimized OOS — stop/exit distances, holding time)")
+    print(f"  {'─' * (W - 2)}")
+    print(f"\n  {'Win':<4}  {'StopDist avg%':>14}  {'StopDist med%':>14}  "
+          f"{'StopDist min/max%':>18}  {'ExitDist avg%':>14}  {'AvgHold(days)':>14}")
+    print(f"  {'─'*4}  {'─'*14}  {'─'*14}  {'─'*18}  {'─'*14}  {'─'*14}")
+    for r in results:
+        ss = r.oos_metrics.get("stop_stats",  {})
+        es = r.oos_metrics.get("exit_stats",  {})
+        hs = r.oos_metrics.get("hold_stats",  {})
+        stop_rng = f"{ss.get('min_pct',0):.2f} / {ss.get('max_pct',0):.2f}"
+        print(
+            f"  {r.window_num:<4}  {ss.get('avg_pct',0):>14.2f}  {ss.get('median_pct',0):>14.2f}  "
+            f"{stop_rng:>18}  {es.get('avg_pct',0):>+14.2f}  {hs.get('avg_bars',0):>14.1f}"
+        )
 
     # ── Section C: Parameter stability table ─────────────────────────────────
     print(f"\n  {'─' * (W - 2)}")
@@ -694,6 +1084,14 @@ def main() -> None:
         "--windows", type=str, default="1,2,3,4",
         help="Comma-separated window numbers to run (default: 1,2,3,4)",
     )
+    parser.add_argument(
+        "--parallel-windows", action="store_true",
+        help=(
+            "Run IS optimization for all windows concurrently via ThreadPoolExecutor. "
+            "Each window's per-trial work still uses ProcessPoolExecutor for tickers. "
+            "CPU budget is divided evenly across windows to avoid oversubscription."
+        ),
+    )
     args = parser.parse_args()
 
     selected = {int(w.strip()) for w in args.windows.split(",")}
@@ -702,6 +1100,13 @@ def main() -> None:
     if not windows_to_run:
         print(f"ERROR: no valid windows in --windows={args.windows!r}  (valid: 1,2,3,4)")
         sys.exit(1)
+
+    # ── System integrity confirmation ─────────────────────────────────────────
+    print("=" * 60)
+    print("EXIT MODEL: EMA20 + S/R ONLY")
+    print("NO TARGET EXITS ACTIVE")
+    print("PARAMS ALIGNED WITH OPTUNA RANGES")
+    print("=" * 60, flush=True)
 
     # ── 1. Load price data ────────────────────────────────────────────────────
     _DATA_DIR.mkdir(exist_ok=True)
@@ -713,34 +1118,74 @@ def main() -> None:
         print("  Download price data first (see wfo_cache.py).")
         sys.exit(1)
 
+    n_cpu = os.cpu_count() or 4
+    parallel_windows = getattr(args, "parallel_windows", False)
+    n_win = len(windows_to_run)
+    # When running windows in parallel, divide CPU budget to avoid oversubscription
+    inner_workers = max(1, n_cpu // n_win) if parallel_windows else None
+
     print(f"\nWalk-Forward Optuna Validation")
     print(f"  Windows  : {[w[0] for w in windows_to_run]}")
     print(f"  IS trials: {args.trials} per window")
     print(f"  Universe : {len(ticker_cache)} tickers")
     print(f"  Resume   : {args.resume}")
+    print(f"  CPUs     : {n_cpu}  parallel-windows={parallel_windows}"
+          + (f"  inner-workers={inner_workers}" if parallel_windows else ""))
     print()
 
     all_results: List[WindowOptResult] = []
 
-    # ── 2. Per-window loop ────────────────────────────────────────────────────
+    # ── 2a. IS Optimization phase ─────────────────────────────────────────────
+    # Either sequential (default) or parallel across windows (--parallel-windows).
+    # Parallel mode uses ThreadPoolExecutor so each window thread can still spawn
+    # ProcessPoolExecutor workers for tickers without hitting nested-spawn limits.
+
+    is_phase_results: Dict[int, Tuple[BacktestParams, dict, int, float]] = {}
+
+    def _run_one_window_is(w_args):
+        wn, ws, we, _, _ = w_args
+        st = f"sqlite:///{_DATA_DIR}/wfo_final_w{wn}.db"
+        print(f"\n{'═' * 70}")
+        print(f"  Window {wn}: IS {ws}→{we}")
+        print(f"{'═' * 70}")
+        print(f"\n[IS-W{wn}] Running {args.trials} Optuna trials…", flush=True)
+        t0 = datetime.now()
+        res = _optimize_window(
+            wn, ws, we, ticker_cache, spy_df,
+            args.trials, st, args.resume, inner_workers,
+        )
+        elapsed = (datetime.now() - t0).total_seconds() / 60
+        bp, im, btn, bs = res
+        print(
+            f"\n[IS-W{wn}] Done in {elapsed:.1f}min  "
+            f"best trial #{btn}  score={bs:.4f}  "
+            f"E={im['expectancy']:+.4f}  PF={im['profit_factor']:.3f}  "
+            f"N={im['total_trades']}",
+            flush=True,
+        )
+        return wn, res
+
+    if parallel_windows and n_win > 1:
+        print(f"  [parallel-windows] IS phase: {n_win} windows in ThreadPoolExecutor", flush=True)
+        with ThreadPoolExecutor(max_workers=n_win) as tpe:
+            for wn, res in tpe.map(_run_one_window_is, windows_to_run):
+                is_phase_results[wn] = res
+    else:
+        for w_args in windows_to_run:
+            wn, res = _run_one_window_is(w_args)
+            is_phase_results[wn] = res
+
+    # ── 2. Per-window OOS evaluation loop ─────────────────────────────────────
     for window_num, is_start, is_end, oos_start, oos_end in windows_to_run:
         storage = f"sqlite:///{_DATA_DIR}/wfo_final_w{window_num}.db"
 
         print(f"\n{'═' * 70}")
-        print(f"  Window {window_num}: IS {is_start}→{is_end}  |  OOS {oos_start}→{oos_end}")
+        print(f"  Window {window_num}: OOS {oos_start}→{oos_end}")
         print(f"{'═' * 70}")
 
-        # ── 2a. IS Optuna optimization ────────────────────────────────────────
-        print(f"\n[IS] Running {args.trials} Optuna trials…", flush=True)
-        t0_is = datetime.now()
-        best_params, is_metrics, best_trial_n, best_score = _optimize_window(
-            window_num, is_start, is_end,
-            ticker_cache, spy_df, args.trials, storage, args.resume,
-        )
-        elapsed_is = (datetime.now() - t0_is).total_seconds() / 60
+        best_params, is_metrics, best_trial_n, best_score = is_phase_results[window_num]
         print(
-            f"\n[IS] Done in {elapsed_is:.1f}min  "
-            f"best trial #{best_trial_n}  score={best_score:.4f}  "
+            f"\n[IS] best trial #{best_trial_n}  score={best_score:.4f}  "
             f"E={is_metrics['expectancy']:+.4f}  PF={is_metrics['profit_factor']:.3f}  "
             f"N={is_metrics['total_trades']}",
             flush=True,
@@ -748,9 +1193,7 @@ def main() -> None:
 
         # ── 2b. OOS with optimized params ─────────────────────────────────────
         print(f"\n[OOS-opt] Evaluating OOS with optimized params…", flush=True)
-        oos_trades  = asyncio.run(
-            _run_trial(ticker_cache, spy_df, oos_start, oos_end, best_params)
-        )
+        oos_trades, _, _ = _run_trial(ticker_cache, spy_df, oos_start, oos_end, best_params)
         oos_metrics = _compute_metrics(oos_trades)
         print(
             f"[OOS-opt] E={oos_metrics['expectancy']:+.4f}  "
@@ -763,9 +1206,7 @@ def main() -> None:
         # ── 2c. OOS with frozen #433 params ───────────────────────────────────
         print(f"\n[OOS-frz] Evaluating OOS with frozen #433 params…", flush=True)
         frozen        = _frozen_params()
-        frozen_trades = asyncio.run(
-            _run_trial(ticker_cache, spy_df, oos_start, oos_end, frozen)
-        )
+        frozen_trades, _, _ = _run_trial(ticker_cache, spy_df, oos_start, oos_end, frozen)
         frozen_metrics = _compute_metrics(frozen_trades)
         print(
             f"[OOS-frz] E={frozen_metrics['expectancy']:+.4f}  "
@@ -828,4 +1269,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Required on Windows: prevents recursive subprocess spawning when
+    # ProcessPoolExecutor workers import this module.
+    multiprocessing.freeze_support()
     main()

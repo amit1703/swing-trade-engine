@@ -3,6 +3,10 @@ Centralized entry-gate filters shared by scanner, backtest, and WFO.
 
 All filter functions are pure (no side effects, no network calls) so they
 can be called safely inside the per-bar backtest replay loop.
+
+Regime scoring delegates to engines/engine0.py (V2 continuous, 0.0–100.0).
+Identical scoring is used for both live scan and historical backtest,
+eliminating train-serve skew.
 """
 from __future__ import annotations
 
@@ -18,118 +22,57 @@ from constants import (
     EARNINGS_BLACKOUT_DAYS,
     REGIME_AGGRESSIVE_THRESHOLD,
     REGIME_SELECTIVE_THRESHOLD,
-    REGIME_WEIGHT_EMA20,
-    REGIME_WEIGHT_SMA50,
-    REGIME_WEIGHT_MA_STACK,
-    REGIME_WEIGHT_SLOPE,
 )
+from engines.engine0 import compute_regime_score_series as _engine0_score_series
+
+# Minimum bars required before regime scoring produces reliable output.
+# Ensures ATR50sma warmup (14 + 50 = 64 bars); protects unit-test inputs with
+# < 65 bars from returning spurious bullish signals during indicator warmup.
+_REGIME_MIN_BARS = 65
 
 
-def _compute_spy_regime_score(spy_df: pd.DataFrame) -> pd.Series:
+def compute_regime_score_series(spy_df: pd.DataFrame) -> pd.Series:
     """
-    Compute the integer regime score series for spy_df.
+    Return float regime score (0.0–1.0) per date as a pd.Series.
 
-    Uses SPY-only factors from engine0 (f1–f4):
-      f1: SPY Close > EMA20       → REGIME_WEIGHT_EMA20  pts
-      f2: SPY Close > SMA50       → REGIME_WEIGHT_SMA50  pts
-      f3: SMA50 > SMA200          → REGIME_WEIGHT_MA_STACK pts
-      f4: EMA20 slope (5-bar)     → 0..REGIME_WEIGHT_SLOPE pts
-
-    Bars where SMA200 is NaN (insufficient history) are zeroed out.
-    Caller is responsible for ensuring len(spy_df) >= 200.
+    Delegates to engines.engine0.compute_regime_score_series (SPY-only continuous
+    7-factor scoring). Returns all-zero for inputs with fewer than _REGIME_MIN_BARS rows.
     """
-    close  = spy_df["Close"]
-    ema20  = close.ewm(span=20, adjust=False).mean()
-    sma50  = close.rolling(50).mean()
-    sma200 = close.rolling(200).mean()
-    # Vectorized scoring — all operations stay in NumPy speed
-    score = pd.Series(0, index=spy_df.index, dtype=int)
-    score += (close > ema20).astype(int) * REGIME_WEIGHT_EMA20
-    score += (close > sma50).astype(int) * REGIME_WEIGHT_SMA50
-    score += (sma50 > sma200).astype(int) * REGIME_WEIGHT_MA_STACK
-
-    # f4: EMA20 slope over 5 bars — pct-change with ±1% midpoint mapping.
-    # Matches engine0.py convention: flat EMA = 0.5 → 5 pts (neutral midpoint).
-    # Range: -1% → 0 pts, 0% → 5 pts, +1% → 10 pts. Wider than ±0.5% to
-    # reduce noise and prevent excessive regime flipping.
-    slope5_pct = ((ema20 - ema20.shift(5)) / ema20.shift(5)).fillna(0.0)
-    slope_norm = (slope5_pct + 0.01) / 0.02   # -1%→0, 0%→0.5, +1%→1
-    slope_pts  = (slope_norm.clip(0, 1) * REGIME_WEIGHT_SLOPE).astype(int)
-    score += slope_pts
-
-    # Zero out any bars where SMA200 is NaN (insufficient history)
-    score = score.where(sma200.notna(), other=0)
-
-    return score
+    if spy_df is None or len(spy_df) < _REGIME_MIN_BARS:
+        idx = spy_df.index if spy_df is not None else pd.DatetimeIndex([])
+        return pd.Series(0.0, index=idx, dtype=float)
+    return _engine0_score_series(spy_df)
 
 
 def compute_regime_series(spy_df: pd.DataFrame) -> pd.Series:
     """
     Return a boolean pd.Series (same index as spy_df) where True = bullish regime.
 
-    Uses SPY-only factors from engine0 (f1–f4):
-      f1: SPY Close > EMA20       → REGIME_WEIGHT_EMA20  pts
-      f2: SPY Close > SMA50       → REGIME_WEIGHT_SMA50  pts
-      f3: SMA50 > SMA200          → REGIME_WEIGHT_MA_STACK pts
-      f4: EMA20 slope (5-bar)     → 0..REGIME_WEIGHT_SLOPE pts
-
-    Threshold: REGIME_SELECTIVE_THRESHOLD (40 pts).
-    Returns all-False for inputs with < 200 bars (insufficient SMA200 history).
-
-    Factors f5–f7 (breadth, H/L ratio, VIX) require universe-wide live data
-    and are intentionally omitted for use in historical backtesting.
+    Threshold: REGIME_SELECTIVE_THRESHOLD (0.40 on the 0.0–1.0 continuous scale).
+    Returns all-False for inputs with fewer than _REGIME_MIN_BARS rows.
     """
-    if spy_df is None or len(spy_df) < 200:
-        if spy_df is not None:
-            return pd.Series(False, index=spy_df.index, dtype=bool)
-        return pd.Series(dtype=bool)
-
-    score = _compute_spy_regime_score(spy_df)
+    if spy_df is None or len(spy_df) < _REGIME_MIN_BARS:
+        idx = spy_df.index if spy_df is not None else pd.DatetimeIndex([])
+        return pd.Series(False, index=idx, dtype=bool)
+    score = compute_regime_score_series(spy_df)
     return score >= REGIME_SELECTIVE_THRESHOLD
-
-
-# Proportionally scaled thresholds for 4/7 factor backtest regime
-# Max achievable: F1(20)+F2(15)+F3(15)+F4(10) = 60 pts
-# Derived from live thresholds in constants.py so both stay in sync.
-_BACKTEST_REGIME_MAX        = 60
-_BACKTEST_REGIME_AGGRESSIVE = round(REGIME_AGGRESSIVE_THRESHOLD / 100 * _BACKTEST_REGIME_MAX)
-_BACKTEST_REGIME_SELECTIVE  = round(REGIME_SELECTIVE_THRESHOLD  / 100 * _BACKTEST_REGIME_MAX)
-
-
-def compute_regime_score_series(spy_df: pd.DataFrame) -> pd.Series:
-    """
-    Return integer regime score (0–60, f1–f4 only) per date as a pd.Series.
-    Public wrapper around _compute_spy_regime_score for use in portfolio_backtest.
-    """
-    if spy_df is None or len(spy_df) < 200:
-        if spy_df is not None:
-            return pd.Series(0, index=spy_df.index, dtype=int)
-        return pd.Series(dtype=int)
-    return _compute_spy_regime_score(spy_df)
 
 
 def compute_regime_label_series(spy_df: pd.DataFrame) -> pd.Series:
     """
     Return a pd.Series of str ('AGGRESSIVE'|'SELECTIVE'|'DEFENSIVE') per date.
 
-    Uses the same SPY-only F1-F4 scoring as compute_regime_series but returns
-    regime labels using proportionally scaled thresholds for the 60-pt max:
-      AGGRESSIVE : score >= 42  (equiv 70/100 of full 7-factor system)
-      SELECTIVE  : score >= 24  (equiv 40/100)
-      DEFENSIVE  : score <  24
-
-    Returns all-DEFENSIVE for inputs with < 200 bars.
+    Uses the same SPY-only 7-factor continuous scoring as compute_regime_series.
+    Returns all-'DEFENSIVE' for inputs with fewer than _REGIME_MIN_BARS rows.
     """
-    if spy_df is None or len(spy_df) < 200:
-        if spy_df is not None:
-            return pd.Series("DEFENSIVE", index=spy_df.index, dtype=object)
-        return pd.Series(dtype=object)
+    if spy_df is None or len(spy_df) < _REGIME_MIN_BARS:
+        idx = spy_df.index if spy_df is not None else pd.DatetimeIndex([])
+        return pd.Series("DEFENSIVE", index=idx, dtype=object)
 
-    score = _compute_spy_regime_score(spy_df)
-
+    score = compute_regime_score_series(spy_df)
     labels = pd.Series(
         np.select(
-            [score >= _BACKTEST_REGIME_AGGRESSIVE, score >= _BACKTEST_REGIME_SELECTIVE],
+            [score >= REGIME_AGGRESSIVE_THRESHOLD, score >= REGIME_SELECTIVE_THRESHOLD],
             ["AGGRESSIVE", "SELECTIVE"],
             default="DEFENSIVE",
         ),

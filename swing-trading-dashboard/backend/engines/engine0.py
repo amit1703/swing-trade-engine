@@ -1,24 +1,35 @@
 """
-Engine 0: Institutional Market Regime Engine (Task 2)
-══════════════════════════════════════════════════════
-Multi-factor regime scoring system (0–100).
+Engine 0: Continuous Market Regime Engine (V2 — 7-Factor SPY-Only)
+═══════════════════════════════════════════════════════════════════
+All 7 factors are computable from SPY OHLCV alone.
+Identical logic for live scanner and historical backtest — eliminates
+train-serve skew.
 
-Factor weights (total = 100):
-  1. SPY Close > EMA20          → 20 pts  (momentum gate)
-  2. SPY Close > SMA50          → 15 pts  (intermediate trend)
-  3. SMA50 > SMA200             → 15 pts  (MA stack — Stage 2 market)
-  4. EMA20 slope (5-day)        → 10 pts  (trend acceleration)
-  5. % universe above SMA50     → 20 pts  (breadth — passed from main.py)
-  6. 52-week H/L ratio          → 10 pts  (breadth quality — passed from main.py)
-  7. VIX < VIX SMA20            → 10 pts  (fear gauge)
+Factor design (weights sum to 100; Optuna-injectable via RegimeWeights):
+  F1 Close/EMA20  (10 pts): σ((close − EMA20) / ATR14 × k)
+  F2 Close/SMA50  (10 pts): σ((close − SMA50) / ATR14 × k)
+  F3 SMA50 Slope  (20 pts): σ(SMA50_5bar_pct × k)          ← heavy: momentum
+  F4 Close/SMA200 (25 pts): σ((close − SMA200) / ATR14 × k) ← heaviest: long trend
+  F5 EMA20/SMA50  (10 pts): σ((EMA20 − SMA50) / ATR14 × k) ← stack alignment
+  F6 ATR Regime   (10 pts): 1 − σ((ATR-ratio − 1) × k)     ← inverted: low vol
+  F7 EMA8/EMA20   (15 pts): σ((EMA8 − EMA20) / ATR14 × k)  ← short momentum
 
-Regime zones:
-  70–100  →  AGGRESSIVE  (full engine suite enabled)
-  40–69   →  SELECTIVE   (engines enabled, size conservatively)
-  0–39    →  DEFENSIVE   (Engines 2 & 3 disabled)
+CCI multiplier (applied to raw sum):
+  CCI > 150 → linear penalty down to 0.35 at CCI 250+
+  CCI < −150 and turning up → 1.10 boost (oversold reversal)
+
+Output: float 0.0–1.0 per bar (was 0–100 in V1 4-factor version).
+
+Regime zones (0.0–1.0 scale):
+  0.70–1.0  → AGGRESSIVE  (full engine suite)
+  0.40–0.69 → SELECTIVE   (all engines, conservative sizing)
+  0.00–0.39 → DEFENSIVE   (Engines 2 & 3 disabled)
 """
 
-from typing import Dict
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -27,18 +38,261 @@ import yfinance as yf
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from indicators import ema as _ema, sma as _sma
 from constants import (
-    REGIME_WEIGHT_EMA20,
-    REGIME_WEIGHT_SMA50,
-    REGIME_WEIGHT_MA_STACK,
-    REGIME_WEIGHT_SLOPE,
-    REGIME_WEIGHT_BREADTH,
-    REGIME_WEIGHT_HL,
-    REGIME_WEIGHT_VIX,
     REGIME_AGGRESSIVE_THRESHOLD,
     REGIME_SELECTIVE_THRESHOLD,
+    REGIME_W_CLOSE_EMA20,
+    REGIME_W_CLOSE_SMA50,
+    REGIME_W_SMA50_SLOPE,
+    REGIME_W_CLOSE_SMA200,
+    REGIME_W_EMA20_SMA50,
+    REGIME_W_ATR_REGIME,
+    REGIME_W_EMA8_EMA20,
+    REGIME_K_CLOSE_EMA20,
+    REGIME_K_CLOSE_SMA50,
+    REGIME_K_SMA50_SLOPE,
+    REGIME_K_CLOSE_SMA200,
+    REGIME_K_EMA20_SMA50,
+    REGIME_K_ATR_REGIME,
+    REGIME_K_EMA8_EMA20,
+    REGIME_CCI_OB_START,
+    REGIME_CCI_OB_MAX,
+    REGIME_CCI_MIN_MULT,
+    REGIME_CCI_OS_LEVEL,
+    REGIME_CCI_BOOST,
 )
+
+
+@dataclass
+class RegimeWeights:
+    """
+    All tunable regime parameters — injectable by Optuna or WFO sweep.
+
+    Weights need not sum to exactly 100; the scoring formula normalises by
+    the actual sum so any positive values produce a valid 0.0–1.0 output.
+    """
+    # Component weights
+    w_close_ema20:  float = REGIME_W_CLOSE_EMA20
+    w_close_sma50:  float = REGIME_W_CLOSE_SMA50
+    w_sma50_slope:  float = REGIME_W_SMA50_SLOPE
+    w_close_sma200: float = REGIME_W_CLOSE_SMA200
+    w_ema20_sma50:  float = REGIME_W_EMA20_SMA50
+    w_atr:          float = REGIME_W_ATR_REGIME
+    w_ema8_ema20:   float = REGIME_W_EMA8_EMA20
+    # Sigmoid steepness params
+    k_close_ema20:  float = REGIME_K_CLOSE_EMA20
+    k_close_sma50:  float = REGIME_K_CLOSE_SMA50
+    k_sma50_slope:  float = REGIME_K_SMA50_SLOPE
+    k_close_sma200: float = REGIME_K_CLOSE_SMA200
+    k_ema20_sma50:  float = REGIME_K_EMA20_SMA50
+    k_atr:          float = REGIME_K_ATR_REGIME
+    k_ema8_ema20:   float = REGIME_K_EMA8_EMA20
+    # CCI multiplier params
+    cci_ob_start:   float = REGIME_CCI_OB_START
+    cci_ob_max:     float = REGIME_CCI_OB_MAX
+    cci_min_mult:   float = REGIME_CCI_MIN_MULT
+    cci_os_level:   float = REGIME_CCI_OS_LEVEL
+    cci_boost:      float = REGIME_CCI_BOOST
+
+
+# ── Internal helpers ──────────────────────────────────────────────────────────
+
+def _sigmoid_series(x: pd.Series, k: float) -> pd.Series:
+    """Vectorised logistic sigmoid σ(x · k) → (0, 1)."""
+    return 1.0 / (1.0 + np.exp(-x * k))
+
+
+def _cci_multiplier_series(
+    close: pd.Series,
+    high: Optional[pd.Series],
+    low: Optional[pd.Series],
+    weights: RegimeWeights,
+    period: int = 20,
+) -> pd.Series:
+    """
+    CCI-based score multiplier aligned to *close* index.
+
+    Uses Typical Price (H+L+C)/3 when H/L are available, else falls back to Close.
+    Returns a float Series clamped to [cci_min_mult, cci_boost].
+    """
+    tp = (high + low + close) / 3.0 if (high is not None and low is not None) else close
+    tp_sma = tp.rolling(period).mean()
+    mad = tp.rolling(period).apply(
+        lambda x: np.mean(np.abs(x - x.mean())), raw=True
+    )
+    denom = (0.015 * mad).replace(0.0, np.nan)
+    cci = ((tp - tp_sma) / denom).fillna(0.0)
+
+    mult = pd.Series(1.0, index=close.index, dtype=float)
+
+    # Overbought penalty: linear 1.0 → cci_min_mult over [ob_start, ob_max]
+    ob_range = max(weights.cci_ob_max - weights.cci_ob_start, 1e-9)
+    ob_mask  = cci > weights.cci_ob_start
+    penalty  = ((cci - weights.cci_ob_start) / ob_range).clip(0.0, 1.0)
+    penalty_mult = 1.0 - penalty * (1.0 - weights.cci_min_mult)
+    mult = mult.where(~ob_mask, other=penalty_mult)
+
+    # Oversold boost: CCI < os_level AND turning up (CCI[t] > CCI[t-1])
+    os_mask = (cci < weights.cci_os_level) & (cci > cci.shift(1))
+    mult = mult.where(~os_mask, other=weights.cci_boost)
+
+    return mult.clip(weights.cci_min_mult, weights.cci_boost)
+
+
+def _extract_ohlc(spy_df: pd.DataFrame):
+    """
+    Extract (close, high, low) Series from spy_df, handling MultiIndex columns.
+    Returns (close, high_or_None, low_or_None).
+    """
+    df = spy_df
+    if isinstance(df.columns, pd.MultiIndex):
+        lvl1 = df.columns.get_level_values(1)
+        if "SPY" in lvl1:
+            df = df.xs("SPY", axis=1, level=1, drop_level=True)
+        else:
+            df = df.copy()
+            df.columns = df.columns.get_level_values(0)
+
+    close = None
+    for col in ("Close", "Adj Close"):
+        if col in df.columns:
+            c = df[col]
+            close = c.iloc[:, 0] if isinstance(c, pd.DataFrame) else c
+            break
+    if close is None:
+        close = df.iloc[:, 0]
+
+    def _get(col):
+        if col not in df.columns:
+            return None
+        s = df[col]
+        return s.iloc[:, 0] if isinstance(s, pd.DataFrame) else s
+
+    return close, _get("High"), _get("Low")
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def compute_regime_score_series(
+    spy_df: pd.DataFrame,
+    weights: Optional[RegimeWeights] = None,
+) -> pd.Series:
+    """
+    Vectorised continuous regime scoring. Returns float Series 0.0–1.0,
+    same index as *spy_df*.
+
+    Parameters
+    ----------
+    spy_df  : pd.DataFrame — SPY daily OHLCV (High/Low used when present).
+              Falls back to Close-only ATR approximation if High/Low absent.
+    weights : RegimeWeights — override defaults for Optuna/WFO sweeps.
+
+    Notes
+    -----
+    SMA200 warmup requires ~200 bars. Bars before that produce lower F4 scores.
+    Caller guards (filters.py _REGIME_MIN_BARS=65) protect against early-series
+    noise. SMA200 fills in gracefully as data accumulates — no hard cutoff here.
+    """
+    if weights is None:
+        weights = RegimeWeights()
+
+    if spy_df is None or len(spy_df) < 20:
+        idx = spy_df.index if spy_df is not None else pd.DatetimeIndex([])
+        return pd.Series(0.0, index=idx, dtype=float)
+
+    close, high, low = _extract_ohlc(spy_df)
+
+    # ── Indicators ────────────────────────────────────────────────────────────
+    ema8   = close.ewm(span=8,   adjust=False).mean()
+    ema20  = close.ewm(span=20,  adjust=False).mean()
+    sma50  = close.rolling(50).mean()
+    sma200 = close.rolling(200).mean()
+
+    if high is not None and low is not None:
+        tr = pd.concat([
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low  - close.shift(1)).abs(),
+        ], axis=1).max(axis=1)
+    else:
+        # Close-only fallback: approximate TR via consecutive-bar abs difference
+        tr = close.diff().abs()
+
+    atr14    = tr.rolling(14).mean()
+    atr50sma = atr14.rolling(50).mean()
+    safe_atr = atr14.replace(0.0, np.nan)
+
+    # ── F1: Close vs EMA20 ────────────────────────────────────────────────────
+    f1 = _sigmoid_series((close - ema20) / safe_atr.fillna(1.0), weights.k_close_ema20) * weights.w_close_ema20
+
+    # ── F2: Close vs SMA50 ────────────────────────────────────────────────────
+    d_sma50 = ((close - sma50) / safe_atr).fillna(0.0)
+    f2 = _sigmoid_series(d_sma50, weights.k_close_sma50) * weights.w_close_sma50
+
+    # ── F3: SMA50 5-bar slope ─────────────────────────────────────────────────
+    sma50_shift5 = sma50.shift(5).replace(0.0, np.nan)
+    sma50_slope  = ((sma50 - sma50_shift5) / sma50_shift5).fillna(0.0)
+    f3 = _sigmoid_series(sma50_slope, weights.k_sma50_slope) * weights.w_sma50_slope
+
+    # ── F4: Close vs SMA200 (heaviest weight) ─────────────────────────────────
+    # SMA200 is NaN for first 199 bars; fill with 0.0 so σ(0)=0.5 (neutral)
+    d_sma200 = ((close - sma200) / safe_atr).fillna(0.0)
+    f4 = _sigmoid_series(d_sma200, weights.k_close_sma200) * weights.w_close_sma200
+
+    # ── F5: EMA20 vs SMA50 (stack alignment) ─────────────────────────────────
+    d_ema20_sma50 = ((ema20 - sma50) / safe_atr).fillna(0.0)
+    f5 = _sigmoid_series(d_ema20_sma50, weights.k_ema20_sma50) * weights.w_ema20_sma50
+
+    # ── F6: ATR Regime — inverted, low vol = stable ───────────────────────────
+    safe_atr50 = atr50sma.replace(0.0, np.nan)
+    atr_ratio  = (atr14 / safe_atr50 - 1.0).fillna(0.0)
+    f6 = (1.0 - _sigmoid_series(atr_ratio, weights.k_atr)) * weights.w_atr
+
+    # ── F7: EMA8 vs EMA20 (short-term momentum) ───────────────────────────────
+    d_ema8_ema20 = ((ema8 - ema20) / safe_atr).fillna(0.0)
+    f7 = _sigmoid_series(d_ema8_ema20, weights.k_ema8_ema20) * weights.w_ema8_ema20
+
+    # ── Weighted sum → 0.0–1.0 ────────────────────────────────────────────────
+    w_sum = (weights.w_close_ema20 + weights.w_close_sma50 + weights.w_sma50_slope
+             + weights.w_close_sma200 + weights.w_ema20_sma50
+             + weights.w_atr + weights.w_ema8_ema20)
+    raw = (f1 + f2 + f3 + f4 + f5 + f6 + f7) / w_sum
+
+    # ── CCI multiplier ────────────────────────────────────────────────────────
+    cci_mult = _cci_multiplier_series(close, high, low, weights)
+    cci_mult = cci_mult.reindex(raw.index).fillna(1.0)
+
+    score = (raw * cci_mult).clip(0.0, 1.0)
+    return score.reindex(spy_df.index).fillna(0.0)
+
+
+def compute_volatility_scalar_series(spy_df: pd.DataFrame) -> pd.Series:
+    """
+    Return ATR14 / close as a fraction-of-price series (same index as spy_df).
+
+    Typical range: 0.01–0.06 (1%–6% of price per ATR unit).
+    Used by callers to scale position sizing or risk parameters dynamically.
+    Returns 0.02 (neutral default) where data is insufficient.
+    """
+    if spy_df is None or len(spy_df) < 15:
+        idx = spy_df.index if spy_df is not None else pd.DatetimeIndex([])
+        return pd.Series(0.02, index=idx, dtype=float)
+
+    close, high, low = _extract_ohlc(spy_df)
+
+    if high is not None and low is not None:
+        tr = pd.concat([
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low  - close.shift(1)).abs(),
+        ], axis=1).max(axis=1)
+    else:
+        tr = close.diff().abs()
+
+    atr14     = tr.rolling(14).mean()
+    safe_close = close.replace(0.0, np.nan)
+    scalar    = (atr14 / safe_close).fillna(0.02).clip(0.005, 0.15)
+    return scalar.reindex(spy_df.index).fillna(0.02)
 
 
 def check_market_regime(
@@ -46,34 +300,27 @@ def check_market_regime(
     hl_ratio: float = 0.5,
 ) -> Dict:
     """
-    Fetch SPY (1y) + VIX (3mo) data and compute a 7-factor regime score.
+    Fetch SPY 1y data and compute the continuous regime score for the live scanner.
 
-    Parameters
-    ----------
-    breadth_pct : float
-        Fraction of the scan universe whose daily close is above SMA50.
-        Computed by main.py from the bulk-prefetch cache and passed here.
-        Default 0.5 (neutral) when called before prefetch.
-    hl_ratio : float
-        new_highs / (new_highs + new_lows + 1) across the scan universe.
-        Default 0.5 (neutral).
+    breadth_pct / hl_ratio are retained in the signature for backward compatibility
+    but are no longer used in scoring — SPY-only model eliminates train-serve skew.
 
     Returns
     -------
     dict
-        is_bullish    : bool   — regime_score >= REGIME_SELECTIVE_THRESHOLD
-        regime_score  : int    — 0–100
-        regime        : str    — "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE"
-        spy_close     : float
-        spy_20ema     : float
-        spy_sma50     : float
-        spy_sma200    : float
-        vix           : float  (0.0 on fetch failure)
-        vix_sma20     : float
-        factors       : dict   — per-factor point breakdown
+        is_bullish         : bool    — regime_score >= REGIME_SELECTIVE_THRESHOLD
+        regime_score       : float   — 0.0–1.0
+        regime             : str     — "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE"
+        volatility_scalar  : float   — ATR14/close at last bar (fraction of price)
+        spy_close          : float
+        spy_20ema          : float
+        spy_sma50          : float
+        spy_sma200         : float
+        vix                : float   — always 0.0 (removed from scoring)
+        vix_sma20          : float   — always 0.0
+        factors            : dict    — per-component contribution at last bar
     """
     try:
-        # ── Fetch SPY 1y daily data ───────────────────────────────────────────
         spy = yf.download(
             "SPY",
             period="1y",
@@ -90,110 +337,84 @@ def check_market_regime(
         if isinstance(spy.columns, pd.MultiIndex):
             spy.columns = spy.columns.get_level_values(0)
 
-        close_col = "Adj Close" if "Adj Close" in spy.columns else "Close"
-        close_raw = spy[close_col]
-        # Newer yfinance may return a one-column DataFrame instead of a Series
-        if isinstance(close_raw, pd.DataFrame):
-            close_raw = close_raw.iloc[:, 0]
-        close = close_raw.dropna()
+        if len(spy) < 22:
+            return _error(f"Insufficient SPY data: {len(spy)} bars (need ≥22)")
 
-        if len(close) < 22:
-            return _error(f"Insufficient SPY data: {len(close)} bars (need ≥22)")
+        scores = compute_regime_score_series(spy)
+        if scores.empty:
+            return _error("compute_regime_score_series returned empty")
 
-        # ── Compute SPY indicators ────────────────────────────────────────────
-        ema20_s  = _ema(close, 20)
-        sma50_s  = _sma(close, 50)
-        sma200_s = _sma(close, 200)
+        regime_score = float(scores.iloc[-1])
+        regime       = _score_to_regime(regime_score)
+        is_bullish   = regime_score >= REGIME_SELECTIVE_THRESHOLD
 
-        def _fv(s) -> float:
-            v = s.iloc[-1]
+        # Volatility scalar at last bar
+        vol_scalars = compute_volatility_scalar_series(spy)
+        volatility_scalar = float(vol_scalars.iloc[-1]) if not vol_scalars.empty else 0.02
+
+        # ── Scalar indicators for the response dict ───────────────────────────
+        close, high, low = _extract_ohlc(spy)
+        close = close.dropna()
+
+        def _last(s: pd.Series) -> float:
+            s2 = s.dropna()
+            if s2.empty:
+                return 0.0
+            v = s2.iloc[-1]
             f = float(v.item() if hasattr(v, "item") else v)
             return 0.0 if np.isnan(f) else f
 
-        lc       = _fv(close)
-        l_ema20  = _fv(ema20_s)
-        l_sma50  = _fv(sma50_s)
-        l_sma200 = _fv(sma200_s)
+        ema8_s   = close.ewm(span=8,   adjust=False).mean()
+        ema20_s  = close.ewm(span=20,  adjust=False).mean()
+        sma50_s  = close.rolling(50).mean()
+        sma200_s = close.rolling(200).mean()
 
-        if lc <= 0 or l_ema20 <= 0:
-            return _error("SPY price or EMA20 is zero/NaN")
+        if high is not None and low is not None:
+            h = high if isinstance(high, pd.Series) else high.iloc[:, 0]
+            l = low  if isinstance(low,  pd.Series) else low.iloc[:,  0]
+            tr14 = pd.concat([h - l, (h - close.shift(1)).abs(), (l - close.shift(1)).abs()], axis=1).max(axis=1)
+        else:
+            tr14 = close.diff().abs()
+        atr14_s    = tr14.rolling(14).mean()
+        atr50sma_s = atr14_s.rolling(50).mean()
 
-        # ── EMA20 slope over last 5 bars ──────────────────────────────────────
-        ema20_clean = ema20_s.dropna()
-        slope_score = 0
-        if len(ema20_clean) >= 6:
-            old = _fv(ema20_clean.iloc[[-6]])
-            new = _fv(ema20_clean.iloc[[-1]])
-            if old > 0:
-                pct_slope = (new - old) / old  # e.g. +0.005 = rising 0.5%/5d
-                # Linear scale: ≥+0.5% → full 10pts; ≤-0.5% → 0pts
-                slope_score = int(min(REGIME_WEIGHT_SLOPE, max(0, (pct_slope + 0.005) / 0.01 * REGIME_WEIGHT_SLOPE)))
+        w = RegimeWeights()
+        safe_atr_s   = atr14_s.replace(0.0, np.nan)
+        safe_atr50_s = atr50sma_s.replace(0.0, np.nan)
 
-        # ── Factor 1–4 scores ─────────────────────────────────────────────────
-        f1 = REGIME_WEIGHT_EMA20    if lc > l_ema20  else 0
-        f2 = REGIME_WEIGHT_SMA50    if lc > l_sma50  else 0
-        f3 = REGIME_WEIGHT_MA_STACK if (l_sma50 > 0 and l_sma200 > 0 and l_sma50 > l_sma200) else 0
-        f4 = slope_score  # 0–10
-
-        # ── VIX fetch (Factor 7) ──────────────────────────────────────────────
-        vix_close = 0.0
-        vix_sma20 = 0.0
-        f7 = 0
-        try:
-            vix_df = yf.download(
-                "^VIX",
-                period="3mo",
-                interval="1d",
-                auto_adjust=False,
-                progress=False,
-                threads=False,
-            )
-            if vix_df is not None and not vix_df.empty:
-                if isinstance(vix_df.columns, pd.MultiIndex):
-                    vix_df.columns = vix_df.columns.get_level_values(0)
-                vc = vix_df["Close"].dropna() if "Close" in vix_df.columns else pd.Series(dtype=float)
-                if len(vc) >= 20:
-                    vix_close = float(vc.iloc[-1])
-                    vix_sma20 = float(vc.rolling(20).mean().iloc[-1])
-                    if vix_close > 0 and vix_sma20 > 0 and vix_close < vix_sma20:
-                        f7 = REGIME_WEIGHT_VIX
-        except Exception:
-            pass  # VIX failure is non-fatal — factor 7 scores 0
-
-        # ── Factor 5 (breadth) and 6 (H/L ratio) ─────────────────────────────
-        # breadth_pct = 0.0 → all below SMA50 (max bearish) → 0 pts
-        # breadth_pct = 1.0 → all above SMA50 (max bullish) → REGIME_WEIGHT_BREADTH pts
-        f5 = int(round(min(breadth_pct, 1.0) * REGIME_WEIGHT_BREADTH))
-
-        # hl_ratio = 0.0 → all new lows → 0 pts
-        # hl_ratio = 1.0 → all new highs → REGIME_WEIGHT_HL pts
-        f6 = int(round(min(hl_ratio, 1.0) * REGIME_WEIGHT_HL))
-
-        regime_score = f1 + f2 + f3 + f4 + f5 + f6 + f7
-
-        regime = _score_to_regime(regime_score)
-        is_bullish = regime_score >= REGIME_SELECTIVE_THRESHOLD
+        f1_s = _sigmoid_series((close - ema20_s) / safe_atr_s, w.k_close_ema20) * w.w_close_ema20
+        f2_s = _sigmoid_series((close - sma50_s) / safe_atr_s, w.k_close_sma50) * w.w_close_sma50
+        sma50_shift5 = sma50_s.shift(5).replace(0.0, np.nan)
+        slope5 = ((sma50_s - sma50_shift5) / sma50_shift5).fillna(0.0)
+        f3_s  = _sigmoid_series(slope5, w.k_sma50_slope) * w.w_sma50_slope
+        sma200_s2 = sma200_s.ffill()  # forward-fill for display
+        f4_s  = _sigmoid_series((close - sma200_s2) / safe_atr_s, w.k_close_sma200) * w.w_close_sma200
+        f5_s  = _sigmoid_series((ema20_s - sma50_s) / safe_atr_s, w.k_ema20_sma50) * w.w_ema20_sma50
+        atr_r = (atr14_s / safe_atr50_s - 1.0).fillna(0.0)
+        f6_s  = (1.0 - _sigmoid_series(atr_r, w.k_atr)) * w.w_atr
+        f7_s  = _sigmoid_series((ema8_s - ema20_s) / safe_atr_s, w.k_ema8_ema20) * w.w_ema8_ema20
 
         return {
-            "is_bullish":   is_bullish,
-            "regime_score": regime_score,
-            "regime":       regime,
-            "spy_close":    round(lc, 2),
-            "spy_20ema":    round(l_ema20, 2),
-            "spy_sma50":    round(l_sma50, 2),
-            "spy_sma200":   round(l_sma200, 2),
-            "vix":          round(vix_close, 2),
-            "vix_sma20":    round(vix_sma20, 2),
-            "breadth_pct":  round(breadth_pct, 3),
-            "hl_ratio":     round(hl_ratio, 3),
+            "is_bullish":        is_bullish,
+            "regime_score":      round(regime_score, 3),
+            "regime":            regime,
+            "volatility_scalar": round(volatility_scalar, 4),
+            "spy_close":         round(_last(close), 2),
+            "spy_20ema":         round(_last(ema20_s), 2),
+            "spy_sma50":         round(_last(sma50_s), 2),
+            "spy_sma200":        round(_last(sma200_s), 2),
+            "vix":               0.0,
+            "vix_sma20":         0.0,
+            "breadth_pct":       round(breadth_pct, 3),
+            "hl_ratio":          round(hl_ratio, 3),
             "factors": {
-                "f1_ema20":    f1,
-                "f2_sma50":    f2,
-                "f3_ma_stack": f3,
-                "f4_slope":    f4,
-                "f5_breadth":  f5,
-                "f6_hl_ratio": f6,
-                "f7_vix":      f7,
+                "f1_close_ema20":  round(_last(f1_s), 3),
+                "f2_close_sma50":  round(_last(f2_s), 3),
+                "f3_sma50_slope":  round(_last(f3_s), 3),
+                "f4_close_sma200": round(_last(f4_s), 3),
+                "f5_ema20_sma50":  round(_last(f5_s), 3),
+                "f6_atr":          round(_last(f6_s), 3),
+                "f7_ema8_ema20":   round(_last(f7_s), 3),
             },
         }
 
@@ -201,7 +422,7 @@ def check_market_regime(
         return _error(str(exc)[:120])
 
 
-def _score_to_regime(score: int) -> str:
+def _score_to_regime(score: float) -> str:
     if score >= REGIME_AGGRESSIVE_THRESHOLD:
         return "AGGRESSIVE"
     if score >= REGIME_SELECTIVE_THRESHOLD:
@@ -211,16 +432,17 @@ def _score_to_regime(score: int) -> str:
 
 def _error(msg: str) -> Dict:
     return {
-        "is_bullish":   False,
-        "regime_score": 0,
-        "regime":       f"ERROR: {msg}",
-        "spy_close":    0.0,
-        "spy_20ema":    0.0,
-        "spy_sma50":    0.0,
-        "spy_sma200":   0.0,
-        "vix":          0.0,
-        "vix_sma20":    0.0,
-        "breadth_pct":  0.5,
-        "hl_ratio":     0.5,
-        "factors":      {},
+        "is_bullish":        False,
+        "regime_score":      0.0,
+        "regime":            f"ERROR: {msg}",
+        "volatility_scalar": 0.02,
+        "spy_close":         0.0,
+        "spy_20ema":         0.0,
+        "spy_sma50":         0.0,
+        "spy_sma200":        0.0,
+        "vix":               0.0,
+        "vix_sma20":         0.0,
+        "breadth_pct":       0.5,
+        "hl_ratio":          0.5,
+        "factors":           {},
     }

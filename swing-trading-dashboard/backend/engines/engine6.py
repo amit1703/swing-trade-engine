@@ -47,8 +47,16 @@ from constants import (
     RES_STOP_ATR_FACTOR,
     RES_BREAKOUT_VOL_MULT,
     RES_DECISIVE_MIN_PCT,
+    RES_DECISIVE_ATR_FACTOR,
 )
 from zone_utils import nearest_resistance_target
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Temporary debug counter — logs first 20 volume gate checks to stderr/stdout.
+# Set to a large number (e.g. 9999) to disable or reset to 0 at start of run.
+# ─────────────────────────────────────────────────────────────────────────────
+_VOL_DEBUG_COUNT: int = 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -77,18 +85,37 @@ def scan_resistance_breakout(
     zones: List[Dict],
     debug: bool = False,
     params=None,
+    regime_score: float = 0.5,
 ) -> Optional[Dict]:
-    """Return the most recent qualifying resistance breakout, or None."""
+    """Return the most recent qualifying resistance breakout, or None.
+
+    Parameters
+    ----------
+    regime_score : float  0.0–1.0 from engine0.
+        Adjusts the Donchian lookback window dynamically:
+        - AGGRESSIVE (1.0) → shorter lookback (tighter, uses recent highs)
+        - NEUTRAL    (0.5) → base lookback unchanged
+        - DEFENSIVE  (0.0) → longer lookback (wider, more historical resistance)
+        Formula: n_adjusted = base_n × (1.0 + (0.5 − regime_score) × 0.67)
+        Clamped to [15, 90].
+    """
     try:
         # ── Resolve tunable params (fall back to module defaults) ─────────────
         _vol_thresh  = getattr(params, "brk_vol_mult",          RES_BREAKOUT_VOL_MULT)
         _stop_atr    = getattr(params, "brk_stop_atr",          RES_STOP_ATR_FACTOR)
         _buffer      = getattr(params, "brk_min_pct",           RES_DECISIVE_MIN_PCT)
         _gap_pct     = getattr(params, "brk_gap_pct",           0.042)   # max close above resistance
-        _donchian_n  = int(getattr(params, "brk_donchian_n",    _DONCHIAN_N_DEFAULT))
+        _base_n      = int(getattr(params, "brk_donchian_n",    _DONCHIAN_N_DEFAULT))
         _pivot_str   = int(getattr(params, "brk_pivot_strength",_PIVOT_STRENGTH_DEFAULT))
         _atr_exp     = getattr(params, "brk_atr_expansion",     _ATR_EXP_DEFAULT)
         _min_consol  = int(getattr(params, "brk_min_consolidation", _MIN_CONSOL_DEFAULT))
+
+        # ── Dynamic Donchian lookback — tighter in bull, wider in bear ────────
+        # regime_score=1.0: factor=0.665 → _base_n×0.665 (tighter, recent highs)
+        # regime_score=0.5: factor=1.0   → _base_n unchanged
+        # regime_score=0.0: factor=1.335 → _base_n×1.335 (wider, more history)
+        _regime_factor = 1.0 + (0.5 - float(regime_score)) * 0.67
+        _donchian_n    = max(15, min(90, int(_base_n * _regime_factor)))
 
         data = _prep(df)
         if data is None or len(data) < max(60, _donchian_n + 10):
@@ -115,11 +142,20 @@ def scan_resistance_breakout(
             return None
 
         # ── Volume SMA ────────────────────────────────────────────────────────
-        vol_sma50_s = data["_VOLSMA50"] if "_VOLSMA50" in data.columns else volume_s.rolling(50).mean()
+        # Shift(1): exclude the current bar from its own average — prevents leakage.
+        # vol_sma50_arr[i] = mean(Volume[i-50 : i])  (excludes bar i itself)
+        vol_sma50_s = (
+            data["_VOLSMA50"].shift(1)
+            if "_VOLSMA50" in data.columns
+            else volume_s.rolling(50, min_periods=10).mean().shift(1)
+        )
         vsm50_val   = vol_sma50_s.iloc[-1]
         vol_sma50   = float(vsm50_val.item() if hasattr(vsm50_val, "item") else vsm50_val)
         if np.isnan(vol_sma50) or vol_sma50 <= 0:
             return None
+        # Keep the full array so aged signals (days_back > 0) use the average
+        # at the correct bar index rather than the last-bar value.
+        vol_sma50_arr = vol_sma50_s.values.astype(float)
 
         # ── ATR ───────────────────────────────────────────────────────────────
         atr14    = data["_ATR14"] if "_ATR14" in data.columns else _atr(high_s, low_s, close_s, 14)
@@ -149,9 +185,11 @@ def scan_resistance_breakout(
         # Use data up to bar n-2 (all confirmed pivots, avoiding the current bar)
         pivot_levels = _find_pivot_highs(high_arr[: n - 1], _pivot_str)
 
-        # ── Scan last _MAX_DAYS_LOOKBACK bars for breakout ────────────────────
-        best: Optional[Dict] = None
-        best_days = _MAX_DAYS_LOOKBACK + 1
+        # ── Scan last _MAX_DAYS_LOOKBACK bars — collect ALL valid candidates ─────
+        # All candidates that pass every filter are accumulated; the best one is
+        # selected after the full scan.  This eliminates per-candidate debug spam
+        # and removes artificial RES_BREAKOUT inflation from multi-level duplicates.
+        _valid_candidates: List[Dict] = []
 
         for days_back in range(_MAX_DAYS_LOOKBACK + 1):
             brk_idx = n - 1 - days_back
@@ -168,18 +206,18 @@ def scan_resistance_breakout(
             pre_close = close_arr[pre_idx]
 
             # Collect resistance candidates above pre_close
-            candidates = _resistance_candidates(
+            res_candidates = _resistance_candidates(
                 high_arr, pre_close,
                 brk_idx, donchian_res,
                 pivot_levels, zones,
             )
 
-            if not candidates:
+            if not res_candidates:
                 if debug:
                     print(f"Engine 6: REJECTED day -{days_back} — No resistance above price")
                 continue
 
-            for resistance, source in candidates:
+            for resistance, source in res_candidates:
 
                 # ── Zone cross ────────────────────────────────────────────────
                 if not (pre_close <= resistance < brk_close):
@@ -205,13 +243,16 @@ def scan_resistance_breakout(
                         print(f"Engine 6: REJECTED day -{days_back} [{source}] — Overextended")
                     continue
 
-                # ── Volume filter ─────────────────────────────────────────────
-                vol_ratio = brk_vol / vol_sma50 if vol_sma50 > 0 else 0.0
+                # ── Volume filter (HARD) ──────────────────────────────────────
+                # Use the 50-day average ending the bar BEFORE the breakout bar
+                # (vol_sma50_arr already has shift(1) applied — no leakage).
+                _vsma_at_brk = vol_sma50_arr[brk_idx] if not np.isnan(vol_sma50_arr[brk_idx]) else vol_sma50
+                vol_ratio    = brk_vol / _vsma_at_brk if _vsma_at_brk > 0 else 0.0
                 if vol_ratio < _vol_thresh:
                     if debug:
                         print(
                             f"Engine 6: REJECTED day -{days_back} [{source}] "
-                            f"— Volume {vol_ratio:.1f}x < {_vol_thresh:.1f}x"
+                            f"— Volume {vol_ratio:.2f}x < {_vol_thresh:.2f}x"
                         )
                     continue
 
@@ -244,11 +285,11 @@ def scan_resistance_breakout(
                             )
                         continue
 
-                # ── All filters passed — build signal ─────────────────────────
+                # ── All filters passed — build candidate ──────────────────────
                 breakout_pct = round((brk_close - resistance) / resistance * 100, 2)
 
                 # Gap gate: skip if already extended too far above resistance.
-                # Mirrors backtest_engine brk_gap_pct check (line 837 context).
+                # Mirrors backtest_engine brk_gap_pct check.
                 if (brk_close - resistance) / resistance > _gap_pct:
                     continue
 
@@ -276,7 +317,7 @@ def scan_resistance_breakout(
                 if source == "donchian":    _score += 0.3
                 elif source == "pivot":     _score += 0.2
 
-                candidate = {
+                _valid_candidates.append({
                     "ticker":              ticker,
                     "setup_type":          "RES_BREAKOUT",
                     "signal":              "BRK",
@@ -293,15 +334,33 @@ def scan_resistance_breakout(
                     "setup_date":          str(data.index[-1].date()),
                     "_raw_score":          round(_score, 1),
                     "atr":                 round(latr, 4),
-                }
+                })
 
-                if days_back < best_days:
-                    best      = candidate
-                    best_days = days_back
-                break  # took the best candidate for this days_back; move to next
+        if not _valid_candidates:
+            if debug:
+                print("Engine 6: No valid breakout found in last 3 days")
+            return None
 
-        if best is None and debug:
-            print("Engine 6: No valid breakout found in last 3 days")
+        # ── Select best candidate ─────────────────────────────────────────────
+        # Primary  : highest volume_ratio  (strongest institutional confirmation)
+        # Secondary: smallest breakout_pct (cleanest entry, closest to resistance)
+        # Tertiary : smallest days_back    (freshest signal)
+        best = max(
+            _valid_candidates,
+            key=lambda c: (c["volume_ratio"], -c["breakout_pct"], -c["days_since_breakout"]),
+        )
+
+        # ── Debug print: once per ticker/day, for selected candidate only ─────
+        global _VOL_DEBUG_COUNT
+        if _VOL_DEBUG_COUNT < 20:
+            _VOL_DEBUG_COUNT += 1
+            print(
+                f"[E6 VOL DEBUG #{_VOL_DEBUG_COUNT}] {ticker} day-{best['days_since_breakout']} "
+                f"candidates={len(_valid_candidates)} "
+                f"vol_ratio={best['volume_ratio']:.3f}  threshold={_vol_thresh:.3f}  "
+                f"passed=YES  trade=TRIGGERED"
+            )
+
         return best
 
     except Exception as exc:

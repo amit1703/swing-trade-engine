@@ -35,9 +35,6 @@ from constants import (
     RS_RANK_MIN_PERCENTILE,
     SELECTIVE_SETUP_WEIGHTS,
     SELECTIVE_HARD_FILTER,
-    REGIME_WEIGHT_BREADTH,
-    REGIME_WEIGHT_HL,
-    REGIME_WEIGHT_VIX,
     REGIME_AGGRESSIVE_THRESHOLD,
     REGIME_SELECTIVE_THRESHOLD,
     TOP_SECTORS_N,
@@ -381,59 +378,24 @@ def _compute_full_regime_dicts(
     ticker_states: List[TickerSimState],
 ) -> Tuple[Dict, Dict]:
     """
-    Compute full 7-factor regime score and label for each SPY trading day.
+    Compute regime score and label for each SPY trading day.
 
-    f1–f4: SPY-only (EMA20, SMA50, MA stack, EMA slope) — via filters.py
-    f5:    breadth (% of loaded tickers with close > 50-SMA)
-    f6:    H/L ratio (52-week highs / (highs + lows + 1))
-    f7:    VIX < VIX SMA20
-
-    Total: 0–100.  Thresholds: AGGRESSIVE ≥ 70, SELECTIVE ≥ 40, DEFENSIVE < 40.
+    V2: SPY-only continuous scoring (0.0–1.0) via filters.compute_regime_score_series.
+    Eliminates train-serve skew — identical logic to the live scanner.
+    vix_df and ticker_states are retained in the signature for call-site compatibility
+    but are no longer used (breadth/VIX factors removed in V2).
 
     Returns
     -------
-    score_dict : {Timestamp: int}   regime score 0-100
-    label_dict : {Timestamp: str}   "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE"
+    score_dict : {Timestamp: float}  regime score 0.0–1.0
+    label_dict : {Timestamp: str}    "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE"
     """
-    if spy_df is None or len(spy_df) < 200 or not ticker_states:
+    if spy_df is None or not ticker_states:
         return {}, {}
 
-    # F1–F4 from filters.py (0-60 scale)
-    base_score = compute_regime_score_series(spy_df)  # pd.Series[int]
-
-    # Build close matrix aligned to SPY for f5 / f6
-    close_matrix = _build_adj_close_matrix(ticker_states, spy_df.index)
-
-    # F5: breadth — fraction of tickers with close > 50-day SMA
-    sma50_matrix = close_matrix.rolling(50, min_periods=10).mean()
-    breadth      = (close_matrix > sma50_matrix).mean(axis=1).fillna(0.5)
-    f5           = (breadth.clip(0.0, 1.0) * REGIME_WEIGHT_BREADTH).astype(int)
-
-    # F6: 52-week H/L ratio
-    high_252 = close_matrix.rolling(252, min_periods=63).max()
-    low_252  = close_matrix.rolling(252, min_periods=63).min()
-    n_high   = (close_matrix >= high_252 * 0.99).sum(axis=1)
-    n_low    = (close_matrix <= low_252  * 1.01).sum(axis=1)
-    hl_ratio = n_high / (n_high + n_low + 1)
-    f6       = (hl_ratio.clip(0.0, 1.0) * REGIME_WEIGHT_HL).astype(int)
-
-    # F7: VIX < VIX SMA20
-    f7 = pd.Series(0, index=spy_df.index, dtype=int)
-    if vix_df is not None and not vix_df.empty:
-        try:
-            _vix = vix_df.copy()
-            if isinstance(_vix.columns, pd.MultiIndex):
-                _vix.columns = _vix.columns.get_level_values(0)
-            vcol = "Close" if "Close" in _vix.columns else _vix.columns[0]
-            vc   = _vix[vcol].dropna()
-            if len(vc) >= 20:
-                vix_sma20  = vc.rolling(20).mean()
-                is_low_vix = (vc < vix_sma20).reindex(spy_df.index).fillna(False)
-                f7         = (is_low_vix.astype(int) * REGIME_WEIGHT_VIX)
-        except Exception:
-            pass  # VIX failure is non-fatal — f7 stays 0
-
-    full_score = (base_score + f5 + f6 + f7).clip(0, 100).astype(int)
+    full_score = compute_regime_score_series(spy_df).clip(0.0, 1.0)
+    if full_score.empty:
+        return {}, {}
 
     labels = pd.Series(
         np.select(
@@ -651,7 +613,7 @@ async def run_portfolio_backtest_universe(
     if not regime_label_dict and _spy_for_regime is not None and len(_spy_for_regime) > 0:
         _fallback = _filters.compute_regime_label_series(_spy_for_regime)
         regime_label_dict = _fallback.to_dict()
-        regime_score_dict = {d: (70 if v == "AGGRESSIVE" else 40 if v == "SELECTIVE" else 0)
+        regime_score_dict = {d: (0.70 if v == "AGGRESSIVE" else 0.40 if v == "SELECTIVE" else 0.0)
                              for d, v in regime_label_dict.items()}
 
     # Sorted SPY date list for O(log n) bisect lookup in Phase 2
@@ -734,7 +696,7 @@ async def run_portfolio_backtest_universe(
             continue
         _spy_date      = _spy_dates_sorted[_pos]
         current_regime = regime_label_dict.get(_spy_date, "DEFENSIVE")
-        regime_score   = int(regime_score_dict.get(_spy_date, 0))
+        regime_score   = float(regime_score_dict.get(_spy_date, 0.0))
 
         if current_regime == "DEFENSIVE":
             continue

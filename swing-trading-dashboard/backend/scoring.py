@@ -40,6 +40,7 @@ from constants import (
     RS_TIER1_MULTIPLIER,
     RS_TIER1_THRESHOLD,
     SCORE_SELECTIVE_REGIME_FACTOR,
+    SCORE_WEIGHT_CCI_QUALITY,
     SCORE_WEIGHT_COILING,
     SCORE_WEIGHT_QUALITY,
     SCORE_WEIGHT_REGIME,
@@ -349,13 +350,18 @@ def _vol_component(setup: Dict) -> float:
     """
     Volume / momentum component (0 – SCORE_WEIGHT_VOL pts).
 
+    Continuous linear ramp: ratio=1.0 → 0 pts, ratio=1.70 → max_pts.
+    Formula: min(max_pts, (vol_ratio - 1.0) / 0.70 × max_pts)
+    Calibration: ratio=1.35 (WFO baseline) → 50% of max_pts.
+
     Adapts to setup type:
-    • VCP / PULLBACK / BASE / RES_BREAKOUT — uses volume_ratio / is_vol_surge
-    • WATCHLIST    — uses proximity (distance_pct) + rs_blue_dot bonus
-    • OPTIONS_CATALYST — uses options_score as proxy
+    • VCP / BASE / RES_BREAKOUT / HTF / LCE — continuous vol ramp
+    • PULLBACK  — continuous ramp OR 30% baseline when support confirmed
+    • WATCHLIST — proximity (distance_pct) + rs_blue_dot bonus
+    • OPTIONS_CATALYST — options_score as proxy
     """
-    st        = setup.get("setup_type", "")
-    max_pts   = float(SCORE_WEIGHT_VOL)
+    st      = setup.get("setup_type", "")
+    max_pts = float(SCORE_WEIGHT_VOL)
 
     if st == "OPTIONS_CATALYST":
         opt_score = float(setup.get("options_score") or 0.0)
@@ -370,24 +376,24 @@ def _vol_component(setup: Dict) -> float:
         rs_dot_bonus  = 5.0 if setup.get("rs_blue_dot") else 0.0
         return min(max_pts, proximity_pts + rs_dot_bonus)
 
-    # All other setup types: chart-based volume surge
+    # All other setup types: continuous volume ramp
     vol_ratio    = float(setup.get("volume_ratio") or 0.0)
     is_vol_surge = bool(setup.get("is_vol_surge", False))
 
-    if vol_ratio >= 2.0 or is_vol_surge:
-        return max_pts
-    if vol_ratio >= 1.5:
-        return max_pts * 0.6   # 12 / 20
-    if vol_ratio >= 1.2:
-        return max_pts * 0.3   # 6 / 20
+    # Legacy boolean is_vol_surge treated as vol_ratio floor of 1.5
+    if is_vol_surge and vol_ratio < 1.5:
+        vol_ratio = 1.5
 
-    # PULLBACK setups don't require a volume surge — confirmed support touch
-    # (KDE zone or ascending trendline) is the quality signal.  Award a
-    # baseline score so high-conviction pullbacks are not unfairly penalised.
-    if st == "PULLBACK" and setup.get("support_source"):
-        return max_pts * 0.3   # 6 / 20 — confirmed support contact
+    # Continuous: ratio=1.0 → 0 pts, ratio=1.70+ → max_pts
+    # 0.70 = (1.70 - 1.0), so ratio=1.35 → (0.35/0.70) × max_pts = 50%
+    vol_pts = min(max_pts, max(0.0, (vol_ratio - 1.0) / 0.70 * max_pts))
 
-    return 0.0
+    # PULLBACK: confirmed structural support contact counts as quality signal
+    # even without volume. Award 30% baseline if no vol but support present.
+    if vol_pts == 0.0 and st == "PULLBACK" and setup.get("support_source"):
+        vol_pts = max_pts * 0.30
+
+    return vol_pts
 
 
 def _quality_component(setup: Dict) -> float:
@@ -497,6 +503,35 @@ def _score_support_tier(setup: Dict) -> float:
     return float(tier_pts) / 5.0 * SCORE_WEIGHT_SUPPORT_TIER
 
 
+def _cci_quality_component(setup: Dict) -> float:
+    """
+    CCI quality bonus at signal bar (0 – SCORE_WEIGHT_CCI_QUALITY pts).
+
+    Rewards oversold entries (more negative CCI = higher entry quality).
+    Uses sigmoid of |CCI| relative to the WFO baseline of -40:
+      CCI = -40  → σ(0)  = 0.50 → ~50% of max_pts
+      CCI = -100 → σ(0.75) = 0.68 → ~68% of max_pts
+      CCI = -200 → σ(2.0)  = 0.88 → ~88% + explosive bonus
+
+    Requires setup["cci_at_signal"] to be stored by engine3.
+    Returns 0.0 when cci_at_signal is absent or non-negative (no overbought bonus).
+    """
+    max_pts = float(SCORE_WEIGHT_CCI_QUALITY)
+    cci = float(setup.get("cci_at_signal") or 0.0)
+    if cci >= 0:
+        return 0.0  # no bonus for neutral/overbought entries
+
+    # Sigmoid centred so CCI=-40 → ~50% score
+    x = (abs(cci) - 40.0) / 80.0    # CCI=-40→x=0, CCI=-200→x=2
+    base = 1.0 / (1.0 + np.exp(-x)) * max_pts
+
+    # Explosive bonus: CCI below -200
+    if cci < -200:
+        base = min(max_pts, base * 1.15)
+
+    return min(max_pts, max(0.0, base))
+
+
 def _score_coiling(setup: Dict) -> float:
     """
     Coiling quality score (0 – SCORE_WEIGHT_COILING pts).
@@ -514,7 +549,7 @@ def _score_coiling(setup: Dict) -> float:
 def compute_setup_score(
     setup: Dict,
     rs_rank: float,
-    regime_score: int,
+    regime_score: float,
     regime: str,
     top_sectors: List[str],
 ) -> int:
@@ -525,7 +560,7 @@ def compute_setup_score(
     ----------
     setup        : engine output dict (must contain setup_type, rr, sector, …)
     rs_rank      : cross-sectional percentile rank of this ticker (0–100)
-    regime_score : engine0 integer score (0–100)
+    regime_score : engine0 float score (0.0–1.0)
     regime       : "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE"
     top_sectors  : list of top-N sector names from compute_top_sectors()
 
@@ -533,11 +568,18 @@ def compute_setup_score(
     -------
     int  0–100
     """
-    # ── 1. RS Rank (0 – SCORE_WEIGHT_RS_RANK pts) ────────────────────────────
-    rs_pts = rs_rank / 100.0 * SCORE_WEIGHT_RS_RANK
+    # ── 1. RS Rank — non-linear boost for top-decile tickers ─────────────────
+    # 0→90 maps linearly to 0%→80% of max_pts.
+    # 90→100 maps to 80%→100% of max_pts (steeper slope for market leaders).
+    max_rs_pts = float(SCORE_WEIGHT_RS_RANK)
+    if rs_rank >= 90.0:
+        rs_pts = 0.80 * max_rs_pts + (rs_rank - 90.0) / 10.0 * 0.20 * max_rs_pts
+    else:
+        rs_pts = rs_rank / 90.0 * 0.80 * max_rs_pts
+    # Tier-1 multiplier on top (capped at max)
     if rs_rank >= RS_TIER1_THRESHOLD:
         rs_pts *= RS_TIER1_MULTIPLIER
-    rs_pts = min(float(SCORE_WEIGHT_RS_RANK), rs_pts)
+    rs_pts = min(max_rs_pts, rs_pts)
 
     # ── 2. Reward-to-Risk (0 – SCORE_WEIGHT_RR pts) ──────────────────────────
     rr     = float(setup.get("rr") or 0.0)
@@ -578,7 +620,10 @@ def compute_setup_score(
     # ── 10. Coiling Quality (WATCHLIST only) ──────────────────────────────────
     coiling_pts = _score_coiling(setup)
 
-    # ── 11. Extension penalty (PULLBACK only) ─────────────────────────────────
+    # ── 11. CCI Quality at signal (additive bonus — PULLBACK primarily) ───────
+    cci_qual_pts = _cci_quality_component(setup)
+
+    # ── 12. Extension penalty (PULLBACK only) ─────────────────────────────────
     # Penalizes setups where close is far above the structural support level.
     ext_penalty = 0.0
     if setup.get("setup_type") == "PULLBACK":
@@ -589,7 +634,7 @@ def compute_setup_score(
             ext_penalty = 2.0
 
     raw = (rs_pts + rr_pts + vol_pts + reg_pts + sector_pts + qual_pts + rs_qual_pts
-           + trend_dur_pts + support_tier_pts + coiling_pts - ext_penalty)
+           + trend_dur_pts + support_tier_pts + coiling_pts + cci_qual_pts - ext_penalty)
     return min(100, max(0, int(round(raw))))
 
 
@@ -620,7 +665,7 @@ def score_and_filter_setups(
     list[Dict]  filtered + sorted setups
     """
     regime_str   = regime.get("regime", "SELECTIVE")
-    regime_score = int(regime.get("regime_score", 50))
+    regime_score = float(regime.get("regime_score", 0.5))
 
     # Mode-based RS hard floor: AGGRESSIVE allows RS ≥ 65, SELECTIVE keeps RS ≥ 70
     _rs_floor = (RS_RANK_MIN_PERCENTILE_AGGRESSIVE if regime_str == "AGGRESSIVE"

@@ -246,14 +246,14 @@ def test_regime_patch_mutates_and_restores():
 
 
 def test_engine3_rs_threshold_patch_works():
-    """_patch_constants must patch engines.engine3.RS_REJECT_THRESHOLD and restore it."""
+    """_patch_constants must patch engines.engine3.BACKTEST_RS_THRESHOLD_DEFAULT and restore it."""
     import importlib
     import optimize_parameters as optimizer
     importlib.reload(optimizer)
     import engines.engine3 as engine3
 
-    original = engine3.RS_REJECT_THRESHOLD
-    assert original == -0.05, f"Expected default -0.05, got {original}"
+    original = engine3.BACKTEST_RS_THRESHOLD_DEFAULT
+    assert original == -0.01219, f"Expected default -0.01219, got {original}"
 
     full_params = {
         "ATR_MULTIPLIER":         1.40,
@@ -267,8 +267,8 @@ def test_engine3_rs_threshold_patch_works():
     }
 
     with optimizer._patch_constants(full_params):
-        assert engine3.RS_REJECT_THRESHOLD == -0.02, \
-            f"Expected -0.02 during patch, got {engine3.RS_REJECT_THRESHOLD}"
+        assert engine3.BACKTEST_RS_THRESHOLD_DEFAULT == -0.02, \
+            f"Expected -0.02 during patch, got {engine3.BACKTEST_RS_THRESHOLD_DEFAULT}"
 
-    assert engine3.RS_REJECT_THRESHOLD == original, \
-        f"Expected restore to {original}, got {engine3.RS_REJECT_THRESHOLD}"
+    assert engine3.BACKTEST_RS_THRESHOLD_DEFAULT == original, \
+        f"Expected restore to {original}, got {engine3.BACKTEST_RS_THRESHOLD_DEFAULT}"

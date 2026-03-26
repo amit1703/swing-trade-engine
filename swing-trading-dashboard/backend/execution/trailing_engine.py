@@ -29,10 +29,11 @@ def advance_ema20_trail(state: Dict, bar: Dict) -> None:
     State keys mutated: trailing_stop, _trail_triggered,
                         _bars_since_entry, _prev_ema20.
     """
-    cfg   = TRAIL_CONFIG["ema"]
-    trig  = cfg["trigger_atr_mult"]        # 1.5
-    ext_t = cfg["extension_threshold_atr"] # 2.5
-    ext_o = cfg["extension_offset_atr"]    # 1.5
+    cfg    = TRAIL_CONFIG["ema"]
+    trig   = cfg["trigger_atr_mult"]        # 1.5
+    ext_t  = cfg["extension_threshold_atr"] # 2.5
+    ext_o  = cfg["extension_offset_atr"]    # 1.5
+    buffer = state.get("_ema_break_buffer", 0.0)  # Optuna-tunable; 0.0 = exact EMA20
 
     ema20 = bar["ema20"]
     atr14 = bar.get("atr14", 0.0)
@@ -54,9 +55,12 @@ def advance_ema20_trail(state: Dict, bar: Dict) -> None:
 
     if state.get("_trail_triggered", False):
         if atr14 > 0 and close > ema20 + ext_t * atr14:
-            new_trail = ema20 + ext_o * atr14   # extended: lock in gains tighter
+            # Extended move: lock in gains above EMA20; buffer doesn't apply here
+            new_trail = ema20 + ext_o * atr14
         else:
-            new_trail = prev_ema20               # normal: trail to previous bar EMA20
+            # Normal phase 2: trail to previous bar EMA20, offset down by buffer
+            # buffer=0.0 → exact EMA20; buffer=0.005 → 0.5% below EMA20
+            new_trail = prev_ema20 * (1.0 - buffer)
         if new_trail > stop:
             state["trailing_stop"] = new_trail
 

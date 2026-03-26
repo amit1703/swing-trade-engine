@@ -75,32 +75,32 @@ def test_rlx_rejects_mild_cci_above_minus_30():
 
 
 def test_rs_reject_threshold_is_patchable():
-    """RS_REJECT_THRESHOLD is a module constant patchable at runtime."""
+    """BACKTEST_RS_THRESHOLD_DEFAULT is a module constant patchable at runtime."""
     import engines.engine3 as engine3
     import io
     from contextlib import redirect_stdout
 
-    # Confirm default value
-    assert engine3.RS_REJECT_THRESHOLD == -0.05
+    # Confirm default value matches constants.BACKTEST_RS_THRESHOLD_DEFAULT
+    assert engine3.BACKTEST_RS_THRESHOLD_DEFAULT == -0.01219
 
     # Tighten threshold to -0.02; rs_score=-0.03 is below it → must be rejected
-    engine3.RS_REJECT_THRESHOLD = -0.02
+    engine3.BACKTEST_RS_THRESHOLD_DEFAULT = -0.02
     try:
         f = io.StringIO()
         with redirect_stdout(f):
             scan_relaxed_pullback("TEST", make_pullback_df(), [make_support_zone(99.0)],
                                   rs_score=-0.03, debug=True)
         assert "RS score too weak" in f.getvalue(), (
-            "With RS_REJECT_THRESHOLD=-0.02 and rs_score=-0.03, RS gate must fire"
+            "With BACKTEST_RS_THRESHOLD_DEFAULT=-0.02 and rs_score=-0.03, RS gate must fire"
         )
     finally:
-        engine3.RS_REJECT_THRESHOLD = -0.05
+        engine3.BACKTEST_RS_THRESHOLD_DEFAULT = -0.01219
 
-    # Restored to -0.05: rs_score=-0.03 is above threshold → RS gate must NOT fire
+    # Restored to -0.01219: rs_score=-0.03 is below threshold → RS gate must still fire
     f2 = io.StringIO()
     with redirect_stdout(f2):
         scan_relaxed_pullback("TEST", make_pullback_df(), [make_support_zone(99.0)],
                               rs_score=-0.03, debug=True)
-    assert "RS score too weak" not in f2.getvalue(), (
-        "After restoring threshold to -0.05, rs_score=-0.03 must pass the RS gate"
+    assert "RS score too weak" in f2.getvalue(), (
+        "After restoring threshold to -0.01219, rs_score=-0.03 must be rejected (below threshold)"
     )

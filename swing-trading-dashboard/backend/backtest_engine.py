@@ -25,6 +25,7 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import bisect
 import logging
 import os
 import sys
@@ -49,6 +50,8 @@ from constants import (
     RES_SELECTIVE_REGIME_FACTOR,
     SELECTIVE_SETUP_WEIGHTS,
     SELECTIVE_HARD_FILTER,
+    CCI_THRESHOLD,
+    BRK_VOL_MULT,
 )
 import constants as _constants  # used by _manage_open_trade for TRAIL_ATR_MULT (patchable)
 
@@ -123,13 +126,13 @@ class BacktestParams:
     the final frozen values from the per-engine Optuna runs (PB, BRK, BASE)
     validated via 3-window OOS backtest (2023-24 in-sample, 2020-21, 2017-19).
     """
-    # ── RS filter ──────────────────────────────────── v5 Optuna #433 (frozen) ─
-    rs_threshold:    float = 0.066
+    # ── RS filter ────────────────────────── midpoint of Optuna range [-0.02,0.03] ─
+    rs_threshold:    float = 0.005
 
-    # ── Pullback scoring thresholds ──────────────── v5 Optuna #433 (frozen) ─
-    cci_threshold:   float = -54.5
-    ema_distance:    float = 1.651
-    score_threshold: float = 2.50     # frozen at 2.50 (not in v5 search space)
+    # ── Pullback scoring thresholds ──────── frozen from Optuna WFO ─────────────
+    cci_threshold:   float = CCI_THRESHOLD   # -40.0 (frozen)
+    ema_distance:    float = 0.85
+    score_threshold: float = 70.0     # unified quality gate (0-100 normalized scale)
 
     # ── Signal-type weights ──────────────────────── v5 Optuna #433 (frozen) ─
     breakout_weight: float = 1.724
@@ -138,19 +141,22 @@ class BacktestParams:
     vcp_bonus:       float = 1.370
     cooldown_days:   int   = 4
 
-    # ── RES_BREAKOUT engine parameters ──────────── v5 Optuna #433 (tuned) ──
-    brk_vol_mult:        float = 3.0161  # volume floor (×50d avg)
-    brk_stop_atr:        float = 1.6675  # stop = resistance − stop_atr×ATR
+    # ── RES_BREAKOUT engine parameters ──────────────────────────────────────
+    # Values below are v5 Optuna #433 results from an UNCONSTRAINED search.
+    # Constrained re-run pending: new search space is [1.2,2.0] / [0.8,1.5].
+    # Do NOT sync these to live scanner constants until constrained run completes.
+    brk_vol_mult:        float = BRK_VOL_MULT  # 1.35 (frozen)
+    brk_stop_atr:        float = 1.6675  # UNCONSTRAINED best; constrained range [0.8,1.5]
     brk_min_pct:         float = 0.02    # min close above resistance (must be < brk_gap_pct=0.036)
     brk_gap_pct:         float = 0.036   # skip T+1 if open > res×(1+gap_pct)  [WFO v1: 4/4 windows consensus 0.037–0.053; was 0.010]
     brk_trail_mult:      float = 6.9060  # ATR trail multiplier
-    brk_regime_factor:   float = 0.861  # score penalty in SELECTIVE (unused when aggressive_only=True)
-    brk_aggressive_only: bool  = False  # diagnostic: enable BRK in SELECTIVE to measure raw performance
-    # ── Multi-source resistance detection (converged in brk run 1, deferred) ─
-    brk_donchian_n:        int   = 87   # rolling-high lookback bars
-    brk_pivot_strength:    int   = 2    # bars each side for pivot detection
-    brk_atr_expansion:     float = 1.474  # min bar expansion (×ATR)
-    brk_min_consolidation: int   = 10   # min bars near resistance before brk
+    brk_regime_factor:   float = 0.861   # score penalty in SELECTIVE (unused when aggressive_only=True)
+    brk_aggressive_only: bool  = False   # diagnostic: enable BRK in SELECTIVE to measure raw performance
+    # ── Multi-source resistance detection ────────────────────────────────────
+    brk_donchian_n:        int   = 40    # midpoint of Optuna range [20,60]
+    brk_pivot_strength:    int   = 2     # bars each side for pivot detection
+    brk_atr_expansion:     float = 1.474 # UNCONSTRAINED; constrained range [0.0,1.0]; live default=0.0 (disabled)
+    brk_min_consolidation: int   = 5     # midpoint of Optuna range [3,8]
 
     # ── BASE engine parameters ─────────────────────────────── base #2 ─────
     base_weight:       float = 3.895  # scoring weight for BASE signals
@@ -159,13 +165,16 @@ class BacktestParams:
     base_quality_min:  int   = 19     # min quality score gate in engine5
     base_stop_atr:     float = 0.2    # stop = floor − stop_atr×ATR (Optuna-tunable)
 
-    # ── Take-profit multiplier ───────────── WFO mean across 4 windows (5.80) ─
-    tp_multiple:   float = 5.80
-
     # ── Trail mode ───────────────────────────────────────────────────────────
     # "ema20" = dynamic EMA20-based trail (Phase 1 initial → Phase 2 EMA20)
     # "atr"   = legacy fixed ATR multiplier (backward-compatible fallback)
     trail_mode: str = "ema20"
+
+    # ── EMA break buffer ─────────────────────────────────────────────────────
+    # Prevents premature exits on shallow EMA violations.
+    # Trailing stop is set at EMA20 * (1 - ema_break_buffer) instead of EMA20.
+    # 0.0 = exact EMA20 (current behaviour); 0.005 = 0.5% below EMA20.
+    ema_break_buffer: float = 0.0
 
 
 # Base scores for non-pullback signals (used in scored mode post-signal gate)
@@ -196,7 +205,7 @@ class TradeRecord:
     take_profit:   float
     exit_date:     str
     exit_price:    float
-    exit_reason:   str    # "TARGET" | "STOP" | "EOD"
+    exit_reason:   str    # "STOP" | "EOD"  (TARGET removed — pure EMA/S/R exit model)
     holding_days:  int
 
     # Computed properties (derived in __post_init__)
@@ -287,29 +296,33 @@ class BacktestSummary:
     peak_equity:      float = 0.0  # peak compound equity as % gain (e.g. 15.3 = +15.3%)
     net_profit_pct:   float = 0.0  # gross_profit + gross_loss
     trades:           List[TradeRecord] = field(default_factory=list)
+    signals_evaluated: int = 0  # bars sent to signal detection (after all pre-gates)
+    signals_passed:    int = 0  # signals that cleared all gates and became trades
 
     def to_dict(self) -> Dict:
         return {
-            "run_id":           self.run_id,
-            "ticker":           self.ticker,
-            "setup_type":       self.setup_type,
-            "start_date":       self.start_date,
-            "end_date":         self.end_date,
-            "total_trades":     self.total_trades,
-            "win_count":        self.win_count,
-            "loss_count":       self.loss_count,
-            "win_rate":         self.win_rate,
-            "avg_rr":           self.avg_rr,
-            "avg_win_r":        self.avg_win_r,
-            "avg_loss_r":       self.avg_loss_r,
-            "peak_equity":      self.peak_equity,
-            "profit_factor":    self.profit_factor,
-            "max_drawdown_pct": self.max_drawdown_pct,
-            "avg_holding_days": self.avg_holding_days,
-            "gross_profit":     self.gross_profit,
-            "gross_loss":       self.gross_loss,
-            "net_profit_pct":   self.net_profit_pct,
-            "trades":           [t.to_dict() for t in self.trades],
+            "run_id":              self.run_id,
+            "ticker":              self.ticker,
+            "setup_type":          self.setup_type,
+            "start_date":          self.start_date,
+            "end_date":            self.end_date,
+            "total_trades":        self.total_trades,
+            "win_count":           self.win_count,
+            "loss_count":          self.loss_count,
+            "win_rate":            self.win_rate,
+            "avg_rr":              self.avg_rr,
+            "avg_win_r":           self.avg_win_r,
+            "avg_loss_r":          self.avg_loss_r,
+            "peak_equity":         self.peak_equity,
+            "profit_factor":       self.profit_factor,
+            "max_drawdown_pct":    self.max_drawdown_pct,
+            "avg_holding_days":    self.avg_holding_days,
+            "gross_profit":        self.gross_profit,
+            "gross_loss":          self.gross_loss,
+            "net_profit_pct":      self.net_profit_pct,
+            "trades":              [t.to_dict() for t in self.trades],
+            "signals_evaluated":   self.signals_evaluated,
+            "signals_passed":      self.signals_passed,
         }
 
 
@@ -428,7 +441,7 @@ def _manage_open_trade(
                 activated once close > ref_level + 1.5xATR (min 1-bar delay).
       "atr"   -- legacy fixed ATR multiplier (backward-compatible).
 
-    Stop is always checked FIRST. Target second. Trail update last.
+    Stop is always checked FIRST. Trail update last. No TARGET exit — EMA/S/R only.
     Gap-realistic fill: exit_price = min(open, stop) on stop-outs.
 
     state keys (EMA20 mode):
@@ -440,18 +453,13 @@ def _manage_open_trade(
     ema20  = bar["ema20"]
     atr14  = bar.get("atr14", 0.0)
     stop   = state["trailing_stop"]
-    target = state["take_profit"]
     entry  = state["entry_price"]
 
     # 1. Stop hit (gap-realistic: fill at min(open, stop))
     if low <= stop:
         return True, min(bar["open"], stop), "STOP"
 
-    # 2. Target hit
-    if high >= target:
-        return True, target, "TARGET"
-
-    # 3. Update trailing stop
+    # 2. Update trailing stop  (TARGET exit removed — pure EMA/S/R exit model)
     trail_mode = state.get("_trail_mode", "atr")
 
     if trail_mode == "ema20":
@@ -685,6 +693,7 @@ class BacktestEngine:
         earnings_dates: Optional[Dict[str, List[str]]] = None,
         trail_mult_override: Optional[float] = None,
         params: Optional[BacktestParams] = None,
+        sr_zones_override: Optional[List] = None,
     ):
         self.ticker              = ticker.upper()
         self.start_date          = start_date
@@ -696,6 +705,7 @@ class BacktestEngine:
         self.earnings_dates: Dict[str, List[str]] = earnings_dates or {}
         self.trail_mult_override = trail_mult_override
         self.params              = params
+        self.sr_zones_override   = sr_zones_override   # precomputed zones from WFO cache
         self._last_close_date: Optional[date] = None   # for per-ticker cooldown
 
     async def prepare(self, shared_spy_df: "Optional[pd.DataFrame]" = None):
@@ -730,9 +740,12 @@ class BacktestEngine:
         # ── 2. Price column identification ────────────────────────────────────
         adj_col = "Adj Close" if "Adj Close" in ticker_df.columns else "Close"
 
-        # ── 3. SR zones (full window — same intentional trade-off as run()) ───
-        from engines.engine1 import calculate_sr_zones as _calc_sr_zones
-        sr_zones_cache = _calc_sr_zones(self.ticker, ticker_df)
+        # ── 3. SR zones — use precomputed override if provided (WFO perf path) ─
+        if self.sr_zones_override is not None:
+            sr_zones_cache = self.sr_zones_override
+        else:
+            from engines.engine1 import calculate_sr_zones as _calc_sr_zones
+            sr_zones_cache = _calc_sr_zones(self.ticker, ticker_df)
 
         # ── 4. Indicator columns ──────────────────────────────────────────────
         if "_EMA8" not in ticker_df.columns:
@@ -835,12 +848,20 @@ class BacktestEngine:
         # ── 4. Replay loop ────────────────────────────────────────────────
         completed_trades: List[TradeRecord] = []
         open_trades: List[Dict]             = []   # up to MAX_OPEN_POSITIONS concurrent
+        _sig_eval: int = 0  # bars that reached signal detection after all pre-gates
+        _sig_pass: int = 0  # signals that cleared all gates and were scheduled as trades
+        _signal_dates_used: set = set()   # TASK 1: one trade per signal_date per ticker
+        _dup_blocked: int = 0             # TASK 3: count same-day duplicate blocks
 
         # Pre-compute regime label series from SPY data (empty Series if no spy_df)
         # NOTE: use local spy_df (just fetched), not self.spy_df (None in universe runs)
         _regime_label_s: pd.Series = pd.Series(dtype=object)
         if spy_df is not None and len(spy_df) > 0:
             _regime_label_s = compute_regime_label_series(spy_df)
+
+        # O(log N) regime lookup: build sorted date list + value dict once before the loop
+        _regime_dates: list = sorted(_regime_label_s.index) if len(_regime_label_s) > 0 else []
+        _regime_dict:  dict = _regime_label_s.to_dict()     if len(_regime_label_s) > 0 else {}
 
         for T_date in replay_dates:
             full_idx = all_dates.get_loc(T_date)
@@ -894,12 +915,12 @@ class BacktestEngine:
             if len(open_trades) >= MAX_OPEN_POSITIONS:
                 continue
 
-            # Regime gate: resolve current regime label, skip if DEFENSIVE
+            # Regime gate: O(log N) bisect lookup — replaces O(N) boolean mask
             _current_regime = "UNKNOWN"
-            if len(_regime_label_s) > 0:
-                spy_dates_before = _regime_label_s.index[_regime_label_s.index <= T_date]
-                if len(spy_dates_before) > 0:
-                    _current_regime = str(_regime_label_s.loc[spy_dates_before[-1]])
+            if _regime_dates:
+                _ri = bisect.bisect_right(_regime_dates, T_date) - 1
+                if _ri >= 0:
+                    _current_regime = str(_regime_dict[_regime_dates[_ri]])
             if _current_regime == "DEFENSIVE":
                 continue
 
@@ -942,40 +963,43 @@ class BacktestEngine:
                     continue
 
             # ── Signal detection ──────────────────────────────────────────────
+            _sig_eval += 1  # bar passed all pre-gates; now attempting signal detection
             if self.params is not None and "PULLBACK" in self.setup_types:
-                # Scored mode: route PULLBACK through scan_pullback_scored
-                from engines.engine3 import scan_pullback_scored as _sps
-                pb_setup, pb_score = _sps(
-                    self.ticker, df_slice, _sr_zones_cache, self.params,
-                    rs_score=float(_rs_t["rs_score"]),
-                )
-                if pb_setup is not None:
-                    # VCP co-signal boost: if VCP also fires on this bar, add bonus
-                    try:
-                        from engines.engine2 import scan_vcp as _scan_vcp
-                        _vcp = _scan_vcp(
-                            self.ticker, df_slice, _sr_zones_cache,
-                            spy_3m_return=float(_rs_t["spy_3m"]),
-                            rs_score=float(_rs_t["rs_score"]),
-                        )
-                        if _vcp is not None:
-                            pb_score += self.params.vcp_bonus
-                    except Exception:
-                        pass   # VCP boost is best-effort; never block the pullback
-                    pb_setup["_raw_score"] = pb_score
-                    signal = pb_setup
-                else:
-                    # VCP disabled as standalone in scored mode (runs as booster above)
-                    non_pb_types = [s for s in self.setup_types if s not in ("PULLBACK", "VCP")]
-                    signal = (
-                        _detect_signals(
-                            self.ticker, df_slice, spy_slice, non_pb_types,
-                            sr_zones=_sr_zones_cache,
-                            precomputed_rs=_rs_t,
-                            params=self.params,
-                        )
-                        if non_pb_types else None
+                # Scored mode: TASK 2 — engine priority RES_BREAKOUT > BASE > HTF > LCE > PULLBACK
+                # Step 1: try high-priority breakout/base engines first (in priority order)
+                _PRIORITY_ORDER = ["RES_BREAKOUT", "BASE", "HTF", "LCE"]
+                priority_types = [s for s in _PRIORITY_ORDER if s in self.setup_types]
+                signal = (
+                    _detect_signals(
+                        self.ticker, df_slice, spy_slice, priority_types,
+                        sr_zones=_sr_zones_cache,
+                        precomputed_rs=_rs_t,
+                        params=self.params,
                     )
+                    if priority_types else None
+                )
+                # Step 2: if no priority signal, try PULLBACK (lowest priority)
+                if signal is None:
+                    from engines.engine3 import scan_pullback_scored as _sps
+                    pb_setup, pb_score = _sps(
+                        self.ticker, df_slice, _sr_zones_cache, self.params,
+                        rs_score=float(_rs_t["rs_score"]),
+                    )
+                    if pb_setup is not None:
+                        # VCP co-signal boost: if VCP also fires on this bar, add bonus
+                        try:
+                            from engines.engine2 import scan_vcp as _scan_vcp
+                            _vcp = _scan_vcp(
+                                self.ticker, df_slice, _sr_zones_cache,
+                                spy_3m_return=float(_rs_t["spy_3m"]),
+                                rs_score=float(_rs_t["rs_score"]),
+                            )
+                            if _vcp is not None:
+                                pb_score += self.params.vcp_bonus
+                        except Exception:
+                            pass   # VCP boost is best-effort; never block the pullback
+                        pb_setup["_raw_score"] = pb_score
+                        signal = pb_setup
             else:
                 # Legacy mode: existing _detect_signals path unchanged
                 signal = _detect_signals(
@@ -1040,7 +1064,12 @@ class BacktestEngine:
                         continue   # hard block
                     final_score *= _sel_weight
 
-                if final_score < self.params.score_threshold:
+                # Normalize final_score to 0-100 scale for threshold comparison.
+                # _SIGNAL_BASE_SCORES × max_weight gives practical max ~14-20.
+                # Normalizing by 10.0 maps a score of 10 to 100%, so VCP/BRK
+                # comfortably pass a 70% threshold while low-quality signals filter.
+                _score_pct = min(100.0, final_score / 10.0 * 100.0)
+                if _score_pct < self.params.score_threshold:
                     continue
                 signal["_final_score"] = final_score
                 signal["_regime"] = _current_regime
@@ -1061,20 +1090,11 @@ class BacktestEngine:
                 if _zone_upper > 0 and entry_price > _zone_upper * (1 + _gap_pct):
                     continue
 
-            stop_loss = signal.get("stop_loss", 0.0)
+            stop_loss   = signal.get("stop_loss", 0.0)
+            take_profit = signal.get("take_profit", 0.0)  # informational only — not used for exits
 
-            # In scored mode, override take_profit with Optuna-tuned tp_multiple so
-            # the target is always (entry − stop) × tp_multiple above entry.
-            if self.params is not None:
-                _risk = entry_price - stop_loss
-                take_profit = round(entry_price + self.params.tp_multiple * _risk, 2) if _risk > 0 else 0.0
-            else:
-                take_profit = signal.get("take_profit", 0.0)
-
-            # Guard: entry must be above stop, and target must be above entry
+            # Guard: entry must be above stop
             if stop_loss <= 0 or stop_loss >= entry_price:
-                continue
-            if take_profit <= entry_price:
                 continue
 
             # Capture engine-specific metadata for diagnostics
@@ -1091,6 +1111,23 @@ class BacktestEngine:
                 elif _sig_type == "BASE":
                     _trade_trail = self.params.base_trail_mult
 
+            # TASK 1: one trade per signal_date per ticker — block same-day duplicates
+            if T_date in _signal_dates_used:
+                _dup_blocked += 1
+                logger.debug(
+                    "[DUP BLOCK] %s %s engine=%s already traded this bar — skipped",
+                    self.ticker, T_date.strftime("%Y-%m-%d"),
+                    signal.get("setup_type", "?"),
+                )
+                continue
+            _signal_dates_used.add(T_date)
+
+            _sig_pass += 1  # signal cleared all gates; scheduling trade entry
+            logger.debug(
+                "[TRADE] %s %s engine=%s (first signal this bar)",
+                self.ticker, T_date.strftime("%Y-%m-%d"),
+                signal.get("setup_type", "?"),
+            )
             open_trades.append({
                 "setup_type":         _sig_type,
                 "signal_date":        T_date.strftime("%Y-%m-%d"),
@@ -1112,6 +1149,9 @@ class BacktestEngine:
                 "_bars_since_entry": 0,
                 "_ref_level":        _extract_ref_level(_setup_meta, _sig_type),
                 "_prev_ema20":       None,
+                "_ema_break_buffer": (self.params.ema_break_buffer
+                                      if self.params is not None
+                                      else 0.0),
             })
 
         # ── 5. Close any still-open trades at end of period ───────────────
@@ -1152,10 +1192,18 @@ class BacktestEngine:
             (sum(1 for t in completed_trades if t.is_win) / len(completed_trades) * 100)
             if completed_trades else 0.0,
         )
-        return compute_metrics(
+        if _dup_blocked > 0:
+            logger.info(
+                "[DUP BLOCK] %s: %d same-bar duplicate(s) blocked during replay",
+                self.ticker, _dup_blocked,
+            )
+        _result = compute_metrics(
             self.ticker, setup_label, self.start_date, self.end_date,
             completed_trades, run_id,
         )
+        _result.signals_evaluated = _sig_eval
+        _result.signals_passed    = _sig_pass
+        return _result
 
 
 # ─────────────────────────────────────────────────────────────────────────────

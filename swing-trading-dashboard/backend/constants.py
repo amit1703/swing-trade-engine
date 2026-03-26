@@ -133,6 +133,7 @@ SCORE_WEIGHT_SECTOR         = 5     # Full pts for top-SECTOR_TIER1_N sectors (r
 SCORE_WEIGHT_SUPPORT_TIER   = 5     # Structural support tier quality (new)
 SCORE_WEIGHT_QUALITY        = 5     # Pattern quality / confirmation signals (unchanged)
 SCORE_WEIGHT_RS_QUALITY     = 20    # RS momentum signals — additive bonus (unchanged)
+SCORE_WEIGHT_CCI_QUALITY    = 10    # CCI quality at signal — additive bonus (new)
 SCORE_SELECTIVE_REGIME_FACTOR = 0.53   # SELECTIVE regime earns 53% of AGGRESSIVE pts (~8/15)
 
 # Support tier quality scores (used in scoring.py _score_support_tier)
@@ -165,7 +166,9 @@ PIVOT_MIN_TOUCHES         = 2      # minimum pivots to form a valid multi-touch 
 PIVOT_SINGLE_MIN_DROP_PCT = 0.20   # single-pivot zone: stock must drop ≥20% from that high → evidence sellers defended hard
 PIVOT_SINGLE_DROP_WINDOW  = 60     # bars to look ahead for the drop after a single pivot high
 
-# ── Market Regime Scoring Weights (Task 2) ─────────────────────────────────
+# ── Market Regime Scoring Weights (V1 — legacy binary system) ──────────────
+# Kept for reference and portfolio_backtest compatibility.
+# V2 continuous engine (engine0.py) uses REGIME_W_* constants below.
 REGIME_WEIGHT_EMA20    = 20   # SPY close > EMA20
 REGIME_WEIGHT_SMA50    = 15   # SPY close > SMA50
 REGIME_WEIGHT_MA_STACK = 15   # SMA50 > SMA200
@@ -174,9 +177,45 @@ REGIME_WEIGHT_BREADTH  = 20   # % universe above SMA50
 REGIME_WEIGHT_HL       = 10   # New 52-week highs vs lows ratio
 REGIME_WEIGHT_VIX      = 10   # VIX below its 20-day SMA
 
-REGIME_AGGRESSIVE_THRESHOLD = 70   # 70–100 = AGGRESSIVE
-REGIME_SELECTIVE_THRESHOLD  = 59   # Optuna v4 best (trial #951); was 54 (v3)
-                                    # 0–39   = DEFENSIVE (Engines 2 & 3 disabled)
+REGIME_AGGRESSIVE_THRESHOLD = 0.70  # 0.70–1.0  = AGGRESSIVE  (V2 0.0–1.0 scale)
+REGIME_SELECTIVE_THRESHOLD  = 0.40  # 0.40–0.69 = SELECTIVE; 0–0.39 = DEFENSIVE
+                                     # V2: output is 0.0–1.0 (was 0–100 in V1).
+                                     # V1 Optuna-tuned threshold was 59 on 0-100 scale.
+
+# ── Market Regime V2 — 7-Factor SPY-Only Continuous Scoring ───────────────
+# All 7 factors computable from SPY OHLCV alone — identical logic for live
+# scanner and historical backtest; eliminates train-serve skew.
+# Output: float 0.0–1.0 (was 0–100 in 4-factor V1 version).
+# Weights sum to 100; normalization handles any positive sum.
+
+# Component weights
+REGIME_W_CLOSE_EMA20  = 10.0  # F1: σ((close−EMA20)/ATR14×k) — near-term trend
+REGIME_W_CLOSE_SMA50  = 10.0  # F2: σ((close−SMA50)/ATR14×k) — medium-term trend
+REGIME_W_SMA50_SLOPE  = 20.0  # F3: σ(SMA50 5-bar slope × k) — momentum direction (HEAVY)
+REGIME_W_CLOSE_SMA200 = 25.0  # F4: σ((close−SMA200)/ATR14×k) — long-term trend (HEAVIEST)
+REGIME_W_EMA20_SMA50  = 10.0  # F5: σ((EMA20−SMA50)/ATR14×k) — medium stack alignment
+REGIME_W_ATR_REGIME   = 10.0  # F6: 1−σ(ATR-ratio×k) — low vol = stable (inverted)
+REGIME_W_EMA8_EMA20   = 15.0  # F7: σ((EMA8−EMA20)/ATR14×k) — short-term momentum
+
+# Sigmoid steepness params (k controls transition sharpness)
+REGIME_K_CLOSE_EMA20  = 3.0    # F1: 1 ATR gap → strong signal
+REGIME_K_CLOSE_SMA50  = 2.5    # F2: softer — SMA50 is laggier
+REGIME_K_SMA50_SLOPE  = 150.0  # F3: slope in decimal (0.01=1%) → sigmoid
+REGIME_K_CLOSE_SMA200 = 1.5    # F4: softest — SMA200 is long-scale
+REGIME_K_EMA20_SMA50  = 4.0    # F5: tight — stack alignment is near-binary
+REGIME_K_ATR_REGIME   = 3.5    # F6: ATR ratio deviation from baseline
+REGIME_K_EMA8_EMA20   = 4.0    # F7: tight — short momentum signals
+
+# CCI multiplier — SPY overbought/oversold adjustment applied to raw score
+REGIME_CCI_OB_START  = 150.0   # CCI level where overbought penalty starts
+REGIME_CCI_OB_MAX    = 250.0   # CCI level where penalty reaches maximum
+REGIME_CCI_MIN_MULT  = 0.35    # minimum score multiplier at extreme overbought
+REGIME_CCI_OS_LEVEL  = -150.0  # CCI below this + turning up → oversold boost
+REGIME_CCI_BOOST     = 1.10    # multiplier when oversold and CCI turning up
+
+# ── Entry signal quality parameters (frozen from WFO analysis) ────────────
+CCI_THRESHOLD  = -40.0   # frozen CCI hook floor — WFO converged; stop optimizing
+BRK_VOL_MULT   = 1.35    # frozen RES_BREAKOUT vol multiplier — WFO baseline
 
 # ──────────────────────────────────────────────────────────────────────────
 # Engine 7 — Options Catalyst
@@ -308,7 +347,7 @@ BACKTEST_V4_TRAIL_MULT   = 4.162          # strict V4 single trail multiplier (a
 BACKTEST_DIAG_CACHE_FILE = "cache/backtest_diagnostics.json"   # relative to backend/
 
 # V5 Scored-mode defaults (Optuna-tunable, used as BacktestParams defaults)
-BACKTEST_RS_THRESHOLD_DEFAULT = -0.01219   # V4 Optuna best; RS_REJECT_THRESHOLD in engine3
+BACKTEST_RS_THRESHOLD_DEFAULT = -0.01219   # V4 Optuna best; single source of truth — imported by engine3
 
 # ── SELECTIVE Regime Setup Filtering ──────────────────────────────────────────
 # Controls which setup types are allowed / penalized in SELECTIVE regime.

@@ -29,12 +29,8 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from indicators import ema as _ema, sma as _sma, atr as _atr, cci as _cci
-from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT, ATR_STOP_MULTIPLIER, PB_ATR_STOP_MULTIPLIER, PB_MIN_TREND_BARS, SUPPORT_MAX_EXTENSION_ATR
+from constants import CCI_STRICT_FLOOR, CCI_RLX_FLOOR, TARGET_RR, TRENDLINE_TOUCH_TOLERANCE_PCT, ATR_STOP_MULTIPLIER, PB_ATR_STOP_MULTIPLIER, PB_MIN_TREND_BARS, SUPPORT_MAX_EXTENSION_ATR, BACKTEST_RS_THRESHOLD_DEFAULT
 from zone_utils import nearest_resistance_target
-
-# RS gate: reject stocks that persistently underperform SPY.
-# Loose floor allows flat-vs-SPY stocks to qualify. Patchable by Optuna.
-RS_REJECT_THRESHOLD = -0.01219   # Optuna v4 best (trial #951); was -0.034124 (v3)
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -207,12 +203,12 @@ def scan_pullback(
 
         # ── 0. RS quality gate ────────────────────────────────────────────
         # Require stock not to be a persistent underperformer vs SPY.
-        # Loose floor (RS_REJECT_THRESHOLD) allows stocks that are flat vs SPY to qualify.
-        if rs_score < RS_REJECT_THRESHOLD:
+        # Loose floor (BACKTEST_RS_THRESHOLD_DEFAULT) allows stocks that are flat vs SPY to qualify.
+        if rs_score < BACKTEST_RS_THRESHOLD_DEFAULT:
             if debug:
                 print(
                     f"Engine 3 Pullback: REJECTED - RS score too weak "
-                    f"({rs_score:.3f} < {RS_REJECT_THRESHOLD:.2f} — persistent underperformer)"
+                    f"({rs_score:.3f} < {BACKTEST_RS_THRESHOLD_DEFAULT:.2f} — persistent underperformer)"
                 )
             return None
 
@@ -382,11 +378,11 @@ def scan_relaxed_pullback(
         cci_prev     = ind.cci_prev
 
         # ── 0. RS quality gate ────────────────────────────────────────────
-        if rs_score < RS_REJECT_THRESHOLD:
+        if rs_score < BACKTEST_RS_THRESHOLD_DEFAULT:
             if debug:
                 print(
                     f"Engine 3 RLX Pullback: REJECTED - RS score too weak "
-                    f"({rs_score:.3f} < {RS_REJECT_THRESHOLD:.2f} — persistent underperformer)"
+                    f"({rs_score:.3f} < {BACKTEST_RS_THRESHOLD_DEFAULT:.2f} — persistent underperformer)"
                 )
             return None
 
@@ -769,7 +765,7 @@ def scan_pullback_approaching(
         cci_prev     = ind.cci_prev
 
         # RS gate (same as engine 3)
-        if rs_score < RS_REJECT_THRESHOLD:
+        if rs_score < BACKTEST_RS_THRESHOLD_DEFAULT:
             return None
 
         # Trend (relaxed — same as scan_relaxed_pullback)

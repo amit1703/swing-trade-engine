@@ -64,8 +64,7 @@ _MODULE_PATCHES: dict[str, list[tuple[str, str]]] = {
         ("engines.engine6", "RES_DECISIVE_ATR_FACTOR"),
     ],
     "BREAKOUT_VOL_MULT": [
-        ("engines.engine6",     "VOL_SURGE_MULTIPLIER"),
-        ("engines.engine6",     "_VOL_SURGE_THRESHOLD"),
+        ("engines.engine6",     "RES_BREAKOUT_VOL_MULT"),
         ("engines.engine8_htf", "VOL_SURGE_MULTIPLIER"),
     ],
     "TARGET_RR": [
@@ -83,7 +82,7 @@ _MODULE_PATCHES: dict[str, list[tuple[str, str]]] = {
         ("filters", "REGIME_SELECTIVE_THRESHOLD"),
     ],
     "ENGINE3_RS_THRESHOLD": [
-        ("engines.engine3", "RS_REJECT_THRESHOLD"),
+        ("engines.engine3", "BACKTEST_RS_THRESHOLD_DEFAULT"),
     ],
 }
 
