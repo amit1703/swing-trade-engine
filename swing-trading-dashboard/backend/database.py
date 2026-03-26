@@ -358,7 +358,7 @@ async def batch_save_setups(db_path: str, scan_timestamp: str, setups: List[Dict
             setup["take_profit"],
             setup["rr"],
             setup["setup_date"],
-            json.dumps({k: v for k, v in setup.items() if k not in meta_keys}),
+            json.dumps({k: v for k, v in setup.items() if k not in meta_keys}, default=_json_default),
         )
         for setup in setups
     ]
