@@ -541,13 +541,20 @@ export default function DiagnosticsTab() {
         }
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const json = await res.json()
+        console.log('[DiagnosticsTab] fetchData received', source, {
+          total_trades: json?.total_trades ?? json?.summary?.total_trades,
+          keys: Object.keys(json ?? {}),
+        })
         if (source === 'isoos') {
           setIoData(json)
         } else {
           setData(json)
         }
       } catch (err) {
-        if (err.name !== 'AbortError') setError(err.message)
+        if (err.name !== 'AbortError') {
+          console.error('[DiagnosticsTab] fetchData error', source, err)
+          setError(err.message)
+        }
       } finally {
         setLoading(false)
       }
@@ -569,12 +576,30 @@ export default function DiagnosticsTab() {
           if (s.status === 'completed') {
             try {
               const r = await fetch('/api/diagnostics/backtest', { cache: 'no-store' })
-              if (r.ok) setData(await r.json())
-            } catch (_) {}
+              if (r.ok) {
+                const json = await r.json()
+                console.log('[DiagnosticsTab] backtest data received', {
+                  total_trades:          json?.total_trades,
+                  summary_trades:        json?.summary?.total_trades,
+                  has_r_distribution:    Array.isArray(json?.r_distribution),
+                  has_score_distribution:Array.isArray(json?.score_distribution),
+                  has_regime_distribution: !!json?.regime_distribution,
+                  avg_hold_win:          json?.summary?.avg_hold_win,
+                })
+                setData(json)
+              } else {
+                console.error('[DiagnosticsTab] backtest data fetch failed, status', r.status)
+              }
+            } catch (err) {
+              console.error('[DiagnosticsTab] backtest data parse error', err)
+            }
           }
+          // setBtRunning(false) fires AFTER setData so the overlay stays until data is ready
           setBtRunning(false)
         }
-      } catch (_) {}
+      } catch (err) {
+        console.warn('[DiagnosticsTab] status poll error', err)
+      }
     }, 3000)
     return () => clearInterval(pollRef.current)
   }, [btRunning])
@@ -1133,7 +1158,7 @@ export default function DiagnosticsTab() {
           )}
 
           {/* R-Multiple Distribution */}
-          {data?.r_distribution && (
+          {Array.isArray(data?.r_distribution) && data.r_distribution.length > 0 && (
             <>
               <SectionHeader title="R-MULTIPLE DISTRIBUTION" />
               <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
@@ -1153,7 +1178,7 @@ export default function DiagnosticsTab() {
           )}
 
           {/* Setup Score Distribution */}
-          {data?.score_distribution && (
+          {Array.isArray(data?.score_distribution) && data.score_distribution.length > 0 && (
             <>
               <SectionHeader title="SETUP SCORE DISTRIBUTION (PRE-GATE)" />
               <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
