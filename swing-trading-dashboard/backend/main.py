@@ -78,6 +78,7 @@ from constants import (
     CACHE_TTL_FAILURE,
     CACHE_TTL_SUCCESS,
     CONCURRENCY_LIMIT,
+    SCAN_CONCURRENCY_LIMIT,
     DATA_FETCH_PERIOD,
     DAYS_3_MONTHS,
     DB_PATH,
@@ -668,7 +669,7 @@ def run_morning_scan() -> None:
 
             # Create a fresh semaphore local to this loop (do not overwrite the
             # module-level _semaphore used by the main FastAPI event loop)
-            _local_semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
+            _local_semaphore = asyncio.Semaphore(SCAN_CONCURRENCY_LIMIT)
 
             scan_ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -761,7 +762,7 @@ async def lifespan(app: FastAPI):
     validate_trail_config()   # raises AssertionError if mode != "ema20"
     _log_trail_config()
 
-    _semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
+    _semaphore = asyncio.Semaphore(SCAN_CONCURRENCY_LIMIT)
     await init_db(DB_PATH)
     log.info("SQLite DB initialised at %s", DB_PATH)
     _cache_store.preload_index()

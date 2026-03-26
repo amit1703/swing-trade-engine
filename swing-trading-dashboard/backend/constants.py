@@ -153,7 +153,8 @@ SUPPORT_MAX_EXTENSION_ATR = 2.5   # hard reject if close > support_level + 2.5 �
 # ──────────────────────────────────────────────────────────────────────────
 
 DATA_FETCH_PERIOD = "1y"  # Historical data lookback for each ticker (1y = 252 bars, covers all engines)
-CONCURRENCY_LIMIT = 64  # Backtest reads local parquet only — no network, safe to run high concurrency
+CONCURRENCY_LIMIT      = 64  # Backtest reads local parquet only — no network, safe to run high concurrency
+SCAN_CONCURRENCY_LIMIT = 10  # Live scanner: max concurrent yfinance requests — keep low to avoid rate-limits
 BATCH_SAVE_SIZE = 100  # Batch size for database operations (if needed)
 FETCH_MAX_RETRIES = 4  # Maximum retry attempts for data fetches
 FETCH_BACKOFF_BASE = 5.0  # Base delay for exponential backoff (seconds) — longer for rate limits
