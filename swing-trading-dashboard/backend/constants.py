@@ -121,19 +121,29 @@ MIN_SETUP_SCORE          = 70   # gate: discard setups with unified score < 70
 MIN_SETUP_SCORE_DEFENSIVE = 45  # lower gate in DEFENSIVE — regime penalty (0 pts) would kill all signals
 LOW_SAMPLE_THRESHOLD    = 20    # min trades per setup type for reliable diagnostics
 
-# Score component weights — sum of primary weights = 100
-# RS_QUALITY is an additive bonus (can push score above 100, capped at 100)
-SCORE_WEIGHT_RS_RANK        = 25    # RS percentile rank (reduced from 30)
-SCORE_WEIGHT_RR             = 17    # Reward-to-Risk ratio (reduced from 20)
-SCORE_WEIGHT_VOL            = 16    # Volume surge / momentum (reduced from 20)
+# Score component weights — base (non-regime) components sum to exactly 85.
+# With the AGGRESSIVE regime bonus (+15) a perfect setup scores 100.
+#
+# Base components (max = 85):
+#   RS Rank(28) + RR(20) + Vol(16) + Sector(8) + Quality(5) + RS_Quality(8) = 85
+#
+# Additive extras (setup-type-specific, push above 85 but capped at 100 with regime):
+#   Trend Duration(10) — PULLBACK; Support Tier(5) — PULLBACK;
+#   CCI Quality(10) — PULLBACK; Coiling(7) — WATCHLIST
+#
+# RR scales at rr / RR_FULL_SCORE_TARGET; rr >= 3.5 earns full 20 pts.
+RR_FULL_SCORE_TARGET        = 3.5   # RR at which full SCORE_WEIGHT_RR pts are earned
+SCORE_WEIGHT_RS_RANK        = 28    # RS percentile rank (raised from 25)
+SCORE_WEIGHT_RR             = 20    # Reward-to-Risk ratio (raised from 17; scales at rr/3.5)
+SCORE_WEIGHT_VOL            = 16    # Volume surge / momentum (unchanged)
 SCORE_WEIGHT_REGIME         = 15    # Market regime alignment (unchanged)
-SCORE_WEIGHT_TREND_DUR      = 10    # Trend duration graduated score (new)
-SCORE_WEIGHT_COILING        = 7     # Coiling quality for WATCHLIST setups (new)
-SCORE_WEIGHT_SECTOR         = 5     # Full pts for top-SECTOR_TIER1_N sectors (reduced from 10)
-SCORE_WEIGHT_SUPPORT_TIER   = 5     # Structural support tier quality (new)
+SCORE_WEIGHT_TREND_DUR      = 10    # Trend duration graduated score (PULLBACK additive)
+SCORE_WEIGHT_COILING        = 7     # Coiling quality for WATCHLIST setups (additive)
+SCORE_WEIGHT_SECTOR         = 8     # Full pts for top-SECTOR_TIER1_N sectors (raised from 5)
+SCORE_WEIGHT_SUPPORT_TIER   = 5     # Structural support tier quality (PULLBACK additive)
 SCORE_WEIGHT_QUALITY        = 5     # Pattern quality / confirmation signals (unchanged)
-SCORE_WEIGHT_RS_QUALITY     = 20    # RS momentum signals — additive bonus (unchanged)
-SCORE_WEIGHT_CCI_QUALITY    = 10    # CCI quality at signal — additive bonus (new)
+SCORE_WEIGHT_RS_QUALITY     = 8     # RS momentum signals — additive bonus (reduced from 20)
+SCORE_WEIGHT_CCI_QUALITY    = 10    # CCI quality at signal — PULLBACK additive bonus
 SCORE_SELECTIVE_REGIME_FACTOR = 0.53   # SELECTIVE regime earns 53% of AGGRESSIVE pts (~8/15)
 
 # Support tier quality scores (used in scoring.py _score_support_tier)

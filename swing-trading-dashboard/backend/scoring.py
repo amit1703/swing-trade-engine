@@ -42,6 +42,7 @@ from constants import (
     SCORE_SELECTIVE_REGIME_FACTOR,
     SCORE_WEIGHT_CCI_QUALITY,
     SCORE_WEIGHT_COILING,
+    RR_FULL_SCORE_TARGET,
     SCORE_WEIGHT_QUALITY,
     SCORE_WEIGHT_REGIME,
     SCORE_WEIGHT_RS_QUALITY,
@@ -582,8 +583,9 @@ def compute_setup_score(
     rs_pts = min(max_rs_pts, rs_pts)
 
     # ── 2. Reward-to-Risk (0 – SCORE_WEIGHT_RR pts) ──────────────────────────
+    # Full pts at rr >= RR_FULL_SCORE_TARGET (3.5:1 — realistic swing target).
     rr     = float(setup.get("rr") or 0.0)
-    rr_pts = min(float(SCORE_WEIGHT_RR), rr / 5.0 * SCORE_WEIGHT_RR)
+    rr_pts = min(float(SCORE_WEIGHT_RR), rr / RR_FULL_SCORE_TARGET * SCORE_WEIGHT_RR)
 
     # ── 3. Volume / Momentum (0 – SCORE_WEIGHT_VOL pts) ──────────────────────
     vol_pts = _vol_component(setup)
