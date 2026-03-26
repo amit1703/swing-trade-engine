@@ -1241,23 +1241,11 @@ async def _fetch(
                 df = await loop.run_in_executor(None, _do_download)
 
                 if df is None or df.empty:
-                    if attempt < FETCH_MAX_RETRIES:
-                        backoff_delay = FETCH_BACKOFF_BASE * (2 ** attempt)
-                        log.warning(
-                            "Fetch %s: empty/None data (attempt %d/%d), retrying in %.1fs...",
-                            ticker,
-                            attempt + 1,
-                            FETCH_MAX_RETRIES,
-                            backoff_delay,
-                        )
-                        need_retry = True
-                    else:
-                        log.warning(
-                            "Fetch DROPPED %s: empty/None data after %d retries",
-                            ticker, FETCH_MAX_RETRIES,
-                        )
-                        _ticker_cache[ticker] = (time.time(), None)
-                        return None
+                    # Empty on first try almost always means delisted — skip immediately,
+                    # no retries (retrying a delisted ticker wastes 75s per symbol).
+                    log.warning("Fetch DROPPED %s: no data (delisted/unavailable) — skipping retries", ticker)
+                    _ticker_cache[ticker] = (time.time(), None)
+                    return None
                 else:
                     # Flatten MultiIndex (newer yfinance versions)
                     if isinstance(df.columns, pd.MultiIndex):
