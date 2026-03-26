@@ -763,6 +763,7 @@ async def run_portfolio_backtest_universe(
                 signal["_regime"]       = current_regime
                 signal["_regime_score"] = regime_score * 100.0
                 setup_type_sig    = signal.get("setup_type", "")
+                has_engine_score = "_raw_score" in signal
                 raw_score         = signal.get(
                     "_raw_score",
                     _SIGNAL_BASE_SCORES.get(setup_type_sig, _SIGNAL_BASE_SCORE_DEFAULT),
@@ -789,8 +790,13 @@ async def run_portfolio_backtest_universe(
                         continue
                     final_score *= sel_w
 
-                # Internal mechanism quality gate
-                if final_score < ts.params.score_threshold:
+                # Internal mechanism quality gate — only apply when the engine
+                # returned a real score.  Non-PULLBACK engines (BASE, RES_BREAKOUT,
+                # HTF, LCE) don't set _raw_score; the fallback base values (4-6)
+                # can never reach score_threshold=70, silently killing all trades.
+                # For those signals, config.min_score (the unified 0-100 gate below)
+                # is the authoritative quality filter.
+                if has_engine_score and final_score < ts.params.score_threshold:
                     continue
 
                 signal["_final_score"] = final_score
