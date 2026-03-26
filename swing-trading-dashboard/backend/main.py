@@ -193,6 +193,8 @@ from analytics import (
     compute_regime_performance,
     compute_regime_stability,
     compute_selective_breakdown,
+    compute_r_distribution,
+    compute_score_distribution,
 )
 from email_digest import send_digest
 from services.macro_service import get_market_overview
@@ -543,15 +545,16 @@ _isoos_status: dict = {
 def _backtest_trade_to_analytics(tr: dict) -> dict:
     """Map TradeRecord.to_dict() fields to analytics.py contract."""
     return {
-        "ticker":       tr["ticker"],
-        "setup_type":   tr["setup_type"],
-        "entry_price":  tr["entry_price"],
-        "stop_loss":    tr["initial_stop"],          # initial_stop → stop_loss
-        "close_price":  tr["exit_price"],            # exit_price  → close_price
-        "exit_date":    tr.get("exit_date", ""),     # for chronological equity curve
-        "status":       "closed",
-        "regime_score": tr.get("regime_score", 0.0), # populated by portfolio_backtest
-        "regime":       tr.get("regime", "UNKNOWN"),
+        "ticker":        tr["ticker"],
+        "setup_type":    tr["setup_type"],
+        "entry_price":   tr["entry_price"],
+        "stop_loss":     tr["initial_stop"],          # initial_stop → stop_loss
+        "close_price":   tr["exit_price"],            # exit_price  → close_price
+        "exit_date":     tr.get("exit_date", ""),     # for chronological equity curve
+        "status":        "closed",
+        "regime_score":  tr.get("regime_score", 0.0), # populated by portfolio_backtest
+        "regime":        tr.get("regime", "UNKNOWN"),
+        "holding_days":  tr.get("holding_days", 0),   # for holding-period analysis
     }
 
 # WFO in-memory state
@@ -4061,14 +4064,53 @@ async def run_backtest_diagnostics(
                 _backtest_diag_status["done"]  = done
                 _backtest_diag_status["total"] = total
 
+            score_collector: list = []
             raw_trades = await run_portfolio_backtest_universe(
                 tickers,
                 config,
                 params=BacktestParams(),
                 progress_cb=_progress,
                 sectors=SECTORS,
+                score_collector=score_collector,
             )
             adapted = [_backtest_trade_to_analytics(t) for t in raw_trades]
+
+            # ── Regime distribution over the backtest period ───────────────
+            regime_distribution: dict = {}
+            try:
+                import yfinance as _yf
+                import pandas as _pd
+                from filters import compute_regime_score_series as _crs
+                from constants import (
+                    REGIME_AGGRESSIVE_THRESHOLD as _AGG,
+                    REGIME_SELECTIVE_THRESHOLD  as _SEL,
+                )
+                _warmup_start = (
+                    _pd.Timestamp(req.start_date) - _pd.DateOffset(years=1)
+                ).strftime("%Y-%m-%d")
+                _spy = _yf.download(
+                    "SPY", start=_warmup_start, end=req.end_date,
+                    interval="1d", auto_adjust=False, progress=False, threads=False,
+                )
+                if _spy is not None and not _spy.empty:
+                    if isinstance(_spy.columns, _pd.MultiIndex):
+                        _spy.columns = _spy.columns.get_level_values(0)
+                    _scores = _crs(_spy)
+                    _mask   = (_scores.index >= _pd.Timestamp(req.start_date)) & \
+                              (_scores.index <= _pd.Timestamp(req.end_date))
+                    _window = _scores[_mask]
+                    _total  = max(len(_window), 1)
+                    _counts = {
+                        "AGGRESSIVE": int((_window >= _AGG).sum()),
+                        "SELECTIVE":  int(((_window >= _SEL) & (_window < _AGG)).sum()),
+                        "DEFENSIVE":  int((_window < _SEL).sum()),
+                    }
+                    regime_distribution = {
+                        k: {"days": v, "pct": round(v / _total * 100, 1)}
+                        for k, v in _counts.items()
+                    }
+            except Exception as _e:
+                log.warning("Regime distribution computation failed: %s", _e)
 
             report = {
                 "generated_at":        datetime.now(timezone.utc).isoformat(),
@@ -4084,6 +4126,9 @@ async def run_backtest_diagnostics(
                 "ticker_distribution": compute_ticker_distribution(adapted),
                 "regime_performance":  compute_regime_performance(adapted),
                 "selective_analysis":  compute_selective_breakdown(adapted),
+                "r_distribution":      compute_r_distribution(adapted),
+                "score_distribution":  compute_score_distribution(score_collector),
+                "regime_distribution": regime_distribution,
                 "trades":              raw_trades,
             }
 

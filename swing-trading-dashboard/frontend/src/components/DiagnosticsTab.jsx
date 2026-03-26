@@ -92,6 +92,122 @@ function EquityCurve({ data, dates }) {
   return <div ref={ref} style={{ width: '100%', height: 160 }} />
 }
 
+// ─── RMultipleDistribution ────────────────────────────────────────────────────
+function RMultipleDistribution({ rows }) {
+  if (!rows || rows.length === 0) return <EmptyState />
+  const maxPct = Math.max(...rows.map(r => r.pct), 1)
+  const BAR_COLORS = {
+    '<-1R':  'var(--halt)',
+    '-1R–0': '#ff6b6b',
+    '0–1R':  '#ffa94d',
+    '1R–2R': '#74c0fc',
+    '2R–3R': '#51cf66',
+    '>3R':   'var(--go)',
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {rows.map(r => (
+        <div key={r.bucket} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{
+            fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, fontWeight: 700,
+            width: 60, flexShrink: 0, color: BAR_COLORS[r.bucket] ?? 'var(--text)',
+          }}>{r.bucket}</span>
+          <div style={{ flex: 1, height: 18, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 3,
+              width: `${(r.pct / maxPct) * 100}%`,
+              background: BAR_COLORS[r.bucket] ?? 'var(--text)',
+              opacity: 0.85,
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+          <span style={{ width: 36, textAlign: 'right', fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', color: 'var(--text)', flexShrink: 0 }}>
+            {r.count}
+          </span>
+          <span style={{ width: 44, textAlign: 'right', fontSize: 10, fontFamily: '"IBM Plex Mono", monospace', color: 'var(--muted)', flexShrink: 0 }}>
+            {r.pct.toFixed(1)}%
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── RegimeDistributionPanel ──────────────────────────────────────────────────
+function RegimeDistributionPanel({ dist }) {
+  if (!dist || Object.keys(dist).length === 0) return <EmptyState message="Regime distribution not available" />
+  const REGIME_COLORS = { AGGRESSIVE: 'var(--go)', SELECTIVE: 'var(--accent)', DEFENSIVE: 'var(--halt)' }
+  const maxPct = Math.max(...Object.values(dist).map(v => v.pct ?? 0), 1)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {['AGGRESSIVE', 'SELECTIVE', 'DEFENSIVE'].map(tier => {
+        const v = dist[tier]
+        if (!v) return null
+        return (
+          <div key={tier} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{
+              fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, fontWeight: 700,
+              width: 96, flexShrink: 0, color: REGIME_COLORS[tier],
+            }}>{tier}</span>
+            <div style={{ flex: 1, height: 18, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 3,
+                width: `${(v.pct / maxPct) * 100}%`,
+                background: REGIME_COLORS[tier],
+                opacity: 0.75,
+                transition: 'width 0.3s ease',
+              }} />
+            </div>
+            <span style={{ width: 40, textAlign: 'right', fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', color: 'var(--text)', flexShrink: 0 }}>
+              {v.days}d
+            </span>
+            <span style={{ width: 44, textAlign: 'right', fontSize: 10, fontFamily: '"IBM Plex Mono", monospace', color: 'var(--muted)', flexShrink: 0 }}>
+              {v.pct.toFixed(1)}%
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── ScoreDistributionPanel ───────────────────────────────────────────────────
+function ScoreDistributionPanel({ rows }) {
+  if (!rows || rows.length === 0) return <EmptyState message="Score distribution not available (run backtest first)" />
+  const total = rows.reduce((s, r) => s + r.count, 0)
+  const maxPct = Math.max(...rows.map(r => r.pct), 1)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace', marginBottom: 4 }}>
+        {total} signals evaluated (pre-gate) · gate at 70
+      </div>
+      {rows.map(r => (
+        <div key={r.bucket} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{
+            fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, fontWeight: 700,
+            width: 52, flexShrink: 0,
+            color: r.above_gate ? 'var(--go)' : 'var(--muted)',
+          }}>{r.bucket}</span>
+          <div style={{ flex: 1, height: 18, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+            <div style={{
+              height: '100%', borderRadius: 3,
+              width: `${(r.pct / maxPct) * 100}%`,
+              background: r.above_gate ? 'var(--go)' : 'rgba(100,116,139,0.5)',
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+          <span style={{ width: 36, textAlign: 'right', fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', color: 'var(--text)', flexShrink: 0 }}>
+            {r.count}
+          </span>
+          <span style={{ width: 44, textAlign: 'right', fontSize: 10, fontFamily: '"IBM Plex Mono", monospace', color: r.above_gate ? 'var(--go)' : 'var(--muted)', flexShrink: 0 }}>
+            {r.pct.toFixed(1)}%
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── SelectiveAnalysis ────────────────────────────────────────────────────────
 const CLASSIFICATION_COLORS = {
   STRONG:            'var(--go)',
@@ -980,6 +1096,8 @@ export default function DiagnosticsTab() {
             <MetricCard label={tr('diag.avgR').toUpperCase()}         value={s.avg_R != null ? `${s.avg_R >= 0 ? '+' : ''}${s.avg_R.toFixed(2)}R` : '—'} />
             <MetricCard label="EXPECTANCY"    value={s.expectancy != null ? `${s.expectancy >= 0 ? '+' : ''}${s.expectancy.toFixed(2)}R` : '—'} />
             <MetricCard label={tr('diag.maxDrawdown').toUpperCase()}  value={s.max_drawdown != null ? `${s.max_drawdown.toFixed(2)}R` : '—'} sub="peak-to-trough" />
+            <MetricCard label="AVG HOLD · WIN"  value={s.avg_hold_win  != null ? `${s.avg_hold_win.toFixed(1)}d`  : '—'} sub="winning trades" />
+            <MetricCard label="AVG HOLD · LOSS" value={s.avg_hold_loss != null ? `${s.avg_hold_loss.toFixed(1)}d` : '—'} sub="losing trades" />
           </div>
 
           {/* Equity curve */}
@@ -1010,6 +1128,36 @@ export default function DiagnosticsTab() {
               <SectionHeader title="SELECTIVE REGIME ANALYSIS" />
               <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
                 <SelectiveAnalysis data={data.selective_analysis} />
+              </div>
+            </>
+          )}
+
+          {/* R-Multiple Distribution */}
+          {data?.r_distribution && (
+            <>
+              <SectionHeader title="R-MULTIPLE DISTRIBUTION" />
+              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+                <RMultipleDistribution rows={data.r_distribution} />
+              </div>
+            </>
+          )}
+
+          {/* Market Regime Distribution */}
+          {data?.regime_distribution && Object.keys(data.regime_distribution).length > 0 && (
+            <>
+              <SectionHeader title="MARKET REGIME DISTRIBUTION (BACKTEST PERIOD)" />
+              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+                <RegimeDistributionPanel dist={data.regime_distribution} />
+              </div>
+            </>
+          )}
+
+          {/* Setup Score Distribution */}
+          {data?.score_distribution && (
+            <>
+              <SectionHeader title="SETUP SCORE DISTRIBUTION (PRE-GATE)" />
+              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+                <ScoreDistributionPanel rows={data.score_distribution} />
               </div>
             </>
           )}

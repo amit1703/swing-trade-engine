@@ -118,6 +118,12 @@ def compute_live_diagnostics(trades: list) -> dict:
         cumulative += r
         equity_curve.append(round(cumulative, 4))
 
+    # Holding period by outcome — requires holding_days in trade dict
+    win_holds  = [t.get("holding_days", 0) for t in trades
+                  if _is_closed(t) and (_r_multiple(t) or 0) > 0]
+    loss_holds = [t.get("holding_days", 0) for t in trades
+                  if _is_closed(t) and (_r_multiple(t) or 0) <= 0 and _r_multiple(t) is not None]
+
     return {
         "total_trades":       len(closed_r),
         "profit_factor":      round(profit_factor, 3) if profit_factor is not None else None,
@@ -127,6 +133,8 @@ def compute_live_diagnostics(trades: list) -> dict:
         "max_drawdown":       round(_max_drawdown(equity_curve), 4),
         "equity_curve_R":     equity_curve,
         "equity_curve_dates": date_labels,
+        "avg_hold_win":       round(sum(win_holds)  / len(win_holds),  1) if win_holds  else None,
+        "avg_hold_loss":      round(sum(loss_holds) / len(loss_holds), 1) if loss_holds else None,
     }
 
 
@@ -214,6 +222,77 @@ def compute_regime_performance(trades: list) -> dict:
             "expectancy": m["expectancy"],
         }
 
+    return result
+
+
+def compute_r_distribution(trades: list) -> list:
+    """
+    Bucket closed trades by realized R-multiple.
+
+    Buckets: <-1R | -1 to 0 | 0 to 1R | 1R to 2R | 2R to 3R | >3R
+
+    Returns a list of dicts ordered from worst to best:
+        [{"bucket": str, "count": int, "pct": float}, ...]
+    """
+    BUCKETS = [
+        ("<-1R",   None,  -1.0),
+        ("-1R–0",  -1.0,   0.0),
+        ("0–1R",    0.0,   1.0),
+        ("1R–2R",   1.0,   2.0),
+        ("2R–3R",   2.0,   3.0),
+        (">3R",     3.0,  None),
+    ]
+
+    rs = [_r_multiple(t) for t in trades if _is_closed(t)]
+    rs = [r for r in rs if r is not None]
+    total = len(rs) or 1
+
+    result = []
+    for label, lo, hi in BUCKETS:
+        if lo is None:
+            n = sum(1 for r in rs if r < hi)
+        elif hi is None:
+            n = sum(1 for r in rs if r >= lo)
+        else:
+            n = sum(1 for r in rs if lo <= r < hi)
+        result.append({"bucket": label, "count": n, "pct": round(n / total * 100, 1)})
+    return result
+
+
+def compute_score_distribution(scores: list) -> list:
+    """
+    Bucket raw setup scores (pre-gate) into quality tiers.
+
+    Buckets: <50 | 50-59 | 60-69 | 70-79 | 80-89 | 90+
+
+    scores : list of float (from score_collector passed to run_portfolio_backtest_universe)
+
+    Returns a list of dicts:
+        [{"bucket": str, "count": int, "pct": float, "above_gate": bool}, ...]
+    """
+    from constants import MIN_SETUP_SCORE
+
+    BUCKETS = [
+        ("<50",   0,   50),
+        ("50-59", 50,  60),
+        ("60-69", 60,  70),
+        ("70-79", 70,  80),
+        ("80-89", 80,  90),
+        ("90+",   90, 999),
+    ]
+
+    valid  = [float(s) for s in scores if s is not None]
+    total  = len(valid) or 1
+
+    result = []
+    for label, lo, hi in BUCKETS:
+        n = sum(1 for s in valid if lo <= s < hi)
+        result.append({
+            "bucket":     label,
+            "count":      n,
+            "pct":        round(n / total * 100, 1),
+            "above_gate": lo >= MIN_SETUP_SCORE,
+        })
     return result
 
 

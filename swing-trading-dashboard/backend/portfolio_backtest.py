@@ -493,6 +493,7 @@ async def run_portfolio_backtest_universe(
     params=None,
     progress_cb=None,
     sectors: Optional[Dict[str, str]] = None,
+    score_collector: Optional[List[float]] = None,
 ) -> List[dict]:
     """
     Portfolio-coordinated backtest over all tickers, matching live-scanner
@@ -828,6 +829,10 @@ async def run_portfolio_backtest_universe(
             # Compute true 0-100 setup score
             setup_score = _score_setup(signal, rs_rank, regime_score, current_regime, top_sectors)
             signal["setup_score"] = setup_score
+
+            # Capture pre-gate score for distribution audit (non-breaking opt-in)
+            if score_collector is not None:
+                score_collector.append(float(setup_score))
 
             # ── Market quality gate ────────────────────────────────────────
             if setup_score < config.min_score:
