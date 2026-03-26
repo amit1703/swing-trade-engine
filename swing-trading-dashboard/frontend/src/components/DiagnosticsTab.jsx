@@ -449,12 +449,14 @@ export default function DiagnosticsTab() {
         const s = await res.json()
         setBacktestStatus(s)
         if (s.status === 'completed' || s.status === 'failed') {
-          setBtRunning(false)
           clearInterval(pollRef.current)
           if (s.status === 'completed') {
-            const r = await fetch('/api/diagnostics/backtest', { cache: 'no-store' })
-            if (r.ok) setData(await r.json())
+            try {
+              const r = await fetch('/api/diagnostics/backtest', { cache: 'no-store' })
+              if (r.ok) setData(await r.json())
+            } catch (_) {}
           }
+          setBtRunning(false)
         }
       } catch (_) {}
     }, 3000)
