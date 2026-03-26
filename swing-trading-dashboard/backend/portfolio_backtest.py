@@ -31,6 +31,7 @@ import pandas as pd
 import constants as _constants
 from constants import (
     CONCURRENCY_LIMIT,
+    MIN_SETUP_SCORE,
     RS_BLUE_DOT_TOLERANCE_PCT,
     RS_RANK_MIN_PERCENTILE,
     SELECTIVE_SETUP_WEIGHTS,
@@ -60,7 +61,7 @@ class BacktestConfig:
     end_date:      str           = "2024-12-31"
     max_positions: int           = 4
     ticker_count:  Optional[int] = None      # None = full universe
-    min_score:     float         = 0.0       # 0–100, same scale as live scanner MIN_SETUP_SCORE
+    min_score:     float         = MIN_SETUP_SCORE  # matches live scanner MIN_SETUP_SCORE (70)
     setup_types:   List[str]     = field(default_factory=lambda: [
         "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"
     ])
@@ -266,6 +267,7 @@ def _build_open_position(
             "trail_mult_override": trail_mult,
             "_final_score":        signal.get("setup_score", signal.get("_final_score")),
             "_regime":             signal.get("_regime", "UNKNOWN"),
+            "_regime_score":       signal.get("_regime_score", 0.0),
             "_rs_score":           float(ts.rs_score_s.iloc[full_idx]),
             "_setup_meta":         setup_meta,
             "_trail_mode":         trail_mode,
@@ -292,7 +294,7 @@ def _build_trade_record(
     entry_dt     = pd.Timestamp(state["entry_date"])
     holding_days = max(1, (exit_date - entry_dt).days)
 
-    return TradeRecord(
+    rec = TradeRecord(
         ticker       = ts.ticker,
         setup_type   = state["setup_type"],
         signal_date  = state["signal_date"],
@@ -311,6 +313,9 @@ def _build_trade_record(
         trail_mode   = state.get("_trail_mode", "atr"),
         trail_phase  = ("ema20" if state.get("_trail_triggered") else "initial"),
     ).to_dict()
+    # Attach regime_score (0-100 float) — not a TradeRecord field but needed by analytics
+    rec["regime_score"] = state.get("_regime_score", 0.0)
+    return rec
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -698,7 +703,22 @@ async def run_portfolio_backtest_universe(
         current_regime = regime_label_dict.get(_spy_date, "DEFENSIVE")
         regime_score   = float(regime_score_dict.get(_spy_date, 0.0))
 
-        if current_regime == "DEFENSIVE":
+        # Do NOT hard-skip DEFENSIVE days — this mismatches the live scanner.
+        # The live scanner runs all engines regardless of regime (comment:
+        # "always runs — scoring handles regime quality").  DEFENSIVE costs
+        # 15 pts in compute_setup_score(), which combined with min_score=70
+        # naturally filters most DEFENSIVE signals.  Hard-skipping prevents
+        # any trade entry in DEFENSIVE even for high-quality setups that
+        # would score ≥70, understating backtest trade count and biasing
+        # results toward high-regime periods only.
+        #
+        # VCP (Engine 2) is the one exception: the live scanner gates it on
+        # `is_bullish`, which is False in DEFENSIVE, so we exclude it here.
+        _setup_types_today = [
+            s for s in config.setup_types
+            if not (s == "VCP" and current_regime == "DEFENSIVE")
+        ]
+        if not _setup_types_today:
             continue
 
         # Top sectors for this date (from monthly pre-computation)
@@ -739,7 +759,8 @@ async def run_portfolio_backtest_universe(
 
             # ── Internal BacktestParams scoring (mechanism quality gate) ──
             if ts.params is not None:
-                signal["_regime"] = current_regime
+                signal["_regime"]       = current_regime
+                signal["_regime_score"] = regime_score * 100.0
                 setup_type_sig    = signal.get("setup_type", "")
                 raw_score         = signal.get(
                     "_raw_score",
@@ -781,7 +802,8 @@ async def run_portfolio_backtest_universe(
                         continue
 
             else:
-                signal["_regime"] = current_regime
+                signal["_regime"]       = current_regime
+                signal["_regime_score"] = regime_score * 100.0
                 if current_regime == "SELECTIVE" and SELECTIVE_HARD_FILTER and SELECTIVE_SETUP_WEIGHTS:
                     setup_type_sig = signal.get("setup_type", "")
                     if SELECTIVE_SETUP_WEIGHTS.get(setup_type_sig, 1.0) == 0.0:

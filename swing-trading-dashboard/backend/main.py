@@ -546,10 +546,11 @@ def _backtest_trade_to_analytics(tr: dict) -> dict:
         "ticker":       tr["ticker"],
         "setup_type":   tr["setup_type"],
         "entry_price":  tr["entry_price"],
-        "stop_loss":    tr["initial_stop"],   # initial_stop → stop_loss
-        "close_price":  tr["exit_price"],     # exit_price  → close_price
+        "stop_loss":    tr["initial_stop"],          # initial_stop → stop_loss
+        "close_price":  tr["exit_price"],            # exit_price  → close_price
+        "exit_date":    tr.get("exit_date", ""),     # for chronological equity curve
         "status":       "closed",
-        "regime_score": None,
+        "regime_score": tr.get("regime_score", 0.0), # populated by portfolio_backtest
         "regime":       tr.get("regime", "UNKNOWN"),
     }
 
@@ -2401,7 +2402,7 @@ class BacktestRunRequest(BaseModel):
     end_date:      str           = Field(default_factory=lambda: BACKTEST_DIAG_END_DATE)
     max_positions: int           = 4
     ticker_count:  Optional[int] = None
-    min_score:     float         = 0.0
+    min_score:     float         = MIN_SETUP_SCORE   # live-scanner parity default (70)
     setup_types:   List[str]     = Field(default_factory=lambda: [
         "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"
     ])
@@ -2414,7 +2415,7 @@ class ISOOSRunRequest(BaseModel):
     oos_end_date:   str           = "2024-12-31"
     max_positions:  int           = 4
     ticker_count:   Optional[int] = None
-    min_score:      float         = 0.0
+    min_score:      float         = MIN_SETUP_SCORE   # live-scanner parity default (70)
     setup_types:    List[str]     = Field(default_factory=lambda: [
         "PULLBACK", "BASE", "RES_BREAKOUT", "HTF", "LCE"
     ])

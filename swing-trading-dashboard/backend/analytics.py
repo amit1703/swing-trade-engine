@@ -75,22 +75,31 @@ def compute_live_diagnostics(trades: list) -> dict:
         equity_curve_R : list[float],    # cumulative R for charting
     }
     """
-    closed_r = []
+    # Collect (exit_date, r) pairs and sort chronologically so the equity curve
+    # reflects real time order.  exit_date may be "exit_date" or "close_date"
+    # depending on source; fall back to "" so missing dates sort to the front.
+    closed_with_date = []
     for t in trades:
         if _is_closed(t):
             r = _r_multiple(t)
             if r is not None:
-                closed_r.append(r)
+                d = t.get("exit_date") or t.get("close_date") or ""
+                closed_with_date.append((d, r))
+
+    closed_with_date.sort(key=lambda x: x[0])   # ISO dates sort correctly as strings
+    closed_r    = [r for _, r in closed_with_date]
+    date_labels = [d for d, _ in closed_with_date]
 
     if not closed_r:
         return {
-            "total_trades":   0,
-            "profit_factor":  None,
-            "win_rate":       0.0,
-            "avg_R":          0.0,
-            "expectancy":     0.0,
-            "max_drawdown":   0.0,
-            "equity_curve_R": [],
+            "total_trades":       0,
+            "profit_factor":      None,
+            "win_rate":           0.0,
+            "avg_R":              0.0,
+            "expectancy":         0.0,
+            "max_drawdown":       0.0,
+            "equity_curve_R":     [],
+            "equity_curve_dates": [],
         }
 
     wins   = [r for r in closed_r if r > 0]
@@ -110,13 +119,14 @@ def compute_live_diagnostics(trades: list) -> dict:
         equity_curve.append(round(cumulative, 4))
 
     return {
-        "total_trades":   len(closed_r),
-        "profit_factor":  round(profit_factor, 3) if profit_factor is not None else None,
-        "win_rate":       round(win_rate, 4),
-        "avg_R":          round(avg_R, 4),
-        "expectancy":     round(expectancy, 4),
-        "max_drawdown":   round(_max_drawdown(equity_curve), 4),
-        "equity_curve_R": equity_curve,
+        "total_trades":       len(closed_r),
+        "profit_factor":      round(profit_factor, 3) if profit_factor is not None else None,
+        "win_rate":           round(win_rate, 4),
+        "avg_R":              round(avg_R, 4),
+        "expectancy":         round(expectancy, 4),
+        "max_drawdown":       round(_max_drawdown(equity_curve), 4),
+        "equity_curve_R":     equity_curve,
+        "equity_curve_dates": date_labels,
     }
 
 

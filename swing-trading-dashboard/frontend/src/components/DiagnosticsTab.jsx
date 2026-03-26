@@ -39,7 +39,7 @@ function EmptyState({ message = 'No closed trade data yet' }) {
 }
 
 // ─── EquityCurve ──────────────────────────────────────────────────────────────
-function EquityCurve({ data }) {
+function EquityCurve({ data, dates }) {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -50,7 +50,7 @@ function EquityCurve({ data }) {
       height: 160,
       layout:      { background: { color: 'transparent' }, textColor: '#64748b' },
       grid:        { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
-      timeScale:   { visible: false },
+      timeScale:   { visible: true, borderColor: '#1e293b' },
       rightPriceScale: { borderColor: '#1e293b' },
       crosshair:   { mode: 1 },
       handleScroll: false,
@@ -63,20 +63,159 @@ function EquityCurve({ data }) {
       priceLineVisible: false,
     })
 
-    // Generate synthetic ISO dates starting from 2020-01-01 (one per trade)
+    // Use actual exit dates when available; fall back to synthetic sequential dates.
+    // Deduplicate: if two trades close the same calendar day, advance by one day.
     const startMs = new Date('2020-01-01').getTime()
     const DAY_MS  = 86400 * 1000
-    series.setData(data.map((v, i) => ({
-      time:  new Date(startMs + i * DAY_MS).toISOString().slice(0, 10),
-      value: v,
-    })))
+    const seen    = new Set()
+    const chartData = data.map((v, i) => {
+      let dateStr = (Array.isArray(dates) && dates[i])
+        ? dates[i].slice(0, 10)
+        : new Date(startMs + i * DAY_MS).toISOString().slice(0, 10)
+      // Shift forward one day at a time until the date is unique
+      while (seen.has(dateStr)) {
+        const d = new Date(dateStr)
+        d.setUTCDate(d.getUTCDate() + 1)
+        dateStr = d.toISOString().slice(0, 10)
+      }
+      seen.add(dateStr)
+      return { time: dateStr, value: v }
+    })
+
+    series.setData(chartData)
     chart.timeScale().fitContent()
 
     return () => chart.remove()
-  }, [data])
+  }, [data, dates])
 
   if (!data || data.length === 0) return <EmptyState message="No equity curve data — close some trades first" />
   return <div ref={ref} style={{ width: '100%', height: 160 }} />
+}
+
+// ─── SelectiveAnalysis ────────────────────────────────────────────────────────
+const CLASSIFICATION_COLORS = {
+  STRONG:            'var(--go)',
+  WEAK:              'var(--halt)',
+  INSUFFICIENT_DATA: 'var(--muted)',
+}
+
+function SelectiveAnalysis({ data }) {
+  if (!data || data.total_selective_trades === 0) return null
+
+  const { setup_breakdown, before, after_simulated, strong_setups, weak_setups,
+          insufficient_data_setups, suggested_weights, total_selective_trades } = data
+
+  const hasBefore = before && before.total_trades > 0
+  const hasAfter  = after_simulated && after_simulated.total_trades > 0
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Summary row */}
+      <div style={{ fontSize: 10, color: 'var(--muted)', fontFamily: '"IBM Plex Mono", monospace' }}>
+        {total_selective_trades} SELECTIVE-regime trades analysed ·{' '}
+        <span style={{ color: 'var(--go)' }}>{strong_setups.length} strong</span>
+        {' · '}
+        <span style={{ color: 'var(--halt)' }}>{weak_setups.length} weak</span>
+        {' · '}
+        <span style={{ color: 'var(--muted)' }}>{insufficient_data_setups.length} insufficient data</span>
+      </div>
+
+      {/* Before / after simulation */}
+      {hasBefore && (
+        <div style={{ display: 'flex', gap: 10 }}>
+          {[
+            { label: 'ALL SELECTIVE (before)', m: before, accent: 'var(--muted)' },
+            hasAfter && { label: 'STRONG ONLY (simulated)', m: after_simulated, accent: 'var(--go)' },
+          ].filter(Boolean).map(({ label, m, accent }) => (
+            <div key={label} style={{
+              flex: 1, background: 'var(--card)', border: `1px solid ${accent}33`,
+              borderRadius: 8, padding: '10px 14px',
+            }}>
+              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
+                color: accent, marginBottom: 8 }}>{label}</div>
+              {[
+                ['Trades',     m.total_trades],
+                ['Win Rate',   m.win_rate   != null ? `${(m.win_rate * 100).toFixed(1)}%`           : '—'],
+                ['Avg R',      m.avg_R      != null ? `${m.avg_R >= 0 ? '+' : ''}${m.avg_R.toFixed(2)}R` : '—'],
+                ['Expectancy', m.expectancy != null ? `${m.expectancy >= 0 ? '+' : ''}${m.expectancy.toFixed(2)}R` : '—'],
+              ].map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', justifyContent: 'space-between',
+                  fontSize: 10, marginBottom: 3 }}>
+                  <span style={{ color: 'var(--muted)' }}>{k}</span>
+                  <span style={{ fontFamily: '"IBM Plex Mono", monospace',
+                    fontWeight: 700, color: 'var(--text)' }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Per-setup classification table */}
+      {Object.keys(setup_breakdown || {}).length > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {['Setup', 'Class', 'Trades', 'Win %', 'Expectancy', 'Suggested Weight'].map(h => (
+                  <th key={h} style={{ textAlign: h === 'Setup' ? 'left' : 'right',
+                    padding: '5px 10px', fontSize: 9, fontWeight: 700,
+                    letterSpacing: '0.08em', color: 'var(--muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(setup_breakdown).map(([stype, m]) => (
+                <tr key={stype} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <td style={{ padding: '7px 10px', fontFamily: '"IBM Plex Mono", monospace',
+                    fontWeight: 700, fontSize: 11,
+                    color: SETUP_COLORS[stype] ?? 'var(--text)' }}>{stype}</td>
+                  <td style={{ textAlign: 'right', padding: '7px 10px',
+                    color: CLASSIFICATION_COLORS[m.classification] ?? 'var(--muted)',
+                    fontFamily: '"IBM Plex Mono", monospace', fontSize: 10,
+                    fontWeight: 700 }}>{m.classification}</td>
+                  <td style={{ textAlign: 'right', padding: '7px 10px',
+                    fontFamily: '"IBM Plex Mono", monospace' }}>{m.count}</td>
+                  <td style={{ textAlign: 'right', padding: '7px 10px',
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    color: (m.win_rate ?? 0) >= 0.5 ? 'var(--go)' : 'var(--halt)' }}>
+                    {m.win_rate != null ? `${(m.win_rate * 100).toFixed(1)}%` : '—'}
+                  </td>
+                  <td style={{ textAlign: 'right', padding: '7px 10px',
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    color: (m.expectancy ?? 0) >= 0 ? 'var(--go)' : 'var(--halt)' }}>
+                    {m.expectancy != null ? `${m.expectancy >= 0 ? '+' : ''}${m.expectancy.toFixed(2)}R` : '—'}
+                  </td>
+                  <td style={{ textAlign: 'right', padding: '7px 10px',
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    color: m.suggested_weight >= 1.0 ? 'var(--go)' : m.suggested_weight >= 0.5 ? 'var(--accent)' : 'var(--halt)',
+                    fontWeight: 700 }}>
+                    {m.suggested_weight != null ? m.suggested_weight.toFixed(1) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Suggested weights — paste-ready for constants.py */}
+      {suggested_weights && Object.keys(suggested_weights).length > 0 && (
+        <div style={{ background: 'rgba(0,0,0,0.25)', borderRadius: 6,
+          padding: '8px 12px', fontFamily: '"IBM Plex Mono", monospace', fontSize: 10 }}>
+          <div style={{ color: 'var(--muted)', marginBottom: 4, fontSize: 9,
+            letterSpacing: '0.08em', fontWeight: 700 }}>
+            SUGGESTED SELECTIVE_SETUP_WEIGHTS (constants.py)
+          </div>
+          <div style={{ color: 'var(--text)' }}>
+            {'{'}{Object.entries(suggested_weights).map(([k, v]) =>
+              `"${k}": ${v.toFixed(1)}`
+            ).join(', ')}{'}'}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── SetupBreakdownTable ──────────────────────────────────────────────────────
@@ -238,7 +377,7 @@ export default function DiagnosticsTab() {
     endYear:      2024,
     maxPositions: 4,
     tickerCount:  null,
-    minScore:     0,
+    minScore:     70,
     setupTypes:   ['PULLBACK', 'BASE', 'RES_BREAKOUT', 'HTF', 'LCE'],
   })
   const [ioConfig, setIoConfig] = useState({
@@ -247,7 +386,7 @@ export default function DiagnosticsTab() {
     oosStartYear: 2022,
     oosEndYear:   2024,
     maxPositions: 4,
-    minScore:     0,
+    minScore:     70,
     setupTypes:   ['PULLBACK', 'BASE', 'RES_BREAKOUT', 'HTF', 'LCE'],
   })
   const [ioRunning, setIoRunning]               = useState(false)
@@ -844,7 +983,7 @@ export default function DiagnosticsTab() {
           {/* Equity curve */}
           <SectionHeader title="EQUITY CURVE (CUMULATIVE R)" />
           <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
-            <EquityCurve data={s.equity_curve_R} />
+            <EquityCurve data={s.equity_curve_R} dates={s.equity_curve_dates} />
           </div>
 
           {/* Setup breakdown */}
@@ -862,6 +1001,16 @@ export default function DiagnosticsTab() {
           {/* Regime performance */}
           <SectionHeader title={tr('diag.regimePerf').toUpperCase()} />
           <RegimePerformance perf={data?.regime_performance} />
+
+          {/* Selective analysis — only shown when there is SELECTIVE-regime data */}
+          {data?.selective_analysis?.total_selective_trades > 0 && (
+            <>
+              <SectionHeader title="SELECTIVE REGIME ANALYSIS" />
+              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+                <SelectiveAnalysis data={data.selective_analysis} />
+              </div>
+            </>
+          )}
         </>
       )}
 
