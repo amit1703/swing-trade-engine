@@ -25,6 +25,9 @@ Usage
   # Load a custom trade CSV instead of the backtest diagnostics cache:
   python monte_carlo_analyzer.py --csv path/to/trades.csv
 
+  # Fetch trades directly from a running backend API (e.g. VPS):
+  python monte_carlo_analyzer.py --url http://<vps-ip>:8000/api/diagnostics/backtest
+
   # Skip charts (headless / VPS):
   python monte_carlo_analyzer.py --no-plot
 
@@ -71,6 +74,24 @@ def load_from_json(path: Path) -> pd.DataFrame:
     df = pd.DataFrame(trades)
     print(f"Loaded {len(df)} trades from {path}")
     print(f"  Period: {data.get('start_date','?')} -> {data.get('end_date','?')}")
+    return df
+
+
+def load_from_url(url: str) -> pd.DataFrame:
+    """Fetch trade data from a running backend API endpoint."""
+    import urllib.request
+    print(f"Fetching trades from {url} ...")
+    with urllib.request.urlopen(url, timeout=30) as resp:
+        data = json.load(resp)
+    trades = data.get("trades", [])
+    if not trades:
+        sys.exit(f"ERROR: no trades found at {url}")
+    df = pd.DataFrame(trades)
+    print(f"Loaded {len(df)} trades from API")
+    print(f"  Period  : {data.get('start_date','?')} -> {data.get('end_date','?')}")
+    print(f"  Tickers : {data.get('tickers_run','?')}")
+    if data.get("generated_at"):
+        print(f"  Generated: {data['generated_at']}")
     return df
 
 
@@ -399,6 +420,8 @@ def parse_args():
                    help=f"Ruin drawdown in R-units, negative (default {DEFAULT_RUIN_THRESHOLD})")
     p.add_argument("--csv",  type=str, default=None,
                    help="Load trades from CSV instead of backtest_diagnostics.json")
+    p.add_argument("--url",  type=str, default=None,
+                   help="Fetch trades from API URL (e.g. http://<vps>:8000/api/diagnostics/backtest)")
     p.add_argument("--no-plot", action="store_true",
                    help="Skip matplotlib charts (headless / VPS)")
     p.add_argument("--seed", type=int, default=42,
@@ -411,12 +434,14 @@ def main():
     rng  = np.random.default_rng(args.seed)
 
     # ── Load data ────────────────────────────────────────────────────────────
-    if args.csv:
+    if args.url:
+        df = load_from_url(args.url)
+    elif args.csv:
         df = load_from_csv(args.csv)
     elif DEFAULT_CACHE.exists():
         df = load_from_json(DEFAULT_CACHE)
     else:
-        sys.exit(f"ERROR: {DEFAULT_CACHE} not found. Run a backtest first, or pass --csv.")
+        sys.exit(f"ERROR: {DEFAULT_CACHE} not found. Run a backtest first, or pass --csv / --url.")
 
     r = prepare_r_series(df)
 

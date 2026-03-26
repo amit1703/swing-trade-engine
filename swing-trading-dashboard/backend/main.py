@@ -80,6 +80,7 @@ from constants import (
     CONCURRENCY_LIMIT,
     SCAN_CONCURRENCY_LIMIT,
     DATA_FETCH_PERIOD,
+    DATA_FRESHNESS_MAX_BDAYS,
     DAYS_3_MONTHS,
     DB_PATH,
     EARNINGS_BLACKOUT_DAYS,
@@ -1289,6 +1290,88 @@ async def _fetch(
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# Data Freshness helpers
+# ────────────────────────────────────────────────────────────────────────────
+
+def _last_expected_bar_date() -> date:
+    """Return the most recent business day (Mon–Fri) on or before today."""
+    d = date.today()
+    while d.weekday() >= 5:  # 5=Sat, 6=Sun
+        d -= datetime.timedelta(days=1)
+    return d
+
+
+async def _freshen_if_stale(
+    ticker: str,
+    df: pd.DataFrame,
+    semaphore: asyncio.Semaphore,
+) -> pd.DataFrame:
+    """
+    If the last bar in df is more than DATA_FRESHNESS_MAX_BDAYS business days old,
+    fetch the trailing 5 trading days fresh and merge them onto the tail of df.
+
+    This keeps indicators computed on the full history (no lookback truncation)
+    while guaranteeing the most recent bars are up-to-date.
+    Updates _ticker_cache so subsequent calls within the session see fresh data.
+    """
+    if df is None or len(df) == 0:
+        return df
+
+    last_bar = df.index[-1]
+    last_bar_d = last_bar.date() if hasattr(last_bar, "date") else last_bar
+    expected = _last_expected_bar_date()
+
+    # pd.bdate_range includes both endpoints, so len-1 = business days between them
+    bdays_behind = max(0, len(pd.bdate_range(str(last_bar_d), str(expected))) - 1)
+    if bdays_behind <= DATA_FRESHNESS_MAX_BDAYS:
+        return df  # already fresh
+
+    try:
+        loop = asyncio.get_event_loop()
+        async with semaphore:
+            fresh = await loop.run_in_executor(
+                None,
+                lambda: yf.Ticker(ticker).history(period="5d", interval="1d", auto_adjust=False),
+            )
+
+        if fresh is None or fresh.empty:
+            return df
+
+        if isinstance(fresh.columns, pd.MultiIndex):
+            fresh.columns = fresh.columns.get_level_values(0)
+        if fresh.columns.duplicated().any():
+            fresh = fresh.loc[:, ~fresh.columns.duplicated()]
+
+        # Only merge columns that exist in both so we don't corrupt indicator-only cols
+        shared_cols = [c for c in df.columns if c in fresh.columns]
+        merged = pd.concat([df[shared_cols], fresh[shared_cols]])
+        merged = merged[~merged.index.duplicated(keep="last")].sort_index()
+
+        # Restore any df-only columns (e.g. computed columns added by caller)
+        for col in df.columns:
+            if col not in merged.columns:
+                merged[col] = df[col].reindex(merged.index)
+
+        log.info(
+            "Freshened %s: last bar %s → %s  (%d bday(s) stale)",
+            ticker, last_bar_d, merged.index[-1].date(), bdays_behind,
+        )
+        _ticker_cache[ticker] = (time.time(), merged)
+        return merged
+
+    except Exception as exc:
+        log.warning("Freshen failed for %s: %s", ticker, exc)
+        return df
+
+
+def _stamp_freshness(setup: dict, last_bar_date: Optional[str], is_stale: bool) -> dict:
+    """Inject last_bar_date and is_stale_data into a setup dict in-place."""
+    setup["last_bar_date"] = last_bar_date
+    setup["is_stale_data"] = is_stale
+    return setup
+
+
+# ────────────────────────────────────────────────────────────────────────────
 # Price-cache pre-warmer
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -1722,6 +1805,26 @@ async def _run_scan(
                     log.debug("Skipped %s: all-NaN price data", ticker)
                     return
 
+                # ── Data Freshness: top-up stale tail before indicators ───────────
+                # Fetches last 5 trading days if df lags by >DATA_FRESHNESS_MAX_BDAYS.
+                # Indicators are computed on the full merged series so they match
+                # backtest values (no lookback truncation from the short fetch).
+                df = await _freshen_if_stale(ticker, df, semaphore)
+                _last_bar_date: Optional[str] = (
+                    df.index[-1].strftime("%Y-%m-%d") if len(df) > 0 else None
+                )
+                _expected_bar = _last_expected_bar_date()
+                _is_stale: bool = (
+                    _last_bar_date is None
+                    or len(pd.bdate_range(_last_bar_date, str(_expected_bar))) - 1
+                    > DATA_FRESHNESS_MAX_BDAYS
+                )
+                if _is_stale:
+                    log.warning(
+                        "Stale data for %s: last bar %s, expected %s",
+                        ticker, _last_bar_date, _expected_bar,
+                    )
+
                 # ── Price Action Vitality — skip zombie / buyout-flatline stocks ──
                 if not is_price_vital(df):
                     _scan_state["engine_stats"]["filtered"]["vitality"] += 1
@@ -1824,9 +1927,12 @@ async def _run_scan(
                 # Detect trendline early (used by VCP follow-up, near-breakout, and pullback)
                 tl = await loop.run_in_executor(None, detect_trendline, ticker, df)
 
-                # ── Engine 2: VCP (all regimes) ──────────────────────────────────
+                # ── Engine 2: VCP (SELECTIVE + AGGRESSIVE only — skip DEFENSIVE) ──────
+                # Matches portfolio_backtest.py: VCP requires is_bullish=True.
+                # DEFENSIVE regime earns 0 regime pts, making VCP scores too low to
+                # trade, and breakout patterns fail disproportionately in bear markets.
                 vcp = None
-                if True:
+                if regime.get("is_bullish", True):
                     vcp = await loop.run_in_executor(
                         None, scan_vcp, ticker, df, zones, spy_3m_return,
                         rs_ratio, rs_52w_high, rs_blue_dot, rs_score
@@ -1844,6 +1950,7 @@ async def _run_scan(
 
                         # Add sector to setup and collect for batch save
                         vcp["sector"] = SECTORS.get(ticker, "Unknown")
+                        _stamp_freshness(vcp, _last_bar_date, _is_stale)
                         collected_setups.append(vcp)
                         vcp_count += 1
                         _scan_state["engine_stats"]["e2"]["vcp"] += 1
@@ -1860,6 +1967,7 @@ async def _run_scan(
                     if wl_res:
                         wl_res["sector"] = SECTORS.get(ticker, "Unknown")
                         wl_res["rs_blue_dot"] = rs_blue_dot
+                        _stamp_freshness(wl_res, _last_bar_date, _is_stale)
                         collected_setups.append(wl_res)
                         _scan_state["engine_stats"]["watchlist"]["res_breakout_near"] += 1
                         log.info("  WL_BRK   %-6s  dist=%.1f%%", ticker, wl_res.get("distance_pct", 0))
@@ -1874,6 +1982,7 @@ async def _run_scan(
                     if wl_pb:
                         wl_pb["sector"] = SECTORS.get(ticker, "Unknown")
                         wl_pb["rs_blue_dot"] = rs_blue_dot
+                        _stamp_freshness(wl_pb, _last_bar_date, _is_stale)
                         collected_setups.append(wl_pb)
                         _scan_state["engine_stats"]["watchlist"]["pullback_approaching"] += 1
                         log.info("  WL_PB    %-6s  sup=%.2f  src=%s", ticker, wl_pb.get("support_level", 0), wl_pb.get("support_source", ""))
@@ -1903,6 +2012,7 @@ async def _run_scan(
                         pb["rs_score"] = rs_score
                         pb["vol_ratio"] = pb.get("volume_ratio", pb.get("vol_ratio", 0.0))
                         pb["recommended_execution"] = "Enter at next market open (T+1)"
+                        _stamp_freshness(pb, _last_bar_date, _is_stale)
                         collected_setups.append(pb)
                         pb_count += 1
                         _scan_state["engine_stats"]["e3"]["pullback"] += 1
@@ -1928,6 +2038,7 @@ async def _run_scan(
                                 _apply_tp_multiple(pb_relaxed, _LIVE_PARAMS)
                                 pb_relaxed["sector"] = SECTORS.get(ticker, "Unknown")
                                 pb_relaxed["recommended_execution"] = "Enter at next market open (T+1)"
+                                _stamp_freshness(pb_relaxed, _last_bar_date, _is_stale)
                                 collected_setups.append(pb_relaxed)
                                 pb_count += 1
                                 _scan_state["engine_stats"]["e3"]["relaxed"] += 1
@@ -1959,6 +2070,7 @@ async def _run_scan(
                             base["vol_ratio"]    = _vr_base
                             base["is_vol_surge"] = _vr_base >= 1.5
                             base["recommended_execution"] = "Enter at next market open (T+1)"
+                            _stamp_freshness(base, _last_bar_date, _is_stale)
                             collected_setups.append(base)
                             base_count += 1
                             if base.get("base_type") == "CUP_HANDLE":
@@ -2010,6 +2122,7 @@ async def _run_scan(
                                     res_brk["gap_risk"]      = False
                                     res_brk["signal_status"] = "valid"
                                 res_brk["recommended_execution"] = "Enter at next market open (T+1)"
+                                _stamp_freshness(res_brk, _last_bar_date, _is_stale)
                                 collected_setups.append(res_brk)
                                 res_count += 1
                                 _scan_state["engine_stats"]["e6"]["res_breakout"] += 1
@@ -2043,6 +2156,7 @@ async def _run_scan(
                                 htf["vol_ratio"]    = _vr_htf
                                 htf["is_vol_surge"] = _vr_htf >= 1.5
                                 htf["recommended_execution"] = "Enter at next market open (T+1)"
+                                _stamp_freshness(htf, _last_bar_date, _is_stale)
                                 collected_setups.append(htf)
                                 htf_count += 1
                                 _scan_state["engine_stats"]["e8"]["htf"] += 1
@@ -2076,6 +2190,7 @@ async def _run_scan(
                                 lce["vol_ratio"]    = _vr_lce
                                 lce["is_vol_surge"] = _vr_lce >= 1.5
                                 lce["recommended_execution"] = "Enter at next market open (T+1)"
+                                _stamp_freshness(lce, _last_bar_date, _is_stale)
                                 collected_setups.append(lce)
                                 lce_count += 1
                                 _scan_state["engine_stats"]["e9"]["lce"] += 1
@@ -2103,6 +2218,7 @@ async def _run_scan(
                             log.warning("Options conversion failed for %s: %s", ticker, conv_err)
                         else:
                             opt["sector"] = SECTORS.get(ticker, "Unknown")
+                            _stamp_freshness(opt, _last_bar_date, _is_stale)
                             collected_setups.append(opt)
                             opt_count += 1
                             _scan_state["engine_stats"]["e7"]["options_catalyst"] += 1
