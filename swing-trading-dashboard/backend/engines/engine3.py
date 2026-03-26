@@ -305,7 +305,7 @@ def scan_pullback(
         # ── Risk math ────────────────────────────────────────────────────
         entry = round(lh * 1.001, 2)
 
-        # Stop: just below candle low with small ATR buffer (PB_ATR_STOP_MULTIPLIER=0.5)
+        # Stop: 1 ATR below candle low (PB_ATR_STOP_MULTIPLIER=1.0)
         # Using candle low only (not zone lower) to avoid excessively wide stops on EMA-test entries
         stop_loss = round(ll - PB_ATR_STOP_MULTIPLIER * latr, 2)
 

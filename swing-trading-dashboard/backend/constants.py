@@ -73,7 +73,7 @@ PB_MIN_TREND_BARS = 10   # hard floor only — scoring handles quality above thi
 # ──────────────────────────────────────────────────────────────────────────
 
 ATR_STOP_MULTIPLIER = 1.278  # Optuna v4 best (trial #951); was 1.360 (v3)
-PB_ATR_STOP_MULTIPLIER = 0.5  # Pullback-specific stop: just below candle low + small ATR buffer (global 1.278 is too wide for EMA-test entries)
+PB_ATR_STOP_MULTIPLIER = 1.0  # Pullback-specific stop: 1 ATR below candle low; was 0.5 (too tight — 56% of trades stopped in Phase 1 before EMA20 trail triggered)
 ENTRY_PRICE_MULTIPLIER = 1.001  # 0.1% above current price for entry orders
 MIN_RISK_REWARD_RATIO = 1.0  # Minimum acceptable R:R ratio for setups
 TARGET_RR             = 4.346   # Optuna trial #433 tp_multiple (converged, CV=0.017)
