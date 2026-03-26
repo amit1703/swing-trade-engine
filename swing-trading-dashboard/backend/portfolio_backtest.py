@@ -704,13 +704,6 @@ async def run_portfolio_backtest_universe(
         current_regime = regime_label_dict.get(_spy_date, "DEFENSIVE")
         regime_score   = float(regime_score_dict.get(_spy_date, 0.0))
 
-        # SELECTIVE regime: no new entries — data shows -0.82R avg loss across 15 trades
-        # (vs +0.15R in AGGRESSIVE).  Scoring naturally reduces quality in SELECTIVE
-        # but not enough to offset the edge loss.  Hard gate here mirrors the
-        # practical trading decision: sit out choppy/uncertain market conditions.
-        if current_regime == "SELECTIVE":
-            continue
-
         # VCP (Engine 2) is gated on `is_bullish` in the live scanner, which is
         # False in DEFENSIVE, so we exclude it here to match live behaviour.
         _setup_types_today = [
