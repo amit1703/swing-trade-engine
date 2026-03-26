@@ -246,7 +246,7 @@ def _regime_block(regime_data: Dict) -> str:
 
 # ── Main HTML builder ─────────────────────────────────────────────────────────
 
-def build_html_email(scan_results: Dict) -> str:
+def build_html_email(scan_results: Dict, label: str = "Morning Digest") -> str:
     et_tz    = ZoneInfo("America/New_York")
     now_et   = datetime.now(et_tz)
     date_str = now_et.strftime("%A, %B %-d %Y")
@@ -297,7 +297,7 @@ def build_html_email(scan_results: Dict) -> str:
       Swing Trading Dashboard
     </div>
     <div style="font-size:24px;font-weight:700;color:{C_TEXT};letter-spacing:-0.3px;">
-      Morning Digest
+      {label}
     </div>
     <div style="font-size:12px;color:{C_MUTED};margin-top:2px;">{date_str} &nbsp;·&nbsp; {time_str}</div>
   </div>
@@ -338,7 +338,7 @@ def build_html_email(scan_results: Dict) -> str:
 
 # ── SMTP sender ───────────────────────────────────────────────────────────────
 
-def send_digest(scan_results: Dict) -> None:
+def send_digest(scan_results: Dict, label: str = "Morning Digest") -> None:
     """
     Build the HTML email from scan_results and send via Gmail SMTP (port 587, STARTTLS).
 
@@ -361,14 +361,14 @@ def send_digest(scan_results: Dict) -> None:
         return
 
     try:
-        html_body = build_html_email(scan_results)
+        html_body = build_html_email(scan_results, label=label)
 
         et_tz    = ZoneInfo("America/New_York")
         now_et   = datetime.now(et_tz)
         date_str = now_et.strftime("%A, %B %-d %Y")
 
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"📊 Swing Digest — {date_str}"
+        msg["Subject"] = f"📊 Swing {label} — {date_str}"
         msg["From"]    = email_from
         msg["To"]      = email_to
 

@@ -567,6 +567,10 @@ _wfo_runs:          Dict[str, Dict] = {}   # run_id → progress dict
 _digest_cache: dict = {}
 _digest_cache_lock = threading.Lock()
 
+# Populated by the 4:05 PM EOD scan job; consumed by the 4:40 PM email job.
+_eod_digest_cache: dict = {}
+_eod_digest_cache_lock = threading.Lock()
+
 # ── APScheduler instance ──────────────────────────────────────────────────────
 _scheduler: Optional[BackgroundScheduler] = None
 
@@ -681,8 +685,9 @@ def run_morning_scan() -> None:
             # Initialise DB (idempotent) in case the server was restarted
             await init_db(DB_PATH)
 
-            # Run full scan pipeline (saves to DB and updates _scan_state)
-            await _run_scan(scan_ts, ACTIVE_UNIVERSE, force=False, dry_run=False, semaphore=_local_semaphore)
+            # Run full scan pipeline — force=True bypasses OHLCV cache freshness
+            # checks so every ticker re-downloads from yfinance (fresh close data).
+            await _run_scan(scan_ts, ACTIVE_UNIVERSE, force=True, dry_run=False, semaphore=_local_semaphore)
 
             # Pull results from DB to build the digest cache
             from database import get_latest_regime as _get_regime, get_latest_setups as _get_setups
@@ -734,25 +739,160 @@ def run_morning_scan() -> None:
         log.error("[scheduler] Morning scan job failed: %s", exc)
 
 
+def _build_digest_data_from_db() -> dict:
+    """
+    Query the DB for the latest scan results and return a digest-ready dict.
+    Used as a fallback when the in-memory cache is empty (e.g. after a server restart).
+    Runs synchronously via asyncio.run() — only call from scheduler threads.
+    """
+    async def _query() -> dict:
+        from database import get_latest_regime as _get_regime, get_latest_setups as _get_setups
+        regime      = await _get_regime(DB_PATH) or {}
+        vcp_setups  = await _get_setups(DB_PATH, setup_type="VCP")
+        watchlist   = await _get_setups(DB_PATH, setup_type="WATCHLIST")
+        res_setups  = await _get_setups(DB_PATH, setup_type="RES_BREAKOUT")
+        pb_setups   = await _get_setups(DB_PATH, setup_type="PULLBACK")
+        opt_setups  = await _get_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
+        htf_setups  = await _get_setups(DB_PATH, setup_type="HTF")
+        lce_setups  = await _get_setups(DB_PATH, setup_type="LCE")
+        try:
+            _local_sem = asyncio.Semaphore(SCAN_CONCURRENCY_LIMIT)
+            spy_df = await _fetch("SPY", semaphore=_local_sem)
+            if spy_df is not None and len(spy_df) >= 50:
+                from indicators import sma as _sma_fn
+                adj_col = "Adj Close" if "Adj Close" in spy_df.columns else "Close"
+                regime["spy_sma50"] = float(_sma_fn(spy_df[adj_col], 50).iloc[-1])
+        except Exception:
+            pass
+        return {
+            "regime":           regime,
+            "vcp":              vcp_setups,
+            "vcp_dry":          watchlist,
+            "res_breakout":     res_setups,
+            "pullback":         pb_setups,
+            "options_catalyst": opt_setups,
+            "htf":              htf_setups,
+            "lce":              lce_setups,
+        }
+    return asyncio.run(_query())
+
+
 def send_morning_email() -> None:
     """
     8:00 AM ET job — send the email digest from _digest_cache.
 
-    If the cache is empty (e.g., scan failed), the email is skipped with a warning.
+    Falls back to a live DB query if the cache is empty (e.g. server restarted
+    after the 7:30 AM scan job ran).
     """
     log.info("[scheduler] 8:00 AM email job starting…")
     with _digest_cache_lock:
         cache_snapshot = dict(_digest_cache)
     if not cache_snapshot:
         log.warning(
-            "[scheduler] Email digest skipped: _digest_cache is empty. "
-            "The 7:30 AM scan may not have completed."
+            "[scheduler] _digest_cache is empty — falling back to DB query for morning email."
         )
+        try:
+            cache_snapshot = _build_digest_data_from_db()
+        except Exception as exc:
+            log.error("[scheduler] Morning email DB fallback failed: %s", exc)
+            return
+    if not cache_snapshot:
+        log.error("[scheduler] Morning email skipped: no data in cache or DB.")
         return
     try:
-        send_digest(cache_snapshot)
+        send_digest(cache_snapshot, label="Morning Digest")
     except Exception as exc:
-        log.error("[scheduler] Email send job failed: %s", exc)
+        log.error("[scheduler] Morning email send failed: %s", exc)
+
+
+def run_eod_scan() -> None:
+    """
+    4:05 PM ET job — run a full scan after market close and populate _eod_digest_cache.
+    """
+    log.info("[scheduler] 4:05 PM EOD scan job starting…")
+    try:
+        async def _scan_and_cache() -> None:
+            global _eod_digest_cache
+
+            _local_semaphore = asyncio.Semaphore(SCAN_CONCURRENCY_LIMIT)
+            scan_ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+
+            await init_db(DB_PATH)
+            # force=True: bypass OHLCV cache so every ticker fetches fresh close data
+            await _run_scan(scan_ts, ACTIVE_UNIVERSE, force=True, dry_run=False, semaphore=_local_semaphore)
+
+            from database import get_latest_regime as _get_regime, get_latest_setups as _get_setups
+
+            regime      = await _get_regime(DB_PATH) or {}
+            vcp_setups  = await _get_setups(DB_PATH, setup_type="VCP")
+            watchlist   = await _get_setups(DB_PATH, setup_type="WATCHLIST")
+            res_setups  = await _get_setups(DB_PATH, setup_type="RES_BREAKOUT")
+            pb_setups   = await _get_setups(DB_PATH, setup_type="PULLBACK")
+            opt_setups  = await _get_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
+            htf_setups  = await _get_setups(DB_PATH, setup_type="HTF")
+            lce_setups  = await _get_setups(DB_PATH, setup_type="LCE")
+
+            spy_sma50: Optional[float] = None
+            try:
+                spy_df_sched = await _fetch("SPY", semaphore=_local_semaphore)
+                if spy_df_sched is not None and len(spy_df_sched) >= 50:
+                    from indicators import sma as _sma_fn
+                    adj_col = "Adj Close" if "Adj Close" in spy_df_sched.columns else "Close"
+                    spy_sma50 = float(_sma_fn(spy_df_sched[adj_col], 50).iloc[-1])
+            except Exception as sma_exc:
+                log.warning("[scheduler] EOD: Could not compute SPY SMA50: %s", sma_exc)
+
+            if isinstance(regime, dict):
+                regime["spy_sma50"] = spy_sma50
+
+            with _eod_digest_cache_lock:
+                _eod_digest_cache = {
+                    "regime":           regime,
+                    "vcp":              vcp_setups,
+                    "vcp_dry":          watchlist,
+                    "res_breakout":     res_setups,
+                    "pullback":         pb_setups,
+                    "options_catalyst": opt_setups,
+                    "htf":              htf_setups,
+                    "lce":              lce_setups,
+                }
+            log.info(
+                "[scheduler] EOD digest cache built: vcp=%d  dry=%d  res=%d  pb=%d  opt=%d  htf=%d  lce=%d",
+                len(vcp_setups), len(watchlist), len(res_setups), len(pb_setups), len(opt_setups),
+                len(htf_setups), len(lce_setups),
+            )
+
+        asyncio.run(_scan_and_cache())
+
+    except Exception as exc:
+        log.error("[scheduler] EOD scan job failed: %s", exc)
+
+
+def send_eod_email() -> None:
+    """
+    4:40 PM ET job — send the end-of-day digest from _eod_digest_cache.
+
+    Falls back to a live DB query if the cache is empty.
+    """
+    log.info("[scheduler] 4:40 PM EOD email job starting…")
+    with _eod_digest_cache_lock:
+        cache_snapshot = dict(_eod_digest_cache)
+    if not cache_snapshot:
+        log.warning(
+            "[scheduler] _eod_digest_cache is empty — falling back to DB query for EOD email."
+        )
+        try:
+            cache_snapshot = _build_digest_data_from_db()
+        except Exception as exc:
+            log.error("[scheduler] EOD email DB fallback failed: %s", exc)
+            return
+    if not cache_snapshot:
+        log.error("[scheduler] EOD email skipped: no data in cache or DB.")
+        return
+    try:
+        send_digest(cache_snapshot, label="End-of-Day Digest")
+    except Exception as exc:
+        log.error("[scheduler] EOD email send failed: %s", exc)
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -802,9 +942,28 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
         misfire_grace_time=600,
     )
+    _scheduler.add_job(
+        run_eod_scan,
+        trigger="cron",
+        hour=16,
+        minute=5,
+        id="eod_scan",
+        replace_existing=True,
+        misfire_grace_time=600,
+    )
+    _scheduler.add_job(
+        send_eod_email,
+        trigger="cron",
+        hour=16,
+        minute=40,
+        id="eod_email",
+        replace_existing=True,
+        misfire_grace_time=600,
+    )
     _scheduler.start()
     log.info(
-        "[scheduler] Started — prewarm at 09:15 ET, scan at 07:30 ET, email at 08:00 ET"
+        "[scheduler] Started — prewarm 09:15 ET | morning scan 07:30 ET | morning email 08:00 ET"
+        " | EOD scan 16:05 ET | EOD email 16:40 ET"
     )
 
     # Warm the price cache in the background immediately on startup.
@@ -910,14 +1069,16 @@ async def _run_io_phase(
     cache_store,                 # CacheStore instance
     semaphore: asyncio.Semaphore,
     workers: int = SCAN_IO_WORKERS,
+    force: bool = False,
 ) -> None:
     """
     Parallel incremental fetch for Pass 1 survivors.
     Uses a bounded queue (workers × SCAN_QUEUE_MULTIPLIER) to limit memory pressure.
+    When ``force=True`` each ticker bypasses the freshness check and re-downloads.
     """
     if not survivors:
         return
-    await cache_store.bulk_fetch_incremental(survivors, semaphore, workers=workers)
+    await cache_store.bulk_fetch_incremental(survivors, semaphore, workers=workers, force=force)
 
 
 async def _run_compute_phase(
@@ -1586,6 +1747,11 @@ async def _run_scan(
 
         # ── SPY data (consolidated single fetch for 3m return + RS Line) ──
         # Fetched before per-ticker processing; used for RS Line calculations.
+        # When force=True, evict SPY from the in-memory cache so a fresh download
+        # is guaranteed regardless of the 4-hour TTL.
+        if force:
+            _ticker_cache.pop("SPY", None)
+
         spy_3m_return = 0.0
         spy_df_full = None
         spy_fetch_start = time.time()
@@ -1652,7 +1818,7 @@ async def _run_scan(
 
         # ── I/O phase: incremental fetch for survivors only ───────────────
         _fetch_start = time.time()
-        await _run_io_phase(_survivors, _cache_store, semaphore or _semaphore)
+        await _run_io_phase(_survivors, _cache_store, semaphore or _semaphore, force=force)
         _fetch_time = round(time.time() - _fetch_start, 2)
         _scan_state["engine_stats"]["timing"]["fetch_s"] = _fetch_time
         log.info("Incremental fetch complete  [%.1fs]", _fetch_time)

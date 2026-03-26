@@ -147,10 +147,14 @@ class CacheStore:
         self,
         ticker: str,
         semaphore: asyncio.Semaphore,
+        force: bool = False,
     ) -> Optional[pd.DataFrame]:
         """
         Load existing parquet, fetch only missing trading days, append, save.
         Returns the updated DataFrame, or None if no data available at all.
+
+        When ``force=True`` the freshness check is skipped and yfinance is always
+        called — used by scheduled scans to guarantee post-close data is current.
         """
         existing = self._load_parquet(ticker)
 
@@ -158,7 +162,7 @@ class CacheStore:
         if existing is not None and not existing.empty:
             last_date = existing.index[-1].date()
             biz_days_old = _biz_days_since(last_date)
-            if biz_days_old <= PRICE_CACHE_FRESH_DAYS:
+            if not force and biz_days_old <= PRICE_CACHE_FRESH_DAYS:
                 # Already fresh — no network call
                 if ticker not in self._mem:
                     self._mem[ticker] = existing
@@ -214,6 +218,7 @@ class CacheStore:
         tickers: List[str],
         semaphore: asyncio.Semaphore,
         workers: int = 48,
+        force: bool = False,
     ) -> None:
         """Parallel incremental fetch for a list of tickers using a worker queue."""
         queue: asyncio.Queue = asyncio.Queue(maxsize=workers * 2)
@@ -225,7 +230,7 @@ class CacheStore:
                     queue.task_done()
                     break
                 try:
-                    await self.fetch_incremental(ticker, semaphore)
+                    await self.fetch_incremental(ticker, semaphore, force=force)
                 except Exception as exc:
                     log.warning("[cache_store] bulk_fetch worker error for %s: %s", ticker, exc)
                 finally:
