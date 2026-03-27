@@ -555,6 +555,7 @@ def _backtest_trade_to_analytics(tr: dict) -> dict:
         "entry_price":   tr["entry_price"],
         "stop_loss":     tr["initial_stop"],          # initial_stop → stop_loss
         "close_price":   tr["exit_price"],            # exit_price  → close_price
+        "entry_date":    tr.get("entry_date", ""),     # for day-of-week analysis
         "exit_date":     tr.get("exit_date", ""),     # for chronological equity curve
         "status":        "closed",
         "regime_score":  tr.get("regime_score", 0.0), # populated by portfolio_backtest
