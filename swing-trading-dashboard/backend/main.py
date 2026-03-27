@@ -43,12 +43,14 @@ import uuid
 from contextlib import asynccontextmanager
 import math
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import aiosqlite
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from alpaca_data import fetch_bars as _alpaca_fetch, fetch_bars_batch as _alpaca_batch
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -66,7 +68,6 @@ def _json_safe(obj):
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from filters import in_earnings_blackout as _in_earnings_blackout
 from indicators import ema as _ema, sma as _sma, cci as _cci, atr as _atr
 from indicators.indicator_engine import compute_indicators, TickerIndicators
 from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Query
@@ -180,7 +181,6 @@ from engines.engine6 import scan_resistance_breakout, scan_res_breakout_near
 from engines.engine4 import calculate_rs_line, detect_rs_blue_dot, get_rs_stats, calculate_rs_score, get_rs_signals
 from engines.engine5 import scan_base_pattern
 from engines.engine6 import scan_resistance_breakout
-from engines.engine7 import scan_options_catalyst
 from engines.engine8_htf import scan_htf
 from engines.engine9_low_cheat import scan_lce
 from tickers import SCAN_UNIVERSE
@@ -416,9 +416,10 @@ def _build_discovery_tickers(
 _price_cache: dict = {}
 PRICE_CACHE_TTL = 60  # seconds
 
-# In-memory earnings blackout cache: {ticker: {"blackout": bool, "cached_at": ISO str}}
-_earnings_cache: dict = {}
-_earnings_cache_lock = threading.Lock()
+# Static ticker info cache: {TICKER: {name, sector, industry, market_cap}}
+# Populated on startup from cache/ticker_info_cache.json; refreshed via admin endpoint.
+_ticker_info_cache: Dict[str, dict] = {}
+TICKER_INFO_CACHE_FILE = os.path.join(os.path.dirname(__file__), "cache", "ticker_info_cache.json")
 
 # Last scan's RS rank map and top sectors — used for on-demand scoring
 _last_rs_rank_map: Dict[str, float] = {}
@@ -442,7 +443,6 @@ _scan_state: Dict = {
         "e3": {"pullback": 0, "relaxed": 0},
         "e5": {"cup_handle": 0, "flat_base": 0},
         "e6": {"res_breakout": 0},
-        "e7": {"options_catalyst": 0},
         "e8": {"htf": 0},
         "e9": {"lce": 0},
         "total_tickers": 0,
@@ -463,7 +463,6 @@ _scan_state: Dict = {
         },
         "filtered": {
             "liquidity":        0,
-            "earnings":         0,
             "insufficient_data": 0,
             "vitality":         0,
             "rs_rank_gate":     0,
@@ -587,88 +586,54 @@ _eod_digest_cache_lock = threading.Lock()
 _scheduler: Optional[BackgroundScheduler] = None
 
 # ────────────────────────────────────────────────────────────────────────────
-# Earnings blackout helpers (Task 1)
+# Ticker info cache (static; populated once; no live yfinance in hot path)
 # ────────────────────────────────────────────────────────────────────────────
 
-def _load_earnings_cache() -> dict:
-    """Load earnings cache from disk; return empty dict on any error."""
+def _load_ticker_info_cache() -> None:
+    """Load name/sector/industry/market_cap cache from disk into _ticker_info_cache."""
+    global _ticker_info_cache
     try:
-        if os.path.exists(EARNINGS_CACHE_FILE):
-            with open(EARNINGS_CACHE_FILE, "r") as f:
-                return json.load(f)
+        if os.path.exists(TICKER_INFO_CACHE_FILE):
+            with open(TICKER_INFO_CACHE_FILE, "r", encoding="utf-8") as f:
+                _ticker_info_cache = json.load(f)
+            log.info("[ticker_info] Loaded cache: %d tickers", len(_ticker_info_cache))
     except Exception as exc:
-        log.warning("Could not load earnings cache: %s", exc)
-    return {}
+        log.warning("[ticker_info] Could not load cache: %s", exc)
 
 
-def _save_earnings_cache(cache: dict) -> None:
-    """Persist earnings cache to disk."""
-    try:
-        os.makedirs(os.path.dirname(EARNINGS_CACHE_FILE), exist_ok=True)
-        with open(EARNINGS_CACHE_FILE, "w") as f:
-            json.dump(cache, f)
-    except Exception as exc:
-        log.warning("Could not save earnings cache: %s", exc)
-
-
-def _check_earnings_blackout_sync(ticker: str) -> bool:
-    """
-    Return True if ``ticker`` has an earnings event within
-    EARNINGS_BLACKOUT_DAYS calendar days.
-
-    Thread-safe: reads/writes global ``_earnings_cache`` under
-    ``_earnings_cache_lock``.  Calls yfinance only for stale / missing entries.
-    Fails *open* on any error (returns False) so individual fetch issues
-    never block a ticker from being analysed.
-    """
-    now = datetime.utcnow()
-
-    # ── Read from cache ───────────────────────────────────────────────────────
-    with _earnings_cache_lock:
-        entry = _earnings_cache.get(ticker)
-
-    if entry is not None:
+def _refresh_ticker_info_cache_sync(tickers: List[str]) -> None:
+    """Batch-fetch name/sector/industry/market_cap from yfinance and persist to disk.
+    Runs synchronously — call from a thread or executor. Safe to call periodically."""
+    import yfinance as _yf
+    result: Dict[str, dict] = {}
+    CHUNK = 1
+    for ticker in tickers:
         try:
-            cached_at = datetime.fromisoformat(entry["cached_at"])
-            if (now - cached_at).total_seconds() < EARNINGS_CACHE_TTL_HOURS * 3600:
-                return entry["blackout"]
+            info = _yf.Ticker(ticker).info
+            result[ticker] = {
+                "name":       info.get("shortName") or info.get("longName"),
+                "sector":     info.get("sector"),
+                "industry":   info.get("industry"),
+                "market_cap": info.get("marketCap"),
+            }
         except Exception:
             pass
-
-    # ── Fetch earnings calendar from yfinance ─────────────────────────────────
-    blackout = False
-    try:
-        cal = yf.Ticker(ticker).calendar
-        if cal is not None:
-            # yfinance may return a dict or a DataFrame depending on version
-            dates = []
-            if isinstance(cal, dict):
-                raw = cal.get("Earnings Date", [])
-                dates = list(raw) if hasattr(raw, "__iter__") and not isinstance(raw, str) else ([raw] if raw else [])
-            elif hasattr(cal, "to_dict"):
-                cal_dict = cal.to_dict("list")
-                dates = cal_dict.get("Earnings Date", [])
-
-            dates_to_check = []
-            for d in dates:
-                try:
-                    if hasattr(d, "to_pydatetime"):
-                        d = d.to_pydatetime().replace(tzinfo=None)
-                    elif isinstance(d, str):
-                        d = datetime.fromisoformat(d)
-                    dates_to_check.append(d.strftime("%Y-%m-%d"))
-                except Exception:
-                    pass
-            today_str = now.strftime("%Y-%m-%d")
-            blackout = _in_earnings_blackout(today_str, dates_to_check)
-    except Exception:
-        pass  # Fail open — don't block tickers we can't check
-
-    # ── Write result to cache ─────────────────────────────────────────────────
-    with _earnings_cache_lock:
-        _earnings_cache[ticker] = {"blackout": blackout, "cached_at": now.isoformat()}
-
-    return blackout
+    if result:
+        os.makedirs(os.path.dirname(TICKER_INFO_CACHE_FILE), exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(TICKER_INFO_CACHE_FILE), suffix=".json")
+        os.close(fd)
+        try:
+            Path(tmp).write_text(json.dumps(result, indent=None), encoding="utf-8")
+            os.replace(tmp, TICKER_INFO_CACHE_FILE)
+        except Exception as exc:
+            log.error("[ticker_info] Failed to write cache: %s", exc)
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+    global _ticker_info_cache
+    _ticker_info_cache = result
+    log.info("[ticker_info] Refreshed cache: %d tickers", len(result))
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -709,7 +674,6 @@ def run_morning_scan() -> None:
             watchlist      = await _get_setups(DB_PATH, setup_type="WATCHLIST")
             res_setups     = await _get_setups(DB_PATH, setup_type="RES_BREAKOUT")
             pb_setups      = await _get_setups(DB_PATH, setup_type="PULLBACK")
-            opt_setups     = await _get_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
             htf_setups     = await _get_setups(DB_PATH, setup_type="HTF")
             lce_setups     = await _get_setups(DB_PATH, setup_type="LCE")
 
@@ -735,13 +699,12 @@ def run_morning_scan() -> None:
                     "vcp_dry":          watchlist,
                     "res_breakout":     res_setups,
                     "pullback":         pb_setups,
-                    "options_catalyst": opt_setups,
                     "htf":              htf_setups,
                     "lce":              lce_setups,
                 }
             log.info(
-                "[scheduler] Digest cache built: vcp=%d  dry=%d  res=%d  pb=%d  opt=%d  htf=%d  lce=%d",
-                len(vcp_setups), len(watchlist), len(res_setups), len(pb_setups), len(opt_setups),
+                "[scheduler] Digest cache built: vcp=%d  dry=%d  res=%d  pb=%d  htf=%d  lce=%d",
+                len(vcp_setups), len(watchlist), len(res_setups), len(pb_setups),
                 len(htf_setups), len(lce_setups),
             )
 
@@ -764,7 +727,6 @@ def _build_digest_data_from_db() -> dict:
         watchlist   = await _get_setups(DB_PATH, setup_type="WATCHLIST")
         res_setups  = await _get_setups(DB_PATH, setup_type="RES_BREAKOUT")
         pb_setups   = await _get_setups(DB_PATH, setup_type="PULLBACK")
-        opt_setups  = await _get_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
         htf_setups  = await _get_setups(DB_PATH, setup_type="HTF")
         lce_setups  = await _get_setups(DB_PATH, setup_type="LCE")
         try:
@@ -782,7 +744,6 @@ def _build_digest_data_from_db() -> dict:
             "vcp_dry":          watchlist,
             "res_breakout":     res_setups,
             "pullback":         pb_setups,
-            "options_catalyst": opt_setups,
             "htf":              htf_setups,
             "lce":              lce_setups,
         }
@@ -840,7 +801,6 @@ def run_eod_scan() -> None:
             watchlist   = await _get_setups(DB_PATH, setup_type="WATCHLIST")
             res_setups  = await _get_setups(DB_PATH, setup_type="RES_BREAKOUT")
             pb_setups   = await _get_setups(DB_PATH, setup_type="PULLBACK")
-            opt_setups  = await _get_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
             htf_setups  = await _get_setups(DB_PATH, setup_type="HTF")
             lce_setups  = await _get_setups(DB_PATH, setup_type="LCE")
 
@@ -864,13 +824,12 @@ def run_eod_scan() -> None:
                     "vcp_dry":          watchlist,
                     "res_breakout":     res_setups,
                     "pullback":         pb_setups,
-                    "options_catalyst": opt_setups,
                     "htf":              htf_setups,
                     "lce":              lce_setups,
                 }
             log.info(
-                "[scheduler] EOD digest cache built: vcp=%d  dry=%d  res=%d  pb=%d  opt=%d  htf=%d  lce=%d",
-                len(vcp_setups), len(watchlist), len(res_setups), len(pb_setups), len(opt_setups),
+                "[scheduler] EOD digest cache built: vcp=%d  dry=%d  res=%d  pb=%d  htf=%d  lce=%d",
+                len(vcp_setups), len(watchlist), len(res_setups), len(pb_setups),
                 len(htf_setups), len(lce_setups),
             )
 
@@ -924,6 +883,7 @@ async def lifespan(app: FastAPI):
     log.info("SQLite DB initialised at %s", DB_PATH)
     _cache_store.preload_index()
     log.info("Scan cache index preloaded")
+    _load_ticker_info_cache()
 
     # ── APScheduler: scan at 7:30 AM ET, email at 8:00 AM ET ────────────────
     _scheduler = BackgroundScheduler(timezone="America/New_York")
@@ -1015,49 +975,36 @@ app.add_middleware(
 # ────────────────────────────────────────────────────────────────────────────
 
 def _batch_download_sync(tickers_batch: List[str]) -> Dict[str, pd.DataFrame]:
-    """
-    Download 1y daily OHLCV for a batch of tickers in ONE yfinance HTTP request.
-    Returns {ticker: DataFrame} for tickers that returned valid data.
-    Much faster than individual Ticker().history() calls.
-    """
+    """Fetch 1y daily OHLCV for a batch of tickers via Alpaca (yfinance fallback)."""
     if not tickers_batch:
         return {}
-    if len(tickers_batch) == 1:
-        t = tickers_batch[0]
-        try:
-            df = yf.Ticker(t).history(period="1y", interval="1d", auto_adjust=False)
-            return {t: df} if df is not None and not df.empty else {}
-        except Exception:
-            return {}
+    result = _alpaca_batch(tickers_batch, period_days=365)
+    if result:
+        return result
+    # Fallback: yfinance
+    import yfinance as _yf
     try:
-        raw = yf.download(
-            tickers_batch,
-            period="1y",
-            interval="1d",
-            auto_adjust=False,
-            group_by="ticker",
-            progress=False,
-            threads=True,
-            timeout=60,
+        if len(tickers_batch) == 1:
+            t = tickers_batch[0]
+            df = _yf.Ticker(t).history(period="1y", interval="1d", auto_adjust=False)
+            return {t: df} if df is not None and not df.empty else {}
+        raw = _yf.download(
+            tickers_batch, period="1y", interval="1d",
+            auto_adjust=False, group_by="ticker", progress=False, threads=True, timeout=60,
         )
-        result: Dict[str, pd.DataFrame] = {}
-        top_level = raw.columns.get_level_values(0).unique().tolist()
-        for ticker in tickers_batch:
+        fb: Dict[str, pd.DataFrame] = {}
+        top = raw.columns.get_level_values(0).unique().tolist()
+        for t in tickers_batch:
             try:
-                if ticker not in top_level:
-                    continue
-                df = raw[ticker].copy()
-                df = df.dropna(how="all")
-                if df.empty:
-                    continue
-                if df.columns.duplicated().any():
-                    df = df.loc[:, ~df.columns.duplicated()]
-                result[ticker] = df
+                if t in top:
+                    df = raw[t].dropna(how="all")
+                    if not df.empty:
+                        fb[t] = df
             except Exception:
                 pass
-        return result
+        return fb
     except Exception as exc:
-        log.warning("Batch download failed: %s", exc)
+        log.warning("_batch_download_sync yfinance fallback failed: %s", exc)
         return {}
 
 
@@ -1410,11 +1357,13 @@ async def _fetch(
             loop = asyncio.get_event_loop()
             try:
                 def _do_download(t=ticker):
-                    """Bind ticker via default arg; use Ticker().history() for thread-safe isolation."""
-                    return yf.Ticker(t).history(
-                        period=DATA_FETCH_PERIOD,
-                        interval="1d",
-                        auto_adjust=False,
+                    """Fetch via Alpaca; fall back to yfinance on failure."""
+                    df = _alpaca_fetch(t, period_days=365)
+                    if df is not None and not df.empty:
+                        return df
+                    import yfinance as _yf
+                    return _yf.Ticker(t).history(
+                        period=DATA_FETCH_PERIOD, interval="1d", auto_adjust=False,
                     )
                 df = await loop.run_in_executor(None, _do_download)
 
@@ -1504,7 +1453,7 @@ async def _freshen_if_stale(
         async with semaphore:
             fresh = await loop.run_in_executor(
                 None,
-                lambda: yf.Ticker(ticker).history(period="5d", interval="1d", auto_adjust=False),
+                lambda tk=ticker: _alpaca_fetch(tk) or yf.Ticker(tk).history(period="5d", interval="1d", auto_adjust=False),
             )
 
         if fresh is None or fresh.empty:
@@ -1655,7 +1604,6 @@ async def _run_scan(
             "e3": {"pullback": 0, "relaxed": 0},
             "e5": {"cup_handle": 0, "flat_base": 0},
             "e6": {"res_breakout": 0},
-            "e7": {"options_catalyst": 0},
             "e8": {"htf": 0},
             "e9": {"lce": 0},
             "total_tickers": 0,
@@ -1676,7 +1624,6 @@ async def _run_scan(
             },
             "filtered": {
                 "liquidity":        0,
-                "earnings":         0,
                 "insufficient_data": 0,
                 "vitality":         0,
                 "rs_rank_gate":     0,
@@ -1930,11 +1877,6 @@ async def _run_scan(
                 "  [force=True]" if force else "",
             )
 
-        # ── Load earnings cache from disk (Task 1) ────────────────────────────
-        global _earnings_cache
-        _earnings_cache = _load_earnings_cache()
-        log.info("Earnings cache loaded: %d entries", len(_earnings_cache))
-
         # ── Per-ticker processing ─────────────────────────────────────────
         # Collect setups instead of saving individually for batch optimization
         collected_setups: List[Dict] = []
@@ -1944,15 +1886,13 @@ async def _run_scan(
         pb_count = 0
         base_count = 0
         res_count  = 0
-        opt_count  = 0
         htf_count  = 0
         lce_count  = 0
         liquidity_filtered = 0
-        earnings_filtered  = 0
         process_start_time = time.time()
 
         async def _process(ticker: str, idx: int) -> None:
-            nonlocal vcp_count, pb_count, base_count, res_count, opt_count, htf_count, lce_count, dropped_tickers, liquidity_filtered, earnings_filtered
+            nonlocal vcp_count, pb_count, base_count, res_count, htf_count, lce_count, dropped_tickers, liquidity_filtered
 
             try:
                 # ── Data Integrity Check ────────────────────────────────────
@@ -2029,18 +1969,6 @@ async def _run_scan(
                                 RS_RANK_MIN_PERCENTILE,
                             )
                             return
-
-                # ── Earnings Blackout — checked BEFORE compute_indicators ─────────
-                # Earnings check needs only _earnings_cache (loaded before the loop).
-                # Moving it here avoids a full compute_indicators call for blackout tickers.
-                blackout = await loop.run_in_executor(
-                    None, _check_earnings_blackout_sync, ticker
-                )
-                if blackout:
-                    earnings_filtered += 1
-                    _scan_state["engine_stats"]["filtered"]["earnings"] += 1
-                    log.debug("Skipped %s: earnings within %d days", ticker, EARNINGS_BLACKOUT_DAYS)
-                    return
 
                 # ── Centralized Indicator Engine (Task 6) ────────────────────────
                 # Cache by (ticker, last_date, row_count) — invalidates the moment
@@ -2378,36 +2306,6 @@ async def _run_scan(
                     except Exception as lce_exc:
                         log.warning("LCE check failed for %s: %s", ticker, lce_exc)
 
-                # Engine 7: Options Catalyst (not gated by market regime)
-                # Wrapped with IO semaphore: options chain fetch is a live HTTP call
-                # and must be rate-limited like all other yfinance requests.
-                try:
-                    async with _semaphore:
-                        opt = await loop.run_in_executor(
-                            None, scan_options_catalyst, ticker, df
-                        )
-                    if opt:
-                        try:
-                            opt["entry"]      = float(opt.get("entry", 0.0))
-                            opt["stop_loss"]  = float(opt.get("stop_loss", 0.0))
-                            opt["take_profit"]= float(opt.get("take_profit", 0.0))
-                            opt["rr"]         = float(opt.get("rr", 2.0))
-                        except (ValueError, TypeError) as conv_err:
-                            log.warning("Options conversion failed for %s: %s", ticker, conv_err)
-                        else:
-                            opt["sector"] = SECTORS.get(ticker, "Unknown")
-                            _stamp_freshness(opt, _last_bar_date, _is_stale)
-                            collected_setups.append(opt)
-                            opt_count += 1
-                            _scan_state["engine_stats"]["e7"]["options_catalyst"] += 1
-                            log.info("  OPTIONS  %-6s  score=%.0f  vol=%d  C/P=%.2f  DTE=%d",
-                                     ticker, opt.get("options_score", 0),
-                                     opt.get("total_call_volume", 0),
-                                     opt.get("call_put_ratio", 0),
-                                     opt.get("dte", 0))
-                except Exception as opt_exc:
-                    log.warning("Options check failed for %s: %s", ticker, opt_exc)
-
             except Exception as exc:
                 log.error("Error processing %s: %s", ticker, exc)
                 import traceback
@@ -2432,13 +2330,13 @@ async def _run_scan(
         _f = _scan_state["engine_stats"]["filtered"]
         log.info(
             "Per-ticker processing completed  [%.1fs]  "
-            "setups: vcp=%d pb=%d base=%d res=%d opt=%d HTF=%d LCE=%d total=%d  |  "
-            "rejected: data=%d vital=%d rs_rank=%d earn=%d ind=%d liq=%d rs_score=%d",
+            "setups: vcp=%d pb=%d base=%d res=%d HTF=%d LCE=%d total=%d  |  "
+            "rejected: data=%d vital=%d rs_rank=%d ind=%d liq=%d rs_score=%d",
             process_time,
-            vcp_count, pb_count, base_count, res_count, opt_count, htf_count, lce_count,
+            vcp_count, pb_count, base_count, res_count, htf_count, lce_count,
             len(collected_setups),
             _f["insufficient_data"], _f["vitality"], _f["rs_rank_gate"],
-            _f["earnings"], _f["ind_failed"], _f["liquidity"], _f["rs_score_gate"],
+            _f["ind_failed"], _f["liquidity"], _f["rs_score_gate"],
         )
 
         # ── Sector Clustering — inject hot_sector flag before saving ─────────
@@ -2489,11 +2387,6 @@ async def _run_scan(
             log.info("Batch saved %d setups to database  [%.1fs]", len(collected_setups), db_save_time)
         _scan_state["engine_stats"]["timing"]["db_s"] = round(db_save_time, 2)
 
-        # ── Persist earnings cache to disk (Task 1) ───────────────────────────
-        with _earnings_cache_lock:
-            _save_earnings_cache(dict(_earnings_cache))
-        log.info("Earnings cache saved: %d entries", len(_earnings_cache))
-
         if dry_run:
             _scan_state["dry_run_setups"] = {
                 "vcp":               [s for s in collected_setups if s.get("setup_type") == "VCP"],
@@ -2501,7 +2394,6 @@ async def _run_scan(
                 "base":              [s for s in collected_setups if s.get("setup_type") == "BASE"],
                 "res_breakout":      [s for s in collected_setups if s.get("setup_type") == "RES_BREAKOUT"],
                 "watchlist":         [s for s in collected_setups if s.get("setup_type") == "WATCHLIST"],
-                "options_catalyst":  [s for s in collected_setups if s.get("setup_type") == "OPTIONS_CATALYST"],
                 "htf":               [s for s in collected_setups if s.get("setup_type") == "HTF"],
                 "lce":               [s for s in collected_setups if s.get("setup_type") == "LCE"],
             }
@@ -2538,7 +2430,6 @@ async def _run_scan(
         _scan_state["engine_stats"]["total_duration_s"] = round(total_scan_elapsed, 1)
         _scan_state["engine_stats"]["timing"]["total_s"] = round(total_scan_elapsed, 2)
         _scan_state["engine_stats"]["filtered"]["liquidity"] = liquidity_filtered
-        _scan_state["engine_stats"]["filtered"]["earnings"] = earnings_filtered
         if not dry_run:
             await complete_scan_run(DB_PATH, scan_ts, len(tickers))
         _scan_state["last_completed"] = scan_ts
@@ -2558,12 +2449,12 @@ async def _run_scan(
             log.info("✓ DATA QUALITY: All %d tickers processed successfully (0 dropped)", len(tickers))
 
         log.info(
-            "✔ Scan complete  VCP=%d  Pullbacks=%d  Base=%d  ResBreakout=%d  Options=%d  HTF=%d  LCE=%d  "
-            "Processed=%d/%d  filtered(liq=%d  earn=%d)  "
+            "✔ Scan complete  VCP=%d  Pullbacks=%d  Base=%d  ResBreakout=%d  HTF=%d  LCE=%d  "
+            "Processed=%d/%d  filtered(liq=%d)  "
             "Total=%.1fs  [regime=%.1fs  spy=%.1fs  fetch=%.1fs  process=%.1fs  db=%.1fs]",
-            vcp_count, pb_count, base_count, res_count, opt_count, htf_count, lce_count,
+            vcp_count, pb_count, base_count, res_count, htf_count, lce_count,
             processed_tickers, len(tickers),
-            liquidity_filtered, earnings_filtered,
+            liquidity_filtered,
             total_scan_elapsed,
             regime_time, spy_fetch_time, _fetch_time, process_time, db_save_time,
         )
@@ -3191,15 +3082,6 @@ async def get_res_breakout_setups():
     return {"setups": setups, "count": len(setups)}
 
 
-@app.get("/api/setups/options-catalyst")
-async def get_options_catalyst_setups():
-    """Options Catalyst setups — unusual near-term call activity (Engine 7)."""
-    setups = await get_latest_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
-    setups.sort(key=lambda x: x.get("options_score", 0), reverse=True)
-    await _inject_narratives(setups)
-    return {"setups": setups, "count": len(setups)}
-
-
 @app.get("/api/setups/htf")
 async def get_htf_setups():
     """High Tight Flag setups from the latest scan."""
@@ -3287,42 +3169,24 @@ async def get_prices(tickers: str):
                     pass
         still_missing.append(t)
 
-    # Fetch any tickers not in the main cache via yfinance
     if still_missing:
         try:
             loop = asyncio.get_event_loop()
+            fetch_ts = time.time()
 
-            def _batch_download(tks=still_missing):
-                return yf.download(
-                    tks,
-                    period="5d",
-                    interval="1d",
-                    progress=False,
-                    group_by="ticker" if len(tks) > 1 else None,
-                )
+            def _do_batch(tks=still_missing):
+                return _alpaca_batch(tks, period_days=5)
 
-            df = await loop.run_in_executor(None, _batch_download)
-
-            if df is not None and not df.empty:
-                fetch_ts = time.time()
-                if len(still_missing) == 1:
-                    t = still_missing[0]
+            batch_dict = await loop.run_in_executor(None, _do_batch)
+            if batch_dict:
+                for t, tdf in batch_dict.items():
                     try:
-                        adj = "Adj Close" if "Adj Close" in df.columns else "Close"
-                        price = float(df[adj].dropna().iloc[-1])
+                        adj = "Adj Close" if "Adj Close" in tdf.columns else "Close"
+                        price = float(tdf[adj].dropna().iloc[-1])
                         _price_cache[t] = (fetch_ts, price)
                         result[t] = price
                     except Exception:
                         pass
-                else:
-                    for t in still_missing:
-                        try:
-                            adj = "Adj Close" if "Adj Close" in df.columns else "Close"
-                            price = float(df[adj][t].dropna().iloc[-1])
-                            _price_cache[t] = (fetch_ts, price)
-                            result[t] = price
-                        except Exception:
-                            pass
         except Exception as exc:
             log.warning("[prices] batch fetch error: %s", exc)
 
@@ -3813,7 +3677,10 @@ async def analyze_ticker(ticker: str):
 
     try:
         regime_score = 50  # neutral fallback; overwritten below after DB fetch
-        raw = yf.download(ticker, period="1y", auto_adjust=True, progress=False)
+        raw = _alpaca_fetch(ticker, period_days=365)
+        if raw is None or raw.empty:
+            import yfinance as _yf
+            raw = _yf.download(ticker, period="1y", auto_adjust=True, progress=False)
         if raw is None or raw.empty or len(raw) < 60:
             return {
                 "ticker": ticker, "score": 0, "setup_type": None,
@@ -3837,7 +3704,10 @@ async def analyze_ticker(ticker: str):
 
         spy_df_analyze = None
         try:
-            spy_raw = yf.download("SPY", period="1y", auto_adjust=True, progress=False)
+            spy_raw = _alpaca_fetch("SPY", period_days=365)
+            if spy_raw is None or spy_raw.empty:
+                import yfinance as _yf
+                spy_raw = _yf.download("SPY", period="1y", auto_adjust=True, progress=False)
             if isinstance(spy_raw.columns, pd.MultiIndex):
                 spy_raw.columns = spy_raw.columns.get_level_values(0)
             spy_df_analyze = spy_raw.rename(columns=str.title).copy()
@@ -4024,37 +3894,19 @@ async def get_chart_data(ticker: str):
     last_sma200 = float(sma200.iloc[-1]) if pd.notna(sma200.iloc[-1]) else None
     above_200sma = (last_close > last_sma200) if last_close and last_sma200 else None
 
-    # Ticker metadata from yfinance info (name, sector, industry, market cap)
+    # Ticker metadata from static cache (name, sector, industry, market cap)
+    _cached_info = _ticker_info_cache.get(sym, {})
     ticker_info = {
-        "name": None, "sector": None, "industry": None,
-        "market_cap": None, "atr": round(last_atr, 2) if last_atr else None,
-        "atr_pct": atr_pct, "above_200sma": above_200sma,
+        "name":       _cached_info.get("name"),
+        "sector":     _cached_info.get("sector"),
+        "industry":   _cached_info.get("industry"),
+        "market_cap": _cached_info.get("market_cap"),
+        "atr":        round(last_atr, 2) if last_atr else None,
+        "atr_pct":    atr_pct,
+        "above_200sma": above_200sma,
     }
-    try:
-        loop = asyncio.get_event_loop()
-        info = await loop.run_in_executor(None, lambda: yf.Ticker(sym).info)
-        ticker_info["name"] = info.get("shortName") or info.get("longName")
-        ticker_info["sector"] = info.get("sector")
-        ticker_info["industry"] = info.get("industry")
-        ticker_info["market_cap"] = info.get("marketCap")
-    except Exception as exc:
-        log.warning("Could not fetch info for %s: %s", sym, exc)
 
-    # Earnings date — next scheduled earnings (from yfinance calendar)
     earnings_date: Optional[str] = None
-    try:
-        loop = asyncio.get_event_loop()
-        cal = await loop.run_in_executor(None, lambda: yf.Ticker(sym).calendar)
-        if isinstance(cal, dict):
-            ed_list = cal.get("Earnings Date", [])
-            if ed_list:
-                ed = ed_list[0]
-                if hasattr(ed, "strftime"):
-                    earnings_date = ed.strftime("%Y-%m-%d")
-                elif isinstance(ed, str):
-                    earnings_date = ed[:10]
-    except Exception as exc:
-        log.warning("Could not fetch earnings date for %s: %s", sym, exc)
 
     # RS Line for chart display — compute fresh against SPY
     rs_line_series: list = []
@@ -4372,7 +4224,6 @@ async def run_backtest_diagnostics(
             # ── Regime distribution over the backtest period ───────────────
             regime_distribution: dict = {}
             try:
-                import yfinance as _yf
                 import pandas as _pd
                 from filters import compute_regime_score_series as _crs
                 from constants import (
@@ -4381,11 +4232,14 @@ async def run_backtest_diagnostics(
                 )
                 _warmup_start = (
                     _pd.Timestamp(req.start_date) - _pd.DateOffset(years=1)
-                ).strftime("%Y-%m-%d")
-                _spy = _yf.download(
-                    "SPY", start=_warmup_start, end=req.end_date,
-                    interval="1d", auto_adjust=False, progress=False, threads=False,
-                )
+                ).date()
+                _spy = _alpaca_fetch("SPY", start=_warmup_start)
+                if _spy is None or _spy.empty:
+                    import yfinance as _yf
+                    _spy = _yf.download(
+                        "SPY", start=_warmup_start.isoformat(), end=req.end_date,
+                        interval="1d", auto_adjust=False, progress=False, threads=False,
+                    )
                 if _spy is not None and not _spy.empty:
                     if isinstance(_spy.columns, _pd.MultiIndex):
                         _spy.columns = _spy.columns.get_level_values(0)
@@ -4698,9 +4552,8 @@ async def send_digest_now(email: str):
     watchlist= await get_latest_setups(DB_PATH, setup_type="WATCHLIST")
     res      = await get_latest_setups(DB_PATH, setup_type="RES_BREAKOUT")
     pb       = await get_latest_setups(DB_PATH, setup_type="PULLBACK")
-    opt      = await get_latest_setups(DB_PATH, setup_type="OPTIONS_CATALYST")
 
-    total = len(vcp) + len(watchlist) + len(res) + len(pb) + len(opt)
+    total = len(vcp) + len(watchlist) + len(res) + len(pb)
     if total == 0:
         raise HTTPException(status_code=409, detail="No scan data yet — run a scan first")
 
@@ -4723,7 +4576,6 @@ async def send_digest_now(email: str):
             "vcp_dry":          watchlist,
             "res_breakout":     res,
             "pullback":         pb,
-            "options_catalyst": opt,
         }),
     )
     return {"ok": True, "email": email, "setups": total}
