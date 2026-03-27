@@ -33,11 +33,12 @@ from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
+import yfinance as yf  # fallback only
 
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from alpaca_data import fetch_bars as _alpaca_fetch
 from constants import (
     REGIME_AGGRESSIVE_THRESHOLD,
     REGIME_SELECTIVE_THRESHOLD,
@@ -309,7 +310,7 @@ def check_market_regime(
     -------
     dict
         is_bullish         : bool    — regime_score >= REGIME_SELECTIVE_THRESHOLD
-        regime_score       : float   — 0.0–1.0
+        regime_score       : float   — 0.0–100.0
         regime             : str     — "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE"
         volatility_scalar  : float   — ATR14/close at last bar (fraction of price)
         spy_close          : float
@@ -321,18 +322,15 @@ def check_market_regime(
         factors            : dict    — per-component contribution at last bar
     """
     try:
-        spy = yf.download(
-            "SPY",
-            period="1y",
-            interval="1d",
-            auto_adjust=False,
-            prepost=False,
-            progress=False,
-            threads=False,
-        )
+        spy = _alpaca_fetch("SPY", period_days=365)
+        if spy is None or spy.empty:
+            spy = yf.download(
+                "SPY", period="1y", interval="1d",
+                auto_adjust=False, prepost=False, progress=False, threads=False,
+            )
 
         if spy is None or spy.empty:
-            return _error("No SPY data returned from yfinance")
+            return _error("No SPY data returned")
 
         if isinstance(spy.columns, pd.MultiIndex):
             spy.columns = spy.columns.get_level_values(0)

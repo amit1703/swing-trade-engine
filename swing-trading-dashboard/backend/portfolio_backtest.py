@@ -411,7 +411,7 @@ def _compute_full_regime_dicts(
     """
     Compute regime score and label for each SPY trading day.
 
-    V2: SPY-only continuous scoring (0.0–1.0) via filters.compute_regime_score_series.
+    V2: SPY-only continuous scoring (0.0–100.0) via filters.compute_regime_score_series.
     Eliminates train-serve skew — identical logic to the live scanner.
     vix_df and ticker_states are retained in the signature for call-site compatibility
     but are no longer used (breadth/VIX factors removed in V2).
@@ -645,7 +645,7 @@ async def run_portfolio_backtest_universe(
     if not regime_label_dict and _spy_for_regime is not None and len(_spy_for_regime) > 0:
         _fallback = _filters.compute_regime_label_series(_spy_for_regime)
         regime_label_dict = _fallback.to_dict()
-        regime_score_dict = {d: (0.70 if v == "AGGRESSIVE" else 0.40 if v == "SELECTIVE" else 0.0)
+        regime_score_dict = {d: (70.0 if v == "AGGRESSIVE" else 40.0 if v == "SELECTIVE" else 0.0)
                              for d, v in regime_label_dict.items()}
 
     # Sorted SPY date list for O(log n) bisect lookup in Phase 2
@@ -786,7 +786,7 @@ async def run_portfolio_backtest_universe(
             # ── Internal BacktestParams scoring (mechanism quality gate) ──
             if ts.params is not None:
                 signal["_regime"]       = current_regime
-                signal["_regime_score"] = regime_score * 100.0
+                signal["_regime_score"] = regime_score
                 setup_type_sig    = signal.get("setup_type", "")
                 has_engine_score = "_raw_score" in signal
                 raw_score         = signal.get(
@@ -835,7 +835,7 @@ async def run_portfolio_backtest_universe(
 
             else:
                 signal["_regime"]       = current_regime
-                signal["_regime_score"] = regime_score * 100.0
+                signal["_regime_score"] = regime_score
                 if current_regime == "SELECTIVE" and SELECTIVE_HARD_FILTER and SELECTIVE_SETUP_WEIGHTS:
                     setup_type_sig = signal.get("setup_type", "")
                     if SELECTIVE_SETUP_WEIGHTS.get(setup_type_sig, 1.0) == 0.0:
