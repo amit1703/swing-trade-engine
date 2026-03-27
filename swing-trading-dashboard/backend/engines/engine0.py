@@ -178,7 +178,7 @@ def compute_regime_score_series(
     weights: Optional[RegimeWeights] = None,
 ) -> pd.Series:
     """
-    Vectorised continuous regime scoring. Returns float Series 0.0–1.0,
+    Vectorised continuous regime scoring. Returns float Series 0.0–100.0,
     same index as *spy_df*.
 
     Parameters
@@ -252,7 +252,7 @@ def compute_regime_score_series(
     d_ema8_ema20 = ((ema8 - ema20) / safe_atr).fillna(0.0)
     f7 = _sigmoid_series(d_ema8_ema20, weights.k_ema8_ema20) * weights.w_ema8_ema20
 
-    # ── Weighted sum → 0.0–1.0 ────────────────────────────────────────────────
+    # ── Weighted sum → 0.0–1.0 then scaled to 0.0–100.0 ─────────────────────
     w_sum = (weights.w_close_ema20 + weights.w_close_sma50 + weights.w_sma50_slope
              + weights.w_close_sma200 + weights.w_ema20_sma50
              + weights.w_atr + weights.w_ema8_ema20)
@@ -262,7 +262,7 @@ def compute_regime_score_series(
     cci_mult = _cci_multiplier_series(close, high, low, weights)
     cci_mult = cci_mult.reindex(raw.index).fillna(1.0)
 
-    score = (raw * cci_mult).clip(0.0, 1.0)
+    score = (raw * cci_mult).clip(0.0, 1.0) * 100.0
     return score.reindex(spy_df.index).fillna(0.0)
 
 

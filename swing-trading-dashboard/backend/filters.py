@@ -4,7 +4,7 @@ Centralized entry-gate filters shared by scanner, backtest, and WFO.
 All filter functions are pure (no side effects, no network calls) so they
 can be called safely inside the per-bar backtest replay loop.
 
-Regime scoring delegates to engines/engine0.py (V2 continuous, 0.0–100.0).
+Regime scoring delegates to engines/engine0.py (V2 continuous, 0.0–100.0 scale).
 Identical scoring is used for both live scan and historical backtest,
 eliminating train-serve skew.
 """
@@ -33,7 +33,7 @@ _REGIME_MIN_BARS = 65
 
 def compute_regime_score_series(spy_df: pd.DataFrame) -> pd.Series:
     """
-    Return float regime score (0.0–1.0) per date as a pd.Series.
+    Return float regime score (0.0–100.0) per date as a pd.Series.
 
     Delegates to engines.engine0.compute_regime_score_series (SPY-only continuous
     7-factor scoring). Returns all-zero for inputs with fewer than _REGIME_MIN_BARS rows.
@@ -48,7 +48,7 @@ def compute_regime_series(spy_df: pd.DataFrame) -> pd.Series:
     """
     Return a boolean pd.Series (same index as spy_df) where True = bullish regime.
 
-    Threshold: REGIME_SELECTIVE_THRESHOLD (0.40 on the 0.0–1.0 continuous scale).
+    Threshold: REGIME_SELECTIVE_THRESHOLD (40 on the 0.0–100.0 continuous scale).
     Returns all-False for inputs with fewer than _REGIME_MIN_BARS rows.
     """
     if spy_df is None or len(spy_df) < _REGIME_MIN_BARS:

@@ -392,13 +392,13 @@ def _compute_full_regime_dicts(
 
     Returns
     -------
-    score_dict : {Timestamp: float}  regime score 0.0–1.0
+    score_dict : {Timestamp: float}  regime score 0.0–100.0
     label_dict : {Timestamp: str}    "AGGRESSIVE" | "SELECTIVE" | "DEFENSIVE"
     """
     if spy_df is None or not ticker_states:
         return {}, {}
 
-    full_score = compute_regime_score_series(spy_df).clip(0.0, 1.0)
+    full_score = compute_regime_score_series(spy_df).clip(0.0, 100.0)
     if full_score.empty:
         return {}, {}
 
