@@ -4581,6 +4581,59 @@ async def send_digest_now(email: str):
     return {"ok": True, "email": email, "setups": total}
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# Admin endpoints
+# ────────────────────────────────────────────────────────────────────────────
+
+_ticker_info_refresh_running: bool = False
+
+
+@app.post("/api/admin/refresh-ticker-info", status_code=202)
+async def refresh_ticker_info(background_tasks: BackgroundTasks):
+    """
+    Hydrate the static ticker info cache (name / sector / industry / market_cap)
+    for every ticker in the active universe.
+
+    Runs in the background — returns immediately.  Fetches yfinance .info for
+    each ticker one-by-one; for ~700 tickers expect 5–15 minutes.
+
+    Poll GET /api/admin/ticker-info-status to track progress.
+    """
+    global _ticker_info_refresh_running
+    if _ticker_info_refresh_running:
+        raise HTTPException(status_code=409, detail="Refresh already in progress")
+
+    tickers = list(ACTIVE_UNIVERSE)
+
+    def _run():
+        global _ticker_info_refresh_running
+        _ticker_info_refresh_running = True
+        try:
+            _refresh_ticker_info_cache_sync(tickers)
+        finally:
+            _ticker_info_refresh_running = False
+
+    background_tasks.add_task(_run)
+    return {
+        "status":  "started",
+        "tickers": len(tickers),
+        "note":    "Poll GET /api/admin/ticker-info-status for progress",
+    }
+
+
+@app.get("/api/admin/ticker-info-status")
+async def ticker_info_status():
+    """Current state of the static ticker info cache."""
+    return {
+        "cached_tickers":    len(_ticker_info_cache),
+        "refresh_running":   _ticker_info_refresh_running,
+        "cache_file_exists": os.path.exists(TICKER_INFO_CACHE_FILE),
+        "universe_size":     len(ACTIVE_UNIVERSE),
+        "coverage_pct":      round(len(_ticker_info_cache) / max(len(ACTIVE_UNIVERSE), 1) * 100, 1),
+        "sample":            {k: v for k, v in list(_ticker_info_cache.items())[:3]},
+    }
+
+
 def _send_to(email: str, data: dict) -> None:
     """Send digest to an arbitrary email (overrides EMAIL_TO env var)."""
     import os as _os
