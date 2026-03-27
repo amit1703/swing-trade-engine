@@ -1125,6 +1125,26 @@ export default function DiagnosticsTab() {
             <MetricCard label="AVG HOLD · LOSS" value={s.avg_hold_loss != null ? `${s.avg_hold_loss.toFixed(1)}d` : '—'} sub="losing trades" />
           </div>
 
+          {/* Market Regime Distribution — shown immediately after summary */}
+          {data?.regime_distribution && Object.keys(data.regime_distribution).length > 0 && (
+            <>
+              <SectionHeader title="MARKET REGIME DISTRIBUTION (BACKTEST PERIOD)" />
+              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+                <RegimeDistributionPanel dist={data.regime_distribution} />
+              </div>
+            </>
+          )}
+
+          {/* Setup Score Distribution — shown immediately after regime */}
+          {Array.isArray(data?.score_distribution) && data.score_distribution.length > 0 && (
+            <>
+              <SectionHeader title="SETUP SCORE DISTRIBUTION (PRE-GATE)" />
+              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+                <ScoreDistributionPanel rows={data.score_distribution} />
+              </div>
+            </>
+          )}
+
           {/* Equity curve */}
           <SectionHeader title="EQUITY CURVE (CUMULATIVE R)" />
           <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
@@ -1163,26 +1183,6 @@ export default function DiagnosticsTab() {
               <SectionHeader title="R-MULTIPLE DISTRIBUTION" />
               <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
                 <RMultipleDistribution rows={data.r_distribution} />
-              </div>
-            </>
-          )}
-
-          {/* Market Regime Distribution */}
-          {data?.regime_distribution && Object.keys(data.regime_distribution).length > 0 && (
-            <>
-              <SectionHeader title="MARKET REGIME DISTRIBUTION (BACKTEST PERIOD)" />
-              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
-                <RegimeDistributionPanel dist={data.regime_distribution} />
-              </div>
-            </>
-          )}
-
-          {/* Setup Score Distribution */}
-          {Array.isArray(data?.score_distribution) && data.score_distribution.length > 0 && (
-            <>
-              <SectionHeader title="SETUP SCORE DISTRIBUTION (PRE-GATE)" />
-              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
-                <ScoreDistributionPanel rows={data.score_distribution} />
               </div>
             </>
           )}
