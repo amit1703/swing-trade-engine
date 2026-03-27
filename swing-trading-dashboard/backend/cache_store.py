@@ -24,7 +24,9 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
+import yfinance as yf  # kept for fallback only
+
+from alpaca_data import fetch_bars as _alpaca_fetch, fetch_bars_batch as _alpaca_batch
 
 log = logging.getLogger(__name__)
 
@@ -430,34 +432,43 @@ class CacheStore:
         ticker: str,
         since: Optional[date],
     ) -> Optional[pd.DataFrame]:
-        """Synchronous yfinance fetch — runs in executor."""
-        kwargs = dict(interval="1d", auto_adjust=False)
+        """Fetch OHLCV via Alpaca; falls back to yfinance on failure."""
+        start = (since - timedelta(days=1)) if since is not None else None
+        df = _alpaca_fetch(ticker, start=start)
+        if df is not None and not df.empty:
+            return df
+        # Fallback to yfinance if Alpaca returns nothing
+        log.debug("[cache_store] Alpaca empty for %s — falling back to yfinance", ticker)
+        kwargs: dict = dict(interval="1d", auto_adjust=False)
         if since is None:
             kwargs["period"] = "1y"
         else:
-            # Start 1 day before last known bar to catch any corrections
-            start = since - timedelta(days=1)
-            kwargs["start"] = start.isoformat()
+            kwargs["start"] = (since - timedelta(days=1)).isoformat()
             kwargs["end"]   = (date.today() + timedelta(days=1)).isoformat()
-
         try:
-            df = yf.Ticker(ticker).history(**kwargs)
-            if df is None or df.empty:
+            yf_df = yf.Ticker(ticker).history(**kwargs)
+            if yf_df is None or yf_df.empty:
                 return None
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-            return df
+            if isinstance(yf_df.columns, pd.MultiIndex):
+                yf_df.columns = yf_df.columns.get_level_values(0)
+            return yf_df
         except Exception as exc:
-            log.debug("[cache_store] yf.Ticker(%s).history failed: %s", ticker, exc)
+            log.debug("[cache_store] yf.Ticker(%s).history fallback failed: %s", ticker, exc)
             return None
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
 def _yf_batch_sync(tickers: List[str]) -> Dict[str, pd.DataFrame]:
-    """Synchronous yf.download for multiple tickers. Called from executor."""
+    """Fetch 1y daily OHLCV for multiple tickers via Alpaca batch endpoint.
+    Falls back to yfinance on complete failure."""
     if not tickers:
         return {}
+    result = _alpaca_batch(tickers)
+    if result:
+        return result
+    # Fallback: yfinance download for any tickers Alpaca missed
+    log.warning("[cache_store] Alpaca batch returned nothing — falling back to yfinance")
     try:
         raw = yf.download(
             tickers,
@@ -469,17 +480,17 @@ def _yf_batch_sync(tickers: List[str]) -> Dict[str, pd.DataFrame]:
             threads=True,
             timeout=60,
         )
-        result = {}
+        fb_result: Dict[str, pd.DataFrame] = {}
         top = raw.columns.get_level_values(0).unique().tolist()
         for t in tickers:
             try:
                 if t in top:
                     df = raw[t].dropna(how="all")
                     if not df.empty:
-                        result[t] = df
+                        fb_result[t] = df
             except Exception:
                 pass
-        return result
+        return fb_result
     except Exception as exc:
-        log.warning("[cache_store] yf.download batch failed: %s", exc)
+        log.warning("[cache_store] yfinance fallback batch also failed: %s", exc)
         return {}
