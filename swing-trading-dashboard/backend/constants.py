@@ -19,6 +19,14 @@ KDE_BREAKOUT_UPPER_PCT = 0.025  # 2.5% above resistance for KDE breakouts
 KDE_BREAKOUT_LOWER_PCT = 0.001  # 0.1% below resistance for near-breakout detection
 DRY_RESISTANCE_PROXIMITY_PCT = 0.05  # 5% proximity for dry setups
 WATCHLIST_PROXIMITY_PCT = 0.015  # 1.5% below resistance for watchlist items
+
+# ── Contaminated pivot filter (Engine 2 WATCHLIST, Engine 6, Engine 9 LCE) ────
+# A resistance level is "contaminated" if price previously traded more than
+# PIVOT_CONTAMINATION_PCT above it (within the last PIVOT_CONTAMINATION_LOOKBACK
+# bars) and then retreated below it — indicating the level has already been
+# tested and rejected as a launch-pad, making it weaker resistance.
+PIVOT_CONTAMINATION_PCT      = 0.04   # 4% above level = contaminated
+PIVOT_CONTAMINATION_LOOKBACK = 90     # look back 90 bars (~4 months)
 TRENDLINE_TOUCH_TOLERANCE_PCT = 0.015  # 1.5% tolerance for ascending trendline touch check
 VCP_TIGHT_RANGE_5D_PCT = 0.03594       # Optuna v4 best (trial #951); was 0.04259 (v3)
 

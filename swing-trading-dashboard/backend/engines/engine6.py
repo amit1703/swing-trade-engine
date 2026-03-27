@@ -48,6 +48,8 @@ from constants import (
     RES_BREAKOUT_VOL_MULT,
     RES_DECISIVE_MIN_PCT,
     RES_DECISIVE_ATR_FACTOR,
+    PIVOT_CONTAMINATION_PCT,
+    PIVOT_CONTAMINATION_LOOKBACK,
 )
 from zone_utils import nearest_resistance_target
 
@@ -282,6 +284,22 @@ def scan_resistance_breakout(
                                 f"— No consolidation near resistance "
                                 f"(max close={consol_closes.max():.2f}, "
                                 f"need ≥{resistance*(1-_CONSOL_TOLERANCE):.2f})"
+                            )
+                        continue
+
+                # ── Contaminated pivot check ──────────────────────────────────
+                # If price previously exceeded this resistance level by more than
+                # PIVOT_CONTAMINATION_PCT and then retreated, the level is a
+                # failed launch-pad — reject it.
+                _contam_start = max(0, brk_idx - PIVOT_CONTAMINATION_LOOKBACK)
+                _contam_end   = max(0, brk_idx - 5)
+                if _contam_end > _contam_start:
+                    _prior_peak = float(np.max(high_arr[_contam_start:_contam_end]))
+                    if _prior_peak > resistance * (1.0 + PIVOT_CONTAMINATION_PCT):
+                        if debug:
+                            print(
+                                f"Engine 6: REJECTED day -{days_back} [{source}@{resistance:.2f}] "
+                                f"— Contaminated pivot (prior peak {_prior_peak:.2f})"
                             )
                         continue
 

@@ -32,6 +32,8 @@ from constants import (
     LCE_MAX_DISTANCE_PCT,
     LCE_MAX_RISK_PCT,
     LCE_BREAKOUT_VOL_RATIO,
+    PIVOT_CONTAMINATION_PCT,
+    PIVOT_CONTAMINATION_LOOKBACK,
 )
 
 
@@ -92,6 +94,19 @@ def scan_lce(
             if debug:
                 print(f"Engine 9 LCE {ticker}: REJECTED — distance {dist:.1%} not in (0, {LCE_MAX_DISTANCE_PCT:.0%}]")
             return None
+
+        # ── 2b. Contaminated pivot check ──────────────────────────────────────
+        # Reject if price previously exceeded this resistance level by more than
+        # PIVOT_CONTAMINATION_PCT and then retreated — the level is a failed
+        # launch-pad, not a clean target.
+        _lb = min(PIVOT_CONTAMINATION_LOOKBACK, n - 5)
+        if _lb > 5:
+            _peak_high = float(np.max(high_arr[-_lb:-5]))
+            if _peak_high > resistance_level * (1 + PIVOT_CONTAMINATION_PCT):
+                if debug:
+                    print(f"Engine 9 LCE {ticker}: REJECTED — contaminated pivot "
+                          f"(prior high {_peak_high:.2f} > {resistance_level:.2f} × {1+PIVOT_CONTAMINATION_PCT:.2f})")
+                return None
 
         # ── 3. Higher low ─────────────────────────────────────────────────────
         if n < 11:

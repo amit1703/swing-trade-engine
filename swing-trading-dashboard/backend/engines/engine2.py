@@ -39,6 +39,7 @@ from indicators import ema as _ema, sma as _sma, atr as _atr, true_range as _tr
 from constants import (
     TARGET_RR, ATR_STOP_MULTIPLIER, VCP_ATR_CONTRACTION_THRESHOLD,
     VCP_TIGHT_RANGE_5D_PCT, VCP_MIN_CONTRACTIONS_STRICT,
+    PIVOT_CONTAMINATION_PCT, PIVOT_CONTAMINATION_LOOKBACK,
 )
 from zone_utils import nearest_resistance_target
 
@@ -497,6 +498,18 @@ def scan_near_breakout(
 
         if best_dist is None:
             return None
+
+        # ── Contaminated pivot check ──────────────────────────────────────────
+        # Reject if price previously traded more than PIVOT_CONTAMINATION_PCT
+        # above this level within the lookback window and then fell back below it.
+        # That prior failure makes the level a weaker launch-pad.
+        # Not applied to KDE-BRK (confirmed breakout today — the level is live).
+        if best_type != "KDE-BRK" and best_level is not None:
+            _lb = min(PIVOT_CONTAMINATION_LOOKBACK, len(data) - 5)
+            if _lb > 5:
+                _peak_high = float(data["High"].iloc[-_lb:-5].max())
+                if _peak_high > best_level * (1 + PIVOT_CONTAMINATION_PCT):
+                    return None
 
         is_confirmed_break = best_type in ("KDE-BRK",)
 
