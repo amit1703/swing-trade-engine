@@ -28,7 +28,7 @@ function RegimeCard({ regime, tr }) {
             background: bg, border: `1px solid ${color}40`,
             color, fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700,
           }}>
-            {(regime.regime_score * 100).toFixed(1)}/100
+            {regime.regime_score.toFixed(1)}/100
           </span>
         )}
       </div>

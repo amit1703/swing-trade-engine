@@ -125,7 +125,7 @@ TOP_SECTORS_N           = 8     # top N sectors by avg RS (raised from 5; scorin
 # lower-quality setups. The combination of these three constants produces the
 # effective quality drop observed near ~59 — keeping the behaviour as a soft
 # scoring effect preserves flexibility vs a hard cutoff.
-MIN_SETUP_SCORE          = 70   # gate: discard setups with unified score < 70
+MIN_SETUP_SCORE          = 75   # gate: discard setups with unified score < 75
 MIN_SETUP_SCORE_DEFENSIVE = 45  # lower gate in DEFENSIVE — regime penalty (0 pts) would kill all signals
 LOW_SAMPLE_THRESHOLD    = 20    # min trades per setup type for reliable diagnostics
 
@@ -197,10 +197,8 @@ REGIME_WEIGHT_BREADTH  = 20   # % universe above SMA50
 REGIME_WEIGHT_HL       = 10   # New 52-week highs vs lows ratio
 REGIME_WEIGHT_VIX      = 10   # VIX below its 20-day SMA
 
-REGIME_AGGRESSIVE_THRESHOLD = 0.70  # 0.70–1.0  = AGGRESSIVE  (V2 0.0–1.0 scale)
-REGIME_SELECTIVE_THRESHOLD  = 0.40  # 0.40–0.69 = SELECTIVE; 0–0.39 = DEFENSIVE
-                                     # V2: output is 0.0–1.0 (was 0–100 in V1).
-                                     # V1 Optuna-tuned threshold was 59 on 0-100 scale.
+REGIME_AGGRESSIVE_THRESHOLD = 70    # 70–100 = AGGRESSIVE  (0–100 scale)
+REGIME_SELECTIVE_THRESHOLD  = 40    # 40–69  = SELECTIVE; 0–39 = DEFENSIVE
 
 # ── Market Regime V2 — 7-Factor SPY-Only Continuous Scoring ───────────────
 # All 7 factors computable from SPY OHLCV alone — identical logic for live

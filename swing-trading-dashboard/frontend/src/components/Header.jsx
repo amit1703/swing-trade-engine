@@ -90,7 +90,7 @@ export default function Header({ regime, scanStatus, onRunScan, onSearchTicker, 
                     borderRadius: 2,
                     letterSpacing: '0.04em',
                   }}>
-                    {(regime.regime_score * 100).toFixed(1)}/100
+                    {regime.regime_score.toFixed(1)}/100
                   </span>
                 )}
               </div>

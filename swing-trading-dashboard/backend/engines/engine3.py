@@ -305,9 +305,9 @@ def scan_pullback(
         # ── Risk math ────────────────────────────────────────────────────
         entry = round(lh * 1.001, 2)
 
-        # Stop: 1 ATR below candle low (PB_ATR_STOP_MULTIPLIER=1.0)
-        # Using candle low only (not zone lower) to avoid excessively wide stops on EMA-test entries
-        stop_loss = round(ll - PB_ATR_STOP_MULTIPLIER * latr, 2)
+        # Stop: 1.5 ATR below structural support level — wider buffer prevents
+        # noise-stop-outs while keeping the stop anchored to a meaningful level.
+        stop_loss = round(nearest_sup["level"] - 1.5 * latr, 2)
 
         risk = entry - stop_loss
         if risk <= 0 or risk > entry * 0.15:
@@ -492,7 +492,7 @@ def scan_relaxed_pullback(
         if support_level >= lc:
             return None
 
-        stop_loss = round(ll - PB_ATR_STOP_MULTIPLIER * latr, 2)
+        stop_loss = round(support_level - 1.5 * latr, 2)
         risk = entry - stop_loss
 
         if risk <= 0 or risk > entry * 0.15:
@@ -951,7 +951,7 @@ def scan_pullback_scored(
         if nearest_sup["level"] >= lc:
             return None, 0.0
 
-        stop_loss = round(ll - PB_ATR_STOP_MULTIPLIER * latr, 2)
+        stop_loss = round(nearest_sup["level"] - 1.5 * latr, 2)
         risk      = entry - stop_loss
 
         if risk <= 0 or risk > entry * 0.15:

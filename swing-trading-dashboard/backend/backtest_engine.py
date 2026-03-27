@@ -658,7 +658,16 @@ async def _fetch_data(ticker: str, start_date: str) -> tuple:
             cached.index = pd.to_datetime(cached.index).tz_localize(None)
             if cached.index[0] <= fetch_from_ts:
                 return cached  # cache covers the required window — use it
-        # Cache miss or insufficient history — fall back to yfinance
+        # Try Alpaca batch-friendly fetch (faster, no rate limiting)
+        try:
+            from alpaca_data import fetch_bars as _alpaca_fetch_bars
+            hist = _alpaca_fetch_bars(sym, start=fetch_from, end=date.today() + timedelta(days=1))
+            if hist is not None and not hist.empty:
+                hist.index = pd.to_datetime(hist.index).tz_localize(None)
+                return hist
+        except Exception:
+            pass
+        # Alpaca miss — fall back to yfinance
         try:
             hist = yf.Ticker(sym).history(start=fetch_from_str, auto_adjust=False)
             if hist is None or hist.empty:

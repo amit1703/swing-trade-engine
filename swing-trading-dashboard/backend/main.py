@@ -2188,9 +2188,10 @@ async def _run_scan(
                 except Exception as base_exc:
                     log.warning("Base pattern check failed for %s: %s", ticker, base_exc)
 
-                # Engine 6: Resistance breakout (always runs — Donchian+pivot fallback works
-                # without KDE zones; passing empty zones is valid and handled gracefully)
-                _brk_regime_ok = True
+                # Engine 6: Resistance breakout — skip in DEFENSIVE (same rationale as Engine 2:
+                # breakout patterns fail disproportionately in bear markets and the DEFENSIVE
+                # regime leaks into RES_BREAKOUT trades, distorting backtest P/F negatively).
+                _brk_regime_ok = regime.get("is_bullish", True)
                 if _brk_regime_ok:
                     try:
                         res_brk = await loop.run_in_executor(

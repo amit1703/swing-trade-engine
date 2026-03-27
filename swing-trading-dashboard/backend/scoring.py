@@ -684,10 +684,11 @@ def score_and_filter_setups(
         # For actionable setups, still exclude if no rank (data too short for RS).
         is_watchlist = setup.get("setup_type") == "WATCHLIST"
         if rs_rank is None:
-            if is_watchlist:
-                rs_rank = 0.0  # will score low but still surfaces in the watchlist
-            else:
-                continue  # no RS rank → exclude actionable setups
+            # When rs_rank_map is empty (e.g. SPY fetch failed) or ticker not yet
+            # ranked (short history / new listing), fall back to 0.0 so the setup
+            # is scored and shown rather than silently dropped.  WATCHLIST already
+            # used 0.0; now actionable setups do too instead of being excluded.
+            rs_rank = 0.0
 
         # Apply mode-based RS floor (skip watchlist — proximity is quality filter)
         if rs_rank is not None and not is_watchlist and rs_rank < _rs_floor:
