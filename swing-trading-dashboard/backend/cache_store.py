@@ -237,28 +237,110 @@ class CacheStore:
         workers: int = 48,
         force: bool = False,
     ) -> None:
-        """Parallel incremental fetch for a list of tickers using a worker queue."""
-        queue: asyncio.Queue = asyncio.Queue(maxsize=workers * 2)
+        """Incremental fetch with Alpaca batch pre-fetch to minimise HTTP round-trips.
 
-        async def _worker():
-            while True:
-                ticker = await queue.get()
-                if ticker is None:
-                    queue.task_done()
-                    break
-                try:
-                    await self.fetch_incremental(ticker, semaphore, force=force)
-                except Exception as exc:
-                    log.warning("[cache_store] bulk_fetch worker error for %s: %s", ticker, exc)
-                finally:
-                    queue.task_done()
+        Phase 1 — freshness check (no I/O):
+            Tickers already fresh are loaded from parquet into memory and skipped.
+        Phase 2 — Alpaca batch pre-fetch (one HTTP call per 100 stale tickers):
+            Reduces ~400 individual HTTP requests to ~4 batch calls.
+        Phase 3 — individual fallback (worker queue):
+            Any ticker Alpaca couldn't serve falls back to the original per-ticker path.
+        """
+        loop = asyncio.get_running_loop()
 
-        worker_tasks = [asyncio.create_task(_worker()) for _ in range(workers)]
-        for t in tickers:
-            await queue.put(t)
-        for _ in worker_tasks:
-            await queue.put(None)
-        await asyncio.gather(*worker_tasks)
+        # ── Phase 1: classify tickers ─────────────────────────────────────────
+        stale_tickers: List[str] = []
+        for ticker in tickers:
+            if force:
+                self._mem.pop(ticker, None)
+                stale_tickers.append(ticker)
+                continue
+            if self.is_fresh(ticker):
+                if ticker not in self._mem:
+                    existing = self._load_parquet(ticker)
+                    if existing is not None:
+                        self._mem[ticker] = existing
+                continue
+            stale_tickers.append(ticker)
+
+        log.info(
+            "[cache_store] bulk_fetch: %d fresh skip, %d stale to update (force=%s)",
+            len(tickers) - len(stale_tickers), len(stale_tickers), force,
+        )
+
+        if not stale_tickers:
+            self._flush_metadata()
+            return
+
+        # ── Phase 2: Alpaca batch pre-fetch (100 tickers per HTTP call) ───────
+        _ALPACA_CHUNK = 100
+        batch_served: set = set()
+        today_ts = pd.Timestamp.today().normalize()
+
+        for i in range(0, len(stale_tickers), _ALPACA_CHUNK):
+            chunk = stale_tickers[i: i + _ALPACA_CHUNK]
+            try:
+                async with semaphore:
+                    batch_result: Dict[str, pd.DataFrame] = await loop.run_in_executor(
+                        None, lambda c=chunk: _alpaca_batch(c, period_days=365)
+                    )
+            except Exception as exc:
+                log.warning(
+                    "[cache_store] Alpaca batch chunk [%d:%d] failed: %s",
+                    i, i + _ALPACA_CHUNK, exc,
+                )
+                batch_result = {}
+
+            for ticker, new_df in batch_result.items():
+                if new_df is None or new_df.empty:
+                    continue
+                existing = self._load_parquet(ticker)
+                if existing is not None and not existing.empty:
+                    combined = pd.concat([existing, new_df])
+                else:
+                    combined = new_df
+                combined = self._normalise(combined)
+                # Drop zero-volume current-day bar
+                if len(combined) > 0 and combined.index[-1] == today_ts:
+                    if "Volume" in combined.columns and combined["Volume"].iloc[-1] == 0:
+                        combined = combined.iloc[:-1]
+                self._mem[ticker] = combined
+                self._write_parquet(ticker, combined)
+                self._update_meta_sync(ticker, combined)
+                batch_served.add(ticker)
+
+        log.info(
+            "[cache_store] Alpaca batch pre-fetch: served %d/%d stale tickers",
+            len(batch_served), len(stale_tickers),
+        )
+
+        # ── Phase 3: individual fallback for tickers Alpaca couldn't serve ────
+        fallback_tickers = [t for t in stale_tickers if t not in batch_served]
+        if fallback_tickers:
+            log.info("[cache_store] individual fallback for %d tickers", len(fallback_tickers))
+            queue: asyncio.Queue = asyncio.Queue()
+
+            async def _worker():
+                while True:
+                    ticker = await queue.get()
+                    if ticker is None:
+                        queue.task_done()
+                        break
+                    try:
+                        await self.fetch_incremental(ticker, semaphore, force=force)
+                    except Exception as exc:
+                        log.warning("[cache_store] bulk_fetch worker error for %s: %s", ticker, exc)
+                    finally:
+                        queue.task_done()
+
+            n_workers = min(workers, len(fallback_tickers))
+            worker_tasks = [asyncio.create_task(_worker()) for _ in range(n_workers)]
+            for t in fallback_tickers:
+                await queue.put(t)
+            for _ in worker_tasks:
+                await queue.put(None)
+            await asyncio.gather(*worker_tasks)
+
         self._flush_metadata()
 
     async def _batch_download_with_fallback(
