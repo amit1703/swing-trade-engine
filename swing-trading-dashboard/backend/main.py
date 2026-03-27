@@ -190,6 +190,10 @@ from scoring import compute_rs_rank_map, compute_top_sectors, score_and_filter_s
 from analytics import (
     compute_live_diagnostics,
     compute_setup_breakdown,
+    compute_dow_analysis,
+    compute_mae_mfe_analysis,
+    compute_alpha_analysis,
+    compute_entry_efficiency_analysis,
     compute_ticker_distribution,
     compute_regime_performance,
     compute_regime_stability,
@@ -554,8 +558,15 @@ def _backtest_trade_to_analytics(tr: dict) -> dict:
         "exit_date":     tr.get("exit_date", ""),     # for chronological equity curve
         "status":        "closed",
         "regime_score":  tr.get("regime_score", 0.0), # populated by portfolio_backtest
-        "regime":        tr.get("regime", "UNKNOWN"),
-        "holding_days":  tr.get("holding_days", 0),   # for holding-period analysis
+        "regime":                tr.get("regime", "UNKNOWN"),
+        "holding_days":          tr.get("holding_days", 0),
+        # Execution quality fields — passed through for advanced diagnostics
+        "mae_r":                 tr.get("mae_r", 0.0),
+        "mfe_r":                 tr.get("mfe_r", 0.0),
+        "spy_return_pct":        tr.get("spy_return_pct", 0.0),
+        "alpha_pct":             tr.get("alpha_pct", 0.0),
+        "entry_efficiency_pct":  tr.get("entry_efficiency_pct", 50.0),
+        "pnl_pct":               tr.get("pnl_pct", 0.0),
     }
 
 # WFO in-memory state
@@ -4408,10 +4419,14 @@ async def run_backtest_diagnostics(
                 "ticker_distribution": compute_ticker_distribution(adapted),
                 "regime_performance":  compute_regime_performance(adapted),
                 "selective_analysis":  compute_selective_breakdown(adapted),
-                "r_distribution":      compute_r_distribution(adapted),
-                "score_distribution":  compute_score_distribution(score_collector),
-                "regime_distribution": regime_distribution,
-                "trades":              raw_trades,
+                "r_distribution":          compute_r_distribution(adapted),
+                "score_distribution":      compute_score_distribution(score_collector),
+                "regime_distribution":     regime_distribution,
+                "dow_analysis":            compute_dow_analysis(adapted),
+                "mae_mfe_analysis":        compute_mae_mfe_analysis(adapted),
+                "alpha_analysis":          compute_alpha_analysis(adapted),
+                "entry_efficiency":        compute_entry_efficiency_analysis(adapted),
+                "trades":                  raw_trades,
             }
 
             os.makedirs(os.path.dirname(BACKTEST_DIAG_CACHE_PATH), exist_ok=True)

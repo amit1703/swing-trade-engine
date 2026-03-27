@@ -227,6 +227,13 @@ class TradeRecord:
     trail_mode:  str = "atr"     # "ema20" or "atr" — mode active for this trade
     trail_phase: str = "initial" # "initial" or "ema20" — phase reached at exit
 
+    # Execution quality diagnostics (computed at close from per-bar tracking)
+    mae_r:               float = 0.0   # max adverse excursion in R (heat taken)
+    mfe_r:               float = 0.0   # max favorable excursion in R (potential captured)
+    spy_return_pct:      float = 0.0   # SPY % return over same holding period
+    alpha_pct:           float = 0.0   # stock return% minus SPY return% (true alpha)
+    entry_efficiency_pct: float = 50.0  # 100=entered at low, 0=entered at high of range
+
     def __post_init__(self):
         risk = self.entry_price - self.initial_stop
         if risk > 0:
@@ -268,8 +275,13 @@ class TradeRecord:
             "regime":            self.regime,
             "rs_score":          self.rs_score,
             "setup_meta":        self.setup_meta,
-            "trail_mode":        self.trail_mode,
-            "trail_phase":       self.trail_phase,
+            "trail_mode":             self.trail_mode,
+            "trail_phase":            self.trail_phase,
+            "mae_r":                  self.mae_r,
+            "mfe_r":                  self.mfe_r,
+            "spy_return_pct":         self.spy_return_pct,
+            "alpha_pct":              self.alpha_pct,
+            "entry_efficiency_pct":   self.entry_efficiency_pct,
         }
 
 
@@ -454,6 +466,11 @@ def _manage_open_trade(
     atr14  = bar.get("atr14", 0.0)
     stop   = state["trailing_stop"]
     entry  = state["entry_price"]
+
+    # Excursion + SPY tracking (update before stop check to include stop-out bar)
+    state["_min_low_hold"]   = min(state.get("_min_low_hold",  low),  low)
+    state["_max_high_hold"]  = max(state.get("_max_high_hold", high), high)
+    state["_spy_exit_close"] = bar.get("spy_close", state.get("_spy_exit_close", 0.0))
 
     # 1. Stop hit (gap-realistic: fill at min(open, stop))
     if low <= stop:
@@ -872,13 +889,14 @@ class BacktestEngine:
                 atr14_T = float(ticker_df["_ATR14"].iloc[full_idx]) \
                     if "_ATR14" in ticker_df.columns else 0.0
                 bar = {
-                    "date":  T_date.strftime("%Y-%m-%d"),
-                    "open":  float(ticker_df["Open"].iloc[full_idx]),
-                    "high":  float(ticker_df["High"].iloc[full_idx]),
-                    "low":   float(ticker_df["Low"].iloc[full_idx]),
-                    "close": float(ticker_df[adj_col].iloc[full_idx]),
-                    "ema20": ema20_T if not np.isnan(ema20_T) else 0.0,
-                    "atr14": atr14_T if not np.isnan(atr14_T) else 0.0,
+                    "date":      T_date.strftime("%Y-%m-%d"),
+                    "open":      float(ticker_df["Open"].iloc[full_idx]),
+                    "high":      float(ticker_df["High"].iloc[full_idx]),
+                    "low":       float(ticker_df["Low"].iloc[full_idx]),
+                    "close":     float(ticker_df[adj_col].iloc[full_idx]),
+                    "ema20":     ema20_T if not np.isnan(ema20_T) else 0.0,
+                    "atr14":     atr14_T if not np.isnan(atr14_T) else 0.0,
+                    "spy_close": float(_spy_aligned.iloc[full_idx]),
                 }
                 still_open: List[Dict] = []
                 for trade_state in open_trades:
@@ -886,12 +904,26 @@ class BacktestEngine:
                     if closed:
                         entry_dt     = pd.Timestamp(trade_state["entry_date"])
                         holding_days = max(1, (T_date - entry_dt).days)
+                        # ── Execution quality metrics ──────────────────────
+                        _ep   = trade_state["entry_price"]
+                        _risk = _ep - trade_state["initial_stop"]
+                        _mlo  = trade_state.get("_min_low_hold",  _ep)
+                        _mhi  = trade_state.get("_max_high_hold", _ep)
+                        _spy_en = trade_state.get("_spy_entry_close", 0.0)
+                        _spy_ex = trade_state.get("_spy_exit_close",  0.0)
+                        _mae_r = max(0.0, round((_ep - _mlo) / _risk, 3)) if _risk > 0 else 0.0
+                        _mfe_r = max(0.0, round((_mhi - _ep) / _risk, 3)) if _risk > 0 else 0.0
+                        _pnl_p = round((exit_price - _ep) / _ep * 100, 3) if _ep > 0 else 0.0
+                        _spy_r = round((_spy_ex - _spy_en) / _spy_en * 100, 3) if _spy_en > 0 else 0.0
+                        _alpha = round(_pnl_p - _spy_r, 3)
+                        _rng   = _mhi - _mlo
+                        _eff   = round((_mhi - _ep) / _rng * 100, 1) if _rng > 0 else 50.0
                         completed_trades.append(TradeRecord(
                             ticker=self.ticker,
                             setup_type=trade_state["setup_type"],
                             signal_date=trade_state["signal_date"],
                             entry_date=trade_state["entry_date"],
-                            entry_price=trade_state["entry_price"],
+                            entry_price=_ep,
                             initial_stop=trade_state["initial_stop"],
                             take_profit=trade_state["take_profit"],
                             exit_date=T_date.strftime("%Y-%m-%d"),
@@ -905,6 +937,11 @@ class BacktestEngine:
                             trail_mode=trade_state.get("_trail_mode", "atr"),
                             trail_phase=("ema20" if trade_state.get("_trail_triggered")
                                          else "initial"),
+                            mae_r=_mae_r,
+                            mfe_r=_mfe_r,
+                            spy_return_pct=_spy_r,
+                            alpha_pct=_alpha,
+                            entry_efficiency_pct=_eff,
                         ))
                         self._last_close_date = T_date.date()
                     else:
@@ -1152,6 +1189,11 @@ class BacktestEngine:
                 "_ema_break_buffer": (self.params.ema_break_buffer
                                       if self.params is not None
                                       else 0.0),
+                # Execution quality tracking — seed with T+1 bar values
+                "_spy_entry_close": float(_spy_aligned.iloc[next_idx]),
+                "_min_low_hold":    float(ticker_df["Low"].iloc[next_idx]),
+                "_max_high_hold":   float(ticker_df["High"].iloc[next_idx]),
+                "_spy_exit_close":  float(_spy_aligned.iloc[next_idx]),
             })
 
         # ── 5. Close any still-open trades at end of period ───────────────

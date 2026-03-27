@@ -519,6 +519,159 @@ def compute_regime_stability(regime_history: list) -> dict:
     }
 
 
+def compute_dow_analysis(trades: list) -> list:
+    """
+    Break down win rate, profit factor, and avg R by day of week of entry.
+
+    Returns a list of 5 dicts (Mon–Fri), each with:
+        day, count, win_rate (%), avg_R, profit_factor (None if no losses)
+    """
+    from datetime import datetime as _dt
+    DOW_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    by_dow: dict = {i: [] for i in range(5)}
+    for t in trades:
+        if not _is_closed(t):
+            continue
+        r = _r_multiple(t)
+        if r is None:
+            continue
+        date_str = (t.get("entry_date") or t.get("signal_date") or "")[:10]
+        try:
+            dow = _dt.strptime(date_str, "%Y-%m-%d").weekday()
+            if dow < 5:
+                by_dow[dow].append(r)
+        except (ValueError, TypeError):
+            continue
+
+    result = []
+    for dow in range(5):
+        rs = by_dow[dow]
+        if not rs:
+            result.append({"day": DOW_NAMES[dow], "count": 0,
+                           "win_rate": 0.0, "avg_R": 0.0, "profit_factor": None})
+            continue
+        wins   = [r for r in rs if r > 0]
+        losses = [r for r in rs if r <= 0]
+        pf     = round(sum(wins) / abs(sum(losses)), 2) if losses else None
+        result.append({
+            "day":           DOW_NAMES[dow],
+            "count":         len(rs),
+            "win_rate":      round(len(wins) / len(rs) * 100, 1),
+            "avg_R":         round(sum(rs) / len(rs), 3),
+            "profit_factor": pf,
+        })
+    return result
+
+
+def compute_mae_mfe_analysis(trades: list) -> dict:
+    """
+    Ride Quality Index: MAE (heat taken) and MFE (potential captured) in R.
+
+    Requires trade dicts to have mae_r and mfe_r fields (populated by backtest engine).
+    Returns aggregate stats split by winning vs losing trades.
+    """
+    closed = [t for t in trades if _is_closed(t)]
+    wins   = [t for t in closed if (_r_multiple(t) or 0) > 0]
+    losses = [t for t in closed if _r_multiple(t) is not None and (_r_multiple(t) or 0) <= 0]
+
+    def _avg(lst, key):
+        vals = [float(t[key]) for t in lst if t.get(key) is not None]
+        return round(sum(vals) / len(vals), 3) if vals else None
+
+    # MAE histogram buckets in R
+    all_maes = [float(t["mae_r"]) for t in closed if t.get("mae_r") is not None]
+    MAE_BUCKETS = [("0–0.5R", 0, 0.5), ("0.5–1R", 0.5, 1.0),
+                   ("1–1.5R", 1.0, 1.5), ("1.5–2R", 1.5, 2.0), (">2R", 2.0, None)]
+    mae_hist = []
+    total_m = len(all_maes) or 1
+    for label, lo, hi in MAE_BUCKETS:
+        n = sum(1 for v in all_maes if (hi is None and v >= lo) or (hi is not None and lo <= v < hi))
+        mae_hist.append({"bucket": label, "count": n, "pct": round(n / total_m * 100, 1)})
+
+    return {
+        "avg_mae_winners":   _avg(wins,   "mae_r"),
+        "avg_mfe_winners":   _avg(wins,   "mfe_r"),
+        "avg_mae_losers":    _avg(losses, "mae_r"),
+        "avg_mfe_losers":    _avg(losses, "mfe_r"),
+        "avg_mae_all":       _avg(closed, "mae_r"),
+        "avg_mfe_all":       _avg(closed, "mfe_r"),
+        "mae_histogram":     mae_hist,
+        "capture_ratio":     round(
+            (_avg(wins, "mfe_r") or 0) /
+            max(_avg(wins, "mae_r") or 0.001, 0.001), 2
+        ) if wins else None,  # MFE/MAE on winners: >2 = good ride quality
+    }
+
+
+def compute_alpha_analysis(trades: list) -> dict | None:
+    """
+    Market Correlation: did trades generate true alpha vs SPY beta?
+
+    Requires trade dicts to have alpha_pct and spy_return_pct fields.
+    """
+    closed = [t for t in trades if _is_closed(t) and t.get("alpha_pct") is not None]
+    if not closed:
+        return None
+
+    alphas    = [float(t["alpha_pct"])      for t in closed]
+    spy_rets  = [float(t.get("spy_return_pct", 0)) for t in closed]
+    pnl_pcts  = [float(t.get("pnl_pct", 0)) for t in closed]
+
+    true_alpha_n = sum(1 for a in alphas if a > 0)
+    wins_no_alpha = sum(1 for t in closed
+                        if (_r_multiple(t) or 0) > 0 and float(t.get("alpha_pct", 0)) <= 0)
+    wins_total   = sum(1 for t in closed if (_r_multiple(t) or 0) > 0)
+    total = len(closed)
+
+    return {
+        "avg_alpha_pct":       round(sum(alphas)   / total, 2),
+        "avg_spy_return_pct":  round(sum(spy_rets) / total, 2),
+        "avg_stock_return_pct":round(sum(pnl_pcts) / total, 2),
+        "pct_true_alpha":      round(true_alpha_n  / total * 100, 1),
+        "pct_wins_pure_beta":  round(wins_no_alpha / max(wins_total, 1) * 100, 1),
+        "sample_size":         total,
+    }
+
+
+def compute_entry_efficiency_analysis(trades: list) -> dict | None:
+    """
+    Entry Efficiency: how close was our entry to the optimal low of the holding range?
+
+    100% = entered at the absolute low of the range (perfect)
+     50% = entered at the midpoint (neutral)
+      0% = entered at the absolute high (worst possible)
+
+    Requires entry_efficiency_pct field on trade dicts.
+    """
+    closed = [t for t in trades if _is_closed(t)
+              and t.get("entry_efficiency_pct") is not None]
+    if not closed:
+        return None
+
+    effs   = [float(t["entry_efficiency_pct"]) for t in closed]
+    wins   = [float(t["entry_efficiency_pct"]) for t in closed if (_r_multiple(t) or 0) > 0]
+    losses = [float(t["entry_efficiency_pct"]) for t in closed
+              if _r_multiple(t) is not None and (_r_multiple(t) or 0) <= 0]
+
+    # Histogram: 0-20, 20-40, 40-60, 60-80, 80-100
+    EFF_BUCKETS = [("0–20%", 0, 20), ("20–40%", 20, 40), ("40–60%", 40, 60),
+                   ("60–80%", 60, 80), ("80–100%", 80, 101)]
+    total_e = len(effs) or 1
+    histogram = []
+    for label, lo, hi in EFF_BUCKETS:
+        n = sum(1 for e in effs if lo <= e < hi)
+        histogram.append({"bucket": label, "count": n, "pct": round(n / total_e * 100, 1)})
+
+    return {
+        "avg_efficiency_all":    round(sum(effs)   / len(effs),   1),
+        "avg_efficiency_wins":   round(sum(wins)   / len(wins),   1) if wins   else None,
+        "avg_efficiency_losses": round(sum(losses) / len(losses), 1) if losses else None,
+        "histogram":             histogram,
+        "sample_size":           len(effs),
+        # Interpretation guide: >60 = good, 40-60 = neutral, <40 = late entries
+    }
+
+
 def print_backtest_diagnostics(trades: list) -> str:
     """
     Format a human-readable diagnostics summary for a completed backtest run.

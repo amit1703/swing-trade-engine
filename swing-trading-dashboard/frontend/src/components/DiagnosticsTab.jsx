@@ -133,6 +133,159 @@ function RMultipleDistribution({ rows }) {
   )
 }
 
+// ─── DowAnalysisPanel ─────────────────────────────────────────────────────────
+function DowAnalysisPanel({ rows }) {
+  if (!rows || rows.length === 0) return <EmptyState message="Day-of-week data not available" />
+  const maxWR = Math.max(...rows.map(r => r.win_rate), 1)
+  const colors = ['#74c0fc','#51cf66','#ffa94d','#cc5de8','#ff6b6b']
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '90px 50px 1fr 60px 60px 60px', gap: '0 10px', marginBottom: 4 }}>
+        {['Day','Count','Win Rate','Avg R','P.Factor',''].map((h,i) => (
+          <span key={i} style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', fontWeight: 700, textTransform: 'uppercase' }}>{h}</span>
+        ))}
+      </div>
+      {rows.map((r, i) => (
+        <div key={r.day} style={{ display: 'grid', gridTemplateColumns: '90px 50px 1fr 60px 60px 60px', gap: '0 10px', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, fontFamily: '"IBM Plex Mono",monospace', color: colors[i] }}>{r.day}</span>
+          <span style={{ fontSize: 11, fontFamily: '"IBM Plex Mono",monospace', color: 'var(--muted)', textAlign: 'right' }}>{r.count}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ flex: 1, height: 14, background: 'rgba(255,255,255,0.06)', borderRadius: 3 }}>
+              <div style={{ height: '100%', borderRadius: 3, width: `${(r.win_rate / maxWR) * 100}%`, background: colors[i], opacity: 0.8, transition: 'width 0.3s' }} />
+            </div>
+            <span style={{ width: 38, fontSize: 11, fontFamily: '"IBM Plex Mono",monospace', color: 'var(--text)' }}>{r.win_rate.toFixed(1)}%</span>
+          </div>
+          <span style={{ fontSize: 11, fontFamily: '"IBM Plex Mono",monospace', color: (r.avg_R || 0) >= 0 ? 'var(--go)' : 'var(--halt)', textAlign: 'right' }}>
+            {r.count > 0 ? (r.avg_R >= 0 ? '+' : '') + r.avg_R.toFixed(2) + 'R' : '—'}
+          </span>
+          <span style={{ fontSize: 11, fontFamily: '"IBM Plex Mono",monospace', color: 'var(--text)', textAlign: 'right' }}>
+            {r.profit_factor != null ? r.profit_factor.toFixed(2) : '—'}
+          </span>
+          <span/>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── MaeMfePanel ──────────────────────────────────────────────────────────────
+function MaeMfePanel({ data }) {
+  if (!data) return <EmptyState message="MAE/MFE data not available (re-run backtest)" />
+  const StatBox = ({ label, value, color }) => (
+    <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '10px 14px', textAlign: 'center', flex: 1 }}>
+      <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 4, textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: color || 'var(--text)', fontFamily: '"IBM Plex Mono",monospace' }}>
+        {value != null ? value.toFixed(2) + 'R' : '—'}
+      </div>
+    </div>
+  )
+  const maxHist = Math.max(...(data.mae_histogram || []).map(b => b.pct), 1)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <StatBox label="Avg MAE Winners" value={data.avg_mae_winners} color="#ff6b6b" />
+        <StatBox label="Avg MFE Winners" value={data.avg_mfe_winners} color="var(--go)" />
+        <StatBox label="Avg MAE Losers"  value={data.avg_mae_losers}  color="#ff6b6b" />
+        <StatBox label="Avg MFE Losers"  value={data.avg_mfe_losers}  color="var(--muted)" />
+        <StatBox label="MFE/MAE Ratio"   value={data.capture_ratio}   color="var(--accent)" />
+      </div>
+      {data.mae_histogram && (
+        <div>
+          <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 6, textTransform: 'uppercase' }}>MAE Distribution (heat taken per trade)</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {data.mae_histogram.map(b => (
+              <div key={b.bucket} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 55, fontSize: 10, fontFamily: '"IBM Plex Mono",monospace', color: 'var(--muted)', flexShrink: 0 }}>{b.bucket}</span>
+                <div style={{ flex: 1, height: 14, background: 'rgba(255,255,255,0.05)', borderRadius: 3 }}>
+                  <div style={{ height: '100%', borderRadius: 3, width: `${(b.pct / maxHist) * 100}%`, background: '#ff6b6b', opacity: 0.7 }} />
+                </div>
+                <span style={{ width: 36, textAlign: 'right', fontSize: 10, fontFamily: '"IBM Plex Mono",monospace', color: 'var(--text)' }}>{b.count}</span>
+                <span style={{ width: 40, textAlign: 'right', fontSize: 9, fontFamily: '"IBM Plex Mono",monospace', color: 'var(--muted)' }}>{b.pct.toFixed(1)}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── AlphaAnalysisPanel ───────────────────────────────────────────────────────
+function AlphaAnalysisPanel({ data }) {
+  if (!data) return <EmptyState message="Alpha data not available (re-run backtest)" />
+  const StatBox = ({ label, value, suffix = '%', color }) => (
+    <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '10px 14px', textAlign: 'center', flex: 1 }}>
+      <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 4, textTransform: 'uppercase', lineHeight: 1.3 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: color || 'var(--text)', fontFamily: '"IBM Plex Mono",monospace' }}>
+        {value != null ? (value >= 0 ? '+' : '') + value.toFixed(2) + suffix : '—'}
+      </div>
+    </div>
+  )
+  const alphaColor = (data.avg_alpha_pct || 0) >= 0 ? 'var(--go)' : 'var(--halt)'
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <StatBox label="Avg Alpha vs SPY"    value={data.avg_alpha_pct}       color={alphaColor} />
+        <StatBox label="Avg Stock Return"    value={data.avg_stock_return_pct} color="var(--text)" />
+        <StatBox label="Avg SPY Return"      value={data.avg_spy_return_pct}  color="var(--muted)" />
+        <StatBox label="% True Alpha Trades" value={data.pct_true_alpha}      suffix="%" color="var(--accent)" />
+        <StatBox label="% Wins = Beta Ride"  value={data.pct_wins_pure_beta}  suffix="%" color="#ffa94d" />
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', lineHeight: 1.5 }}>
+        Alpha = stock return − SPY return over same holding period. &quot;Beta ride&quot; = trade won but underperformed SPY (no true edge). Higher % true alpha = system generates independent edge.
+      </div>
+    </div>
+  )
+}
+
+// ─── EntryEfficiencyPanel ─────────────────────────────────────────────────────
+function EntryEfficiencyPanel({ data }) {
+  if (!data) return <EmptyState message="Entry efficiency data not available (re-run backtest)" />
+  const getColor = pct => pct >= 65 ? 'var(--go)' : pct >= 40 ? 'var(--accent)' : 'var(--halt)'
+  const maxHist = Math.max(...(data.histogram || []).map(b => b.pct), 1)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {[
+          { label: 'Avg Efficiency (All)',    val: data.avg_efficiency_all },
+          { label: 'Avg Efficiency (Wins)',   val: data.avg_efficiency_wins },
+          { label: 'Avg Efficiency (Losses)', val: data.avg_efficiency_losses },
+        ].map(({ label, val }) => (
+          <div key={label} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '10px 14px', textAlign: 'center', flex: 1 }}>
+            <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 4, textTransform: 'uppercase' }}>{label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: val != null ? getColor(val) : 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace' }}>
+              {val != null ? val.toFixed(1) + '%' : '—'}
+            </div>
+          </div>
+        ))}
+      </div>
+      {data.histogram && (
+        <div>
+          <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 6, textTransform: 'uppercase' }}>
+            Distribution — 100% = entered at lowest low of holding period (optimal)
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {data.histogram.map(b => {
+              const midPct = parseFloat(b.bucket.replace('%','').split('–')[0]) + 10
+              const barColor = getColor(midPct)
+              return (
+                <div key={b.bucket} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 55, fontSize: 10, fontFamily: '"IBM Plex Mono",monospace', color: 'var(--muted)', flexShrink: 0 }}>{b.bucket}</span>
+                  <div style={{ flex: 1, height: 14, background: 'rgba(255,255,255,0.05)', borderRadius: 3 }}>
+                    <div style={{ height: '100%', borderRadius: 3, width: `${(b.pct / maxHist) * 100}%`, background: barColor, opacity: 0.8 }} />
+                  </div>
+                  <span style={{ width: 36, textAlign: 'right', fontSize: 10, fontFamily: '"IBM Plex Mono",monospace', color: 'var(--text)' }}>{b.count}</span>
+                  <span style={{ width: 40, textAlign: 'right', fontSize: 9, fontFamily: '"IBM Plex Mono",monospace', color: 'var(--muted)' }}>{b.pct.toFixed(1)}%</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── RegimeDistributionPanel ──────────────────────────────────────────────────
 function RegimeDistributionPanel({ dist }) {
   if (!dist || Object.keys(dist).length === 0) return <EmptyState message="Regime distribution not available" />
@@ -1183,6 +1336,46 @@ export default function DiagnosticsTab() {
               <SectionHeader title="R-MULTIPLE DISTRIBUTION" />
               <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
                 <RMultipleDistribution rows={data.r_distribution} />
+              </div>
+            </>
+          )}
+
+          {/* Day of Week Analysis */}
+          {Array.isArray(data?.dow_analysis) && data.dow_analysis.length > 0 && (
+            <>
+              <SectionHeader title="DAY OF WEEK ANALYSIS" />
+              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+                <DowAnalysisPanel rows={data.dow_analysis} />
+              </div>
+            </>
+          )}
+
+          {/* Ride Quality — MAE & MFE */}
+          {data?.mae_mfe_analysis && (
+            <>
+              <SectionHeader title="RIDE QUALITY INDEX (MAE & MFE)" />
+              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+                <MaeMfePanel data={data.mae_mfe_analysis} />
+              </div>
+            </>
+          )}
+
+          {/* Market Correlation / Alpha */}
+          {data?.alpha_analysis && (
+            <>
+              <SectionHeader title="MARKET CORRELATION & ALPHA ANALYSIS" />
+              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+                <AlphaAnalysisPanel data={data.alpha_analysis} />
+              </div>
+            </>
+          )}
+
+          {/* Entry Efficiency */}
+          {data?.entry_efficiency && (
+            <>
+              <SectionHeader title="ENTRY EFFICIENCY" />
+              <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: 16 }}>
+                <EntryEfficiencyPanel data={data.entry_efficiency} />
               </div>
             </>
           )}
