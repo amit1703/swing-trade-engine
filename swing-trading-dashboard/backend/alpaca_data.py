@@ -170,8 +170,15 @@ def fetch_bars_batch(
                         bars_by_ticker[ticker].extend(ticker_bars)
                 next_token = data.get("next_page_token")
                 if next_token:
-                    params = {"page_token": next_token, "limit": 10000,
-                              "feed": _DATA_FEED}
+                    # Keep all original params; only swap in the page token
+                    params = {
+                        "symbols":    ",".join(chunk),
+                        "timeframe":  "1Day",
+                        "adjustment": "all",
+                        "feed":       _DATA_FEED,
+                        "limit":      10000,
+                        "page_token": next_token,
+                    }
                     url = f"{_BASE_URL}/stocks/bars"
                 else:
                     url = None
