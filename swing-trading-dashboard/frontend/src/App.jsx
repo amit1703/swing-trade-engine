@@ -174,12 +174,12 @@ export default function App() {
   // ── Run scan ──────────────────────────────────────────────────────────────
   const handleRunScan = useCallback(async () => {
     try {
-      await triggerScan(devMode, dryRun)
+      await triggerScan(true, dryRun)  // always force=true — manual scans always fetch fresh data
       setScanStatus((s) => ({ ...s, in_progress: true, progress: 0 }))
     } catch (err) {
       console.error('[App] triggerScan:', err)
     }
-  }, [devMode, dryRun])
+  }, [dryRun])
 
   const handleScanTicker = useCallback(async (ticker) => {
     try {
