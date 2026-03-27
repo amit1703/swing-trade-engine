@@ -225,6 +225,7 @@ def _build_open_position(
     stop_loss: float,
     take_profit: float,
     full_idx: int,
+    spy_close_at_entry: float = 0.0,
 ) -> dict:
     """
     Build the open-position dict used by the portfolio coordinator.
@@ -275,6 +276,11 @@ def _build_open_position(
             "_bars_since_entry":   0,
             "_ref_level":          _extract_ref_level(setup_meta, sig_type),
             "_prev_ema20":         None,
+            # Execution quality tracking — seeded at T+1 (entry bar)
+            "_spy_entry_close":    spy_close_at_entry,
+            "_min_low_hold":       float(ts.ticker_df["Low"].iloc[full_idx + 1]),
+            "_max_high_hold":      float(ts.ticker_df["High"].iloc[full_idx + 1]),
+            "_spy_exit_close":     spy_close_at_entry,
         },
     }
 
@@ -294,12 +300,27 @@ def _build_trade_record(
     entry_dt     = pd.Timestamp(state["entry_date"])
     holding_days = max(1, (exit_date - entry_dt).days)
 
+    # Execution quality metrics
+    _ep     = state["entry_price"]
+    _risk   = _ep - state["initial_stop"]
+    _mlo    = state.get("_min_low_hold",  _ep)
+    _mhi    = state.get("_max_high_hold", _ep)
+    _spy_en = state.get("_spy_entry_close", 0.0)
+    _spy_ex = state.get("_spy_exit_close",  0.0)
+    _mae_r  = max(0.0, round((_ep - _mlo) / _risk, 3)) if _risk > 0 else 0.0
+    _mfe_r  = max(0.0, round((_mhi - _ep) / _risk, 3)) if _risk > 0 else 0.0
+    _pnl_p  = round((exit_price - _ep) / _ep * 100, 3) if _ep > 0 else 0.0
+    _spy_r  = round((_spy_ex - _spy_en) / _spy_en * 100, 3) if _spy_en > 0 else 0.0
+    _alpha  = round(_pnl_p - _spy_r, 3)
+    _rng    = _mhi - _mlo
+    _eff    = round((_mhi - _ep) / _rng * 100, 1) if _rng > 0 else 50.0
+
     rec = TradeRecord(
         ticker       = ts.ticker,
         setup_type   = state["setup_type"],
         signal_date  = state["signal_date"],
         entry_date   = state["entry_date"],
-        entry_price  = state["entry_price"],
+        entry_price  = _ep,
         initial_stop = state["initial_stop"],
         take_profit  = state["take_profit"],
         exit_date    = exit_date.strftime("%Y-%m-%d"),
@@ -312,6 +333,11 @@ def _build_trade_record(
         setup_meta   = state.get("_setup_meta", {}),
         trail_mode   = state.get("_trail_mode", "atr"),
         trail_phase  = ("ema20" if state.get("_trail_triggered") else "initial"),
+        mae_r                = _mae_r,
+        mfe_r                = _mfe_r,
+        spy_return_pct       = _spy_r,
+        alpha_pct            = _alpha,
+        entry_efficiency_pct = _eff,
     ).to_dict()
     # Attach regime_score (0-100 float) — not a TradeRecord field but needed by analytics
     rec["regime_score"] = state.get("_regime_score", 0.0)
@@ -652,6 +678,13 @@ async def run_portfolio_backtest_universe(
     open_positions: List[dict]   = []
     completed_trades: List[dict] = []
 
+    # SPY close lookup for per-trade alpha vs SPY calculation
+    _spy_col_exec = "Adj Close" if spy_df is not None and "Adj Close" in spy_df.columns else "Close"
+    _spy_close_lookup: dict = (
+        spy_df[_spy_col_exec].dropna().to_dict()
+        if spy_df is not None and not spy_df.empty else {}
+    )
+
     for _day_idx, T_date in enumerate(replay_dates):
         # Yield to event loop every 50 dates so the server stays responsive
         if _day_idx % 50 == 0:
@@ -672,13 +705,14 @@ async def run_portfolio_backtest_universe(
                         if ts.atr14_full is not None and not np.isnan(ts.atr14_full.iloc[full_idx])
                         else 0.0)
             bar = {
-                "date":  T_date.strftime("%Y-%m-%d"),
-                "open":  float(ts.ticker_df["Open"].iloc[full_idx]),
-                "high":  float(ts.ticker_df["High"].iloc[full_idx]),
-                "low":   float(ts.ticker_df["Low"].iloc[full_idx]),
-                "close": float(ts.ticker_df[ts.adj_col].iloc[full_idx]),
-                "ema20": ema20_T if not np.isnan(ema20_T) else 0.0,
-                "atr14": atr14_T,
+                "date":      T_date.strftime("%Y-%m-%d"),
+                "open":      float(ts.ticker_df["Open"].iloc[full_idx]),
+                "high":      float(ts.ticker_df["High"].iloc[full_idx]),
+                "low":       float(ts.ticker_df["Low"].iloc[full_idx]),
+                "close":     float(ts.ticker_df[ts.adj_col].iloc[full_idx]),
+                "ema20":     ema20_T if not np.isnan(ema20_T) else 0.0,
+                "atr14":     atr14_T,
+                "spy_close": _spy_close_lookup.get(T_date, 0.0),
             }
             closed, exit_price, exit_reason = _manage_open_trade(pos["trade_state"], bar)
             if closed:
@@ -857,7 +891,8 @@ async def run_portfolio_backtest_universe(
                 continue
 
             pos = _build_open_position(
-                signal, ts, T_date, entry_date, entry_price, stop_loss, take_profit, full_idx
+                signal, ts, T_date, entry_date, entry_price, stop_loss, take_profit, full_idx,
+                spy_close_at_entry=_spy_close_lookup.get(entry_date, 0.0),
             )
             open_positions.append(pos)
             ts.is_in_trade = True

@@ -168,30 +168,45 @@ function DowAnalysisPanel({ rows }) {
   )
 }
 
+const ExplainBox = ({ children }) => (
+  <div style={{
+    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: 6, padding: '8px 12px', fontSize: 10, color: 'rgba(255,255,255,0.45)',
+    fontFamily: '"IBM Plex Mono",monospace', lineHeight: 1.6,
+  }}>{children}</div>
+)
+
 // ─── MaeMfePanel ──────────────────────────────────────────────────────────────
 function MaeMfePanel({ data }) {
   if (!data) return <EmptyState message="MAE/MFE data not available (re-run backtest)" />
-  const StatBox = ({ label, value, color }) => (
+  const StatBox = ({ label, value, color, sub }) => (
     <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '10px 14px', textAlign: 'center', flex: 1 }}>
-      <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 4, textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 4, textTransform: 'uppercase', lineHeight: 1.3 }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 700, color: color || 'var(--text)', fontFamily: '"IBM Plex Mono",monospace' }}>
         {value != null ? value.toFixed(2) + 'R' : '—'}
       </div>
+      {sub && <div style={{ fontSize: 8, color: 'var(--muted)', marginTop: 3, lineHeight: 1.3 }}>{sub}</div>}
     </div>
   )
   const maxHist = Math.max(...(data.mae_histogram || []).map(b => b.pct), 1)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <ExplainBox>
+        <b>MAE</b> (Max Adverse Excursion) = how far against you the trade went before closing, in R units.
+        {' '}<b>MFE</b> (Max Favorable Excursion) = the furthest the trade moved in your favor, in R.
+        {' '}<b>MFE/MAE Ratio</b> on winners: how many R of open profit you captured vs heat taken — above 2.0 is healthy.
+        {' '}1R = distance from entry to initial stop. Low MAE on winners means clean entries; high MFE vs MAE = good ride quality.
+      </ExplainBox>
       <div style={{ display: 'flex', gap: 8 }}>
-        <StatBox label="Avg MAE Winners" value={data.avg_mae_winners} color="#ff6b6b" />
-        <StatBox label="Avg MFE Winners" value={data.avg_mfe_winners} color="var(--go)" />
-        <StatBox label="Avg MAE Losers"  value={data.avg_mae_losers}  color="#ff6b6b" />
-        <StatBox label="Avg MFE Losers"  value={data.avg_mfe_losers}  color="var(--muted)" />
-        <StatBox label="MFE/MAE Ratio"   value={data.capture_ratio}   color="var(--accent)" />
+        <StatBox label="Avg MAE Winners" value={data.avg_mae_winners} color="#ff6b6b" sub="heat taken on wins" />
+        <StatBox label="Avg MFE Winners" value={data.avg_mfe_winners} color="var(--go)" sub="max open profit on wins" />
+        <StatBox label="Avg MAE Losers"  value={data.avg_mae_losers}  color="#ff6b6b" sub="heat taken on losses" />
+        <StatBox label="Avg MFE Losers"  value={data.avg_mfe_losers}  color="var(--muted)" sub="peak profit before loss" />
+        <StatBox label="MFE/MAE Ratio"   value={data.capture_ratio}   color="var(--accent)" sub=">2 = good ride quality" />
       </div>
       {data.mae_histogram && (
         <div>
-          <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 6, textTransform: 'uppercase' }}>MAE Distribution (heat taken per trade)</div>
+          <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 6, textTransform: 'uppercase' }}>MAE Distribution — how much heat (adverse movement) each trade absorbed</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {data.mae_histogram.map(b => (
               <div key={b.bucket} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -213,26 +228,30 @@ function MaeMfePanel({ data }) {
 // ─── AlphaAnalysisPanel ───────────────────────────────────────────────────────
 function AlphaAnalysisPanel({ data }) {
   if (!data) return <EmptyState message="Alpha data not available (re-run backtest)" />
-  const StatBox = ({ label, value, suffix = '%', color }) => (
+  const StatBox = ({ label, value, suffix = '%', color, sub }) => (
     <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '10px 14px', textAlign: 'center', flex: 1 }}>
       <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 4, textTransform: 'uppercase', lineHeight: 1.3 }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 700, color: color || 'var(--text)', fontFamily: '"IBM Plex Mono",monospace' }}>
         {value != null ? (value >= 0 ? '+' : '') + value.toFixed(2) + suffix : '—'}
       </div>
+      {sub && <div style={{ fontSize: 8, color: 'var(--muted)', marginTop: 3, lineHeight: 1.3 }}>{sub}</div>}
     </div>
   )
   const alphaColor = (data.avg_alpha_pct || 0) >= 0 ? 'var(--go)' : 'var(--halt)'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <ExplainBox>
+        <b>Alpha</b> = your stock&apos;s % return minus SPY&apos;s % return over the exact same holding period.
+        {' '}Positive alpha means the stock outperformed the market — the system added value beyond just being long equities.
+        {' '}<b>% True Alpha Trades</b> = trades where alpha &gt; 0 (stock beat SPY). <b>% Wins = Beta Ride</b> = trades that made money
+        {' '}but only because the whole market went up (alpha ≤ 0). High beta rides mean the &quot;edge&quot; may disappear in a flat/down market.
+      </ExplainBox>
       <div style={{ display: 'flex', gap: 8 }}>
-        <StatBox label="Avg Alpha vs SPY"    value={data.avg_alpha_pct}       color={alphaColor} />
-        <StatBox label="Avg Stock Return"    value={data.avg_stock_return_pct} color="var(--text)" />
-        <StatBox label="Avg SPY Return"      value={data.avg_spy_return_pct}  color="var(--muted)" />
-        <StatBox label="% True Alpha Trades" value={data.pct_true_alpha}      suffix="%" color="var(--accent)" />
-        <StatBox label="% Wins = Beta Ride"  value={data.pct_wins_pure_beta}  suffix="%" color="#ffa94d" />
-      </div>
-      <div style={{ fontSize: 10, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', lineHeight: 1.5 }}>
-        Alpha = stock return − SPY return over same holding period. &quot;Beta ride&quot; = trade won but underperformed SPY (no true edge). Higher % true alpha = system generates independent edge.
+        <StatBox label="Avg Alpha vs SPY"    value={data.avg_alpha_pct}        suffix="%" color={alphaColor} sub="stock return − SPY return" />
+        <StatBox label="Avg Stock Return"    value={data.avg_stock_return_pct} suffix="%" color="var(--text)" sub="% gain/loss per trade" />
+        <StatBox label="Avg SPY Return"      value={data.avg_spy_return_pct}   suffix="%" color="var(--muted)" sub="SPY during same hold" />
+        <StatBox label="% True Alpha Trades" value={data.pct_true_alpha}       suffix="%" color="var(--accent)" sub="outperformed SPY" />
+        <StatBox label="% Wins = Beta Ride"  value={data.pct_wins_pure_beta}   suffix="%" color="#ffa94d" sub="won but lagged SPY" />
       </div>
     </div>
   )
@@ -245,24 +264,32 @@ function EntryEfficiencyPanel({ data }) {
   const maxHist = Math.max(...(data.histogram || []).map(b => b.pct), 1)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <ExplainBox>
+        <b>Entry Efficiency</b> measures how close your entry price was to the lowest low of the entire holding period.
+        {' '}<b>100%</b> = you entered at the exact bottom of the range (perfect). <b>50%</b> = you entered at the midpoint.
+        {' '}<b>0%</b> = you entered at the highest high (worst possible). Winning trades typically show higher efficiency
+        {' '}(entered near support), while losing trades tend to show lower efficiency (entered late into a move).
+        {' '}Target: wins &gt;60%, all-trades &gt;50%.
+      </ExplainBox>
       <div style={{ display: 'flex', gap: 8 }}>
         {[
-          { label: 'Avg Efficiency (All)',    val: data.avg_efficiency_all },
-          { label: 'Avg Efficiency (Wins)',   val: data.avg_efficiency_wins },
-          { label: 'Avg Efficiency (Losses)', val: data.avg_efficiency_losses },
-        ].map(({ label, val }) => (
+          { label: 'Avg Efficiency (All)',    val: data.avg_efficiency_all,    sub: 'target > 50%' },
+          { label: 'Avg Efficiency (Wins)',   val: data.avg_efficiency_wins,   sub: 'target > 60%' },
+          { label: 'Avg Efficiency (Losses)', val: data.avg_efficiency_losses, sub: 'lower = entered late' },
+        ].map(({ label, val, sub }) => (
           <div key={label} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '10px 14px', textAlign: 'center', flex: 1 }}>
             <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 4, textTransform: 'uppercase' }}>{label}</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: val != null ? getColor(val) : 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace' }}>
               {val != null ? val.toFixed(1) + '%' : '—'}
             </div>
+            <div style={{ fontSize: 8, color: 'var(--muted)', marginTop: 3 }}>{sub}</div>
           </div>
         ))}
       </div>
       {data.histogram && (
         <div>
           <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: '"IBM Plex Mono",monospace', marginBottom: 6, textTransform: 'uppercase' }}>
-            Distribution — 100% = entered at lowest low of holding period (optimal)
+            Distribution — where entries fell relative to the full holding-period range
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {data.histogram.map(b => {
