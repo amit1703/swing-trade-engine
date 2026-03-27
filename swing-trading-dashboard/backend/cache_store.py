@@ -156,6 +156,10 @@ class CacheStore:
         When ``force=True`` the freshness check is skipped and yfinance is always
         called — used by scheduled scans to guarantee post-close data is current.
         """
+        # When force=True, evict in-memory entry so stale data can't sneak through
+        if force:
+            self._mem.pop(ticker, None)
+
         existing = self._load_parquet(ticker)
 
         # Determine fetch start date
@@ -187,12 +191,23 @@ class CacheStore:
             log.warning("[cache_store] fetch_incremental %s failed: %s", ticker, exc)
 
         if new_data is None or new_data.empty:
-            if existing is not None:
-                # Return stale cache with stale flag
-                if ticker in self._meta:
-                    self._meta[ticker]["stale"] = True
-                return existing
-            return None  # No cache, no network — ticker excluded
+            if force and existing is not None:
+                # Incremental delta failed — retry with a full 1y download before giving up
+                log.warning("[cache_store] %s: incremental fetch empty on force=True — retrying full 1y download", ticker)
+                try:
+                    async with semaphore:
+                        new_data = await asyncio.get_running_loop().run_in_executor(
+                            None, lambda: self._yf_history(ticker, None)
+                        )
+                except Exception as exc:
+                    log.warning("[cache_store] %s: full retry also failed: %s", ticker, exc)
+            if new_data is None or new_data.empty:
+                if existing is not None:
+                    # Return stale cache with stale flag
+                    if ticker in self._meta:
+                        self._meta[ticker]["stale"] = True
+                    return existing
+                return None  # No cache, no network — ticker excluded
 
         # Merge existing + new
         if existing is not None and not existing.empty:
